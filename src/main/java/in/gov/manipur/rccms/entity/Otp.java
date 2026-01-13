@@ -34,8 +34,8 @@ public class Otp {
     private String mobileNumber;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "user_type", nullable = false, length = 20)
-    private UserType userType;
+    @Column(name = "citizen_type", nullable = false, length = 20)
+    private CitizenType citizenType;
 
     @Column(name = "otp_code", nullable = false, length = 6)
     private String otpCode;
@@ -51,9 +51,9 @@ public class Otp {
     private LocalDateTime expiresAt;
 
     /**
-     * User Type Enum (same as User entity)
+     * Citizen Type Enum (same as Citizen entity)
      */
-    public enum UserType {
+    public enum CitizenType {
         CITIZEN, OPERATOR
     }
 

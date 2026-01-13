@@ -1,6 +1,6 @@
 package in.gov.manipur.rccms.dto;
 
-import in.gov.manipur.rccms.entity.User;
+import in.gov.manipur.rccms.entity.Citizen;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -9,12 +9,12 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDate;
 
 /**
- * DTO for User Registration Request
+ * DTO for Citizen Registration Request
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserRegistrationDTO {
+public class CitizenRegistrationDTO {
 
     @NotBlank(message = "First name is required")
     @Pattern(regexp = "^[a-zA-Z\\s]+$", message = "First name must contain only letters")
@@ -39,7 +39,7 @@ public class UserRegistrationDTO {
     private LocalDate dateOfBirth;
 
     @NotNull(message = "Gender is required")
-    private User.Gender gender;
+    private Citizen.Gender gender;
 
     @NotBlank(message = "Address is required")
     @Size(min = 10, max = 500, message = "Address must be between 10 and 500 characters")
