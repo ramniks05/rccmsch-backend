@@ -1,10 +1,10 @@
 package in.gov.manipur.rccms.service;
 
+import in.gov.manipur.rccms.entity.Citizen;
 import in.gov.manipur.rccms.entity.Otp;
-import in.gov.manipur.rccms.entity.User;
 import in.gov.manipur.rccms.exception.InvalidCredentialsException;
+import in.gov.manipur.rccms.repository.CitizenRepository;
 import in.gov.manipur.rccms.repository.OtpRepository;
-import in.gov.manipur.rccms.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -26,7 +26,7 @@ import java.util.Random;
 public class OtpService {
 
     private final OtpRepository otpRepository;
-    private final UserRepository userRepository;
+    private final CitizenRepository citizenRepository;
     private final SmsService smsService;
     private static final Random random = new Random();
     // Rate limiting disabled - OTP can be sent freely
@@ -36,14 +36,14 @@ public class OtpService {
     /**
      * Generate and send OTP for mobile number
      * Includes rate limiting (max 3 requests per 15 minutes)
-     * By default, requires user to be active (for login scenarios)
+     * By default, requires citizen to be active (for login scenarios)
      * 
      * @param mobileNumber Mobile number
-     * @param userType User type (CITIZEN or OPERATOR)
+     * @param citizenType Citizen type (CITIZEN or OPERATOR)
      * @return Generated OTP code
      */
-    public String generateOtp(String mobileNumber, User.UserType userType) {
-        return generateOtp(mobileNumber, userType, false);
+    public String generateOtp(String mobileNumber, Citizen.CitizenType citizenType) {
+        return generateOtp(mobileNumber, citizenType, false);
     }
 
     /**
@@ -51,56 +51,56 @@ public class OtpService {
      * Includes rate limiting (max 3 requests per 15 minutes)
      * 
      * @param mobileNumber Mobile number
-     * @param userType User type (CITIZEN or OPERATOR)
-     * @param allowInactive If true, allows OTP generation for inactive users (for registration flow)
+     * @param citizenType Citizen type (CITIZEN or OPERATOR)
+     * @param allowInactive If true, allows OTP generation for inactive citizens (for registration flow)
      * @return Generated OTP code
      */
-    public String generateOtp(String mobileNumber, User.UserType userType, boolean allowInactive) {
+    public String generateOtp(String mobileNumber, Citizen.CitizenType citizenType, boolean allowInactive) {
         if (mobileNumber == null || mobileNumber.trim().isEmpty()) {
             throw new IllegalArgumentException("Mobile number cannot be null or empty");
         }
 
         String trimmedMobile = mobileNumber.trim();
-        Otp.UserType otpUserType = convertUserType(userType);
+        Otp.CitizenType otpCitizenType = convertCitizenType(citizenType);
 
         // Rate limiting disabled - OTP can be sent freely
         // (Rate limiting can be enabled later if needed)
         // LocalDateTime since = LocalDateTime.now().minusMinutes(15);
-        // long recentRequests = otpRepository.countRecentOtpRequests(trimmedMobile, otpUserType, since);
+        // long recentRequests = otpRepository.countRecentOtpRequests(trimmedMobile, otpCitizenType, since);
         // if (recentRequests >= MAX_OTP_REQUESTS_PER_15_MIN) {
-        //     log.warn("Rate limit exceeded for mobile: {} (userType: {})", maskMobile(trimmedMobile), userType);
+        //     log.warn("Rate limit exceeded for mobile: {} (citizenType: {})", maskMobile(trimmedMobile), citizenType);
         //     throw new TooManyRequestsException("Too many OTP requests. Please try again after 15 minutes.");
         // }
 
-        // Verify user exists with this mobile number
-        Optional<User> userOpt = userRepository.findByMobileNumber(trimmedMobile);
-        if (userOpt.isEmpty()) {
+        // Verify citizen exists with this mobile number
+        Optional<Citizen> citizenOpt = citizenRepository.findByMobileNumber(trimmedMobile);
+        if (citizenOpt.isEmpty()) {
             // If allowInactive is true, this is for registration verification
-            // User should exist after registration, but allow OTP generation anyway
-            // (user might be in process of registration or transaction not committed yet)
+            // Citizen should exist after registration, but allow OTP generation anyway
+            // (citizen might be in process of registration or transaction not committed yet)
             if (allowInactive) {
-                log.warn("User not found for registration verification - mobile: {} (may be in registration process)", maskMobile(trimmedMobile));
+                log.warn("Citizen not found for registration verification - mobile: {} (may be in registration process)", maskMobile(trimmedMobile));
                 // Still allow OTP generation for registration verification
-                // The OTP will be stored and can be verified later when user exists
+                // The OTP will be stored and can be verified later when citizen exists
             } else {
-                log.warn("OTP request failed: User not found with mobile: {}", maskMobile(trimmedMobile));
+                log.warn("OTP request failed: Citizen not found with mobile: {}", maskMobile(trimmedMobile));
                 throw new InvalidCredentialsException("Mobile number not registered");
             }
         }
 
-        // Only verify user details if user exists
-        if (userOpt.isPresent()) {
-            User user = userOpt.get();
+        // Only verify citizen details if citizen exists
+        if (citizenOpt.isPresent()) {
+            Citizen citizen = citizenOpt.get();
             
-            // Verify user type matches
-            if (!user.getUserType().equals(userType)) {
-                log.warn("OTP request failed: User type mismatch for mobile: {}", maskMobile(trimmedMobile));
-                throw new InvalidCredentialsException("Invalid user type");
+            // Verify citizen type matches
+            if (!citizen.getCitizenType().equals(citizenType)) {
+                log.warn("OTP request failed: Citizen type mismatch for mobile: {}", maskMobile(trimmedMobile));
+                throw new InvalidCredentialsException("Invalid citizen type");
             }
 
-            // Check if user is active (skip check if allowInactive is true for registration flow)
-            if (!allowInactive && !user.getIsActive()) {
-                log.warn("OTP request failed: User account is inactive for mobile: {}", maskMobile(trimmedMobile));
+            // Check if citizen is active (skip check if allowInactive is true for registration flow)
+            if (!allowInactive && !citizen.getIsActive()) {
+                log.warn("OTP request failed: Citizen account is inactive for mobile: {}", maskMobile(trimmedMobile));
                 throw new InvalidCredentialsException("Account is inactive. Please contact support.");
             }
         }
@@ -109,7 +109,7 @@ public class OtpService {
         String otpCode = generateOtpCode();
         Otp otp = new Otp();
         otp.setMobileNumber(trimmedMobile);
-        otp.setUserType(otpUserType);
+        otp.setCitizenType(otpCitizenType);
         otp.setOtpCode(otpCode);
         otp.setExpiresAt(LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES));
         otp.setIsUsed(false);
@@ -122,7 +122,7 @@ public class OtpService {
         log.info("========================================");
         log.info("MOBILE NUMBER: {}", trimmedMobile);
         log.info("OTP CODE: {}", otpCode);
-        log.info("USER TYPE: {}", userType);
+        log.info("CITIZEN TYPE: {}", citizenType);
         log.info("EXPIRY: {} minutes", OTP_EXPIRY_MINUTES);
         log.info("STATUS: {}", allowInactive ? "Registration Verification" : "Login");
         log.info("========================================");
@@ -141,7 +141,7 @@ public class OtpService {
      * Verify OTP code
      */
     @Transactional(readOnly = true)
-    public boolean verifyOtp(String mobileNumber, String otpCode, User.UserType userType) {
+    public boolean verifyOtp(String mobileNumber, String otpCode, Citizen.CitizenType citizenType) {
         if (mobileNumber == null || mobileNumber.trim().isEmpty()) {
             throw new IllegalArgumentException("Mobile number cannot be null or empty");
         }
@@ -152,12 +152,12 @@ public class OtpService {
         String trimmedMobile = mobileNumber.trim();
         String trimmedOtp = otpCode.trim();
         LocalDateTime now = LocalDateTime.now();
-        Otp.UserType otpUserType = convertUserType(userType);
+        Otp.CitizenType otpCitizenType = convertCitizenType(citizenType);
 
         Optional<Otp> otpOpt = otpRepository.findValidOtpByMobileNumber(
                 trimmedMobile, 
                 trimmedOtp, 
-                otpUserType, 
+                otpCitizenType, 
                 now
         );
 
@@ -167,16 +167,16 @@ public class OtpService {
     /**
      * Mark OTP as used after successful verification
      */
-    public void markOtpAsUsed(String mobileNumber, String otpCode, User.UserType userType) {
+    public void markOtpAsUsed(String mobileNumber, String otpCode, Citizen.CitizenType citizenType) {
         String trimmedMobile = mobileNumber.trim();
         String trimmedOtp = otpCode.trim();
         LocalDateTime now = LocalDateTime.now();
-        Otp.UserType otpUserType = convertUserType(userType);
+        Otp.CitizenType otpCitizenType = convertCitizenType(citizenType);
 
         Optional<Otp> otpOpt = otpRepository.findValidOtpByMobileNumber(
                 trimmedMobile, 
                 trimmedOtp, 
-                otpUserType, 
+                otpCitizenType, 
                 now
         );
 
@@ -195,10 +195,10 @@ public class OtpService {
     }
 
     /**
-     * Convert User.UserType to Otp.UserType
+     * Convert Citizen.CitizenType to Otp.CitizenType
      */
-    private Otp.UserType convertUserType(User.UserType userType) {
-        return Otp.UserType.valueOf(userType.name());
+    private Otp.CitizenType convertCitizenType(Citizen.CitizenType citizenType) {
+        return Otp.CitizenType.valueOf(citizenType.name());
     }
 
     /**

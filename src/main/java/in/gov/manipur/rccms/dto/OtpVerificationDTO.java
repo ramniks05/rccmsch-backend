@@ -1,6 +1,6 @@
 package in.gov.manipur.rccms.dto;
 
-import in.gov.manipur.rccms.entity.User;
+import in.gov.manipur.rccms.entity.Citizen;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -32,7 +32,7 @@ public class OtpVerificationDTO {
     @NotBlank(message = "CAPTCHA ID is required")
     private String captchaId;
 
-    @NotNull(message = "User type is required")
-    private User.UserType userType;
+    @NotNull(message = "Citizen type is required")
+    private Citizen.CitizenType citizenType;
 }
 

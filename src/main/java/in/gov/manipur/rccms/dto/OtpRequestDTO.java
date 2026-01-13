@@ -1,6 +1,6 @@
 package in.gov.manipur.rccms.dto;
 
-import in.gov.manipur.rccms.entity.User;
+import in.gov.manipur.rccms.entity.Citizen;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -20,7 +20,7 @@ public class OtpRequestDTO {
     @Pattern(regexp = "^[6-9]\\d{9}$", message = "Mobile number must be 10 digits starting with 6-9")
     private String mobileNumber;
 
-    @NotNull(message = "User type is required")
-    private User.UserType userType;
+    @NotNull(message = "Citizen type is required")
+    private Citizen.CitizenType citizenType;
 }
 

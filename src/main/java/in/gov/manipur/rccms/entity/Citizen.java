@@ -17,11 +17,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * User Entity (Citizen/Operator)
- * Represents a user in the RCCMS system
+ * Citizen Entity (Citizen/Operator)
+ * Represents a citizen or operator in the RCCMS system
  */
 @Entity
-@Table(name = "users", 
+@Table(name = "citizens", 
        uniqueConstraints = {
            @UniqueConstraint(columnNames = "email"),
            @UniqueConstraint(columnNames = "mobile_number"),
@@ -37,7 +37,7 @@ import java.time.LocalDateTime;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class User {
+public class Citizen {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -94,8 +94,8 @@ public class User {
     private String password; // Will be hashed with BCrypt
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "user_type", nullable = false, length = 20)
-    private UserType userType;
+    @Column(name = "citizen_type", nullable = false, length = 20)
+    private CitizenType citizenType;
 
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = false; // Set to true after mobile verification
@@ -122,9 +122,9 @@ public class User {
     }
 
     /**
-     * User Type Enum
+     * Citizen Type Enum
      */
-    public enum UserType {
+    public enum CitizenType {
         CITIZEN, OPERATOR
     }
 

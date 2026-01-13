@@ -58,6 +58,42 @@ public class JwtService {
     }
 
     /**
+     * Generate JWT token for post-based authentication
+     * @param userid the UserID (ROLE@LGD format)
+     * @param roleCode the role code
+     * @param unitId the unit ID
+     * @param unitLevel the unit level
+     * @param userId the user (person) ID
+     * @return JWT token string
+     */
+    public String generatePostBasedToken(String userid, String roleCode, Long unitId, String unitLevel, Long userId) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userid", userid);
+        claims.put("roleCode", roleCode);
+        claims.put("unitId", unitId);
+        claims.put("unitLevel", unitLevel);
+        claims.put("userId", userId);
+        claims.put("type", "access");
+        claims.put("authType", "POST_BASED");
+        return createToken(claims, userid, jwtExpiration);
+    }
+
+    /**
+     * Generate JWT token for admin authentication
+     * @param username the admin username
+     * @param role the admin role (e.g., SUPER_ADMIN)
+     * @return JWT token string
+     */
+    public String generateAdminToken(String username, String role) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", 0L); // Admin user ID
+        claims.put("role", role);
+        claims.put("type", "access");
+        claims.put("authType", "ADMIN");
+        return createToken(claims, username, jwtExpiration);
+    }
+
+    /**
      * Create JWT token with claims
      */
     private String createToken(Map<String, Object> claims, String subject, Long expiration) {

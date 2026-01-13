@@ -18,25 +18,25 @@ import java.util.Optional;
 public interface OtpRepository extends JpaRepository<Otp, Long> {
 
     /**
-     * Find valid OTP by mobile number, OTP code, and user type
+     * Find valid OTP by mobile number, OTP code, and citizen type
      */
     @Query("SELECT o FROM Otp o WHERE o.mobileNumber = :mobileNumber " +
-           "AND o.otpCode = :otpCode AND o.userType = :userType " +
+           "AND o.otpCode = :otpCode AND o.citizenType = :citizenType " +
            "AND o.isUsed = false AND o.expiresAt > :now ORDER BY o.createdAt DESC")
     Optional<Otp> findValidOtpByMobileNumber(
             @Param("mobileNumber") String mobileNumber,
             @Param("otpCode") String otpCode,
-            @Param("userType") Otp.UserType userType,
+            @Param("citizenType") Otp.CitizenType citizenType,
             @Param("now") LocalDateTime now);
 
     /**
      * Count OTP requests in last 15 minutes for rate limiting
      */
     @Query("SELECT COUNT(o) FROM Otp o WHERE o.mobileNumber = :mobileNumber " +
-           "AND o.userType = :userType AND o.createdAt > :since")
+           "AND o.citizenType = :citizenType AND o.createdAt > :since")
     long countRecentOtpRequests(
             @Param("mobileNumber") String mobileNumber,
-            @Param("userType") Otp.UserType userType,
+            @Param("citizenType") Otp.CitizenType citizenType,
             @Param("since") LocalDateTime since);
 
     /**

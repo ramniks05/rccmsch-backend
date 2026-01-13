@@ -1,10 +1,10 @@
 package in.gov.manipur.rccms.controller;
 
 import in.gov.manipur.rccms.dto.*;
-import in.gov.manipur.rccms.entity.User;
+import in.gov.manipur.rccms.entity.Citizen;
 import in.gov.manipur.rccms.service.AuthService;
+import in.gov.manipur.rccms.service.CitizenService;
 import in.gov.manipur.rccms.service.OtpService;
-import in.gov.manipur.rccms.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -31,7 +31,7 @@ import java.util.Map;
 public class AuthenticationController {
 
     private final AuthService authService;
-    private final UserService userService;
+    private final CitizenService citizenService;
     private final OtpService otpService;
 
     /**
@@ -61,16 +61,16 @@ public class AuthenticationController {
     })
     @PostMapping("/citizen/register")
     public ResponseEntity<ApiResponse<Map<String, Object>>> registerCitizen(
-            @Valid @RequestBody UserRegistrationDTO request) {
+            @Valid @RequestBody CitizenRegistrationDTO request) {
         log.info("Citizen registration request received for email: {}", maskEmail(request.getEmail()));
         
-        Map<String, Object> registrationResult = userService.registerCitizen(request);
-        Long userId = (Long) registrationResult.get("userId");
+        Map<String, Object> registrationResult = citizenService.registerCitizen(request);
+        Long citizenId = (Long) registrationResult.get("citizenId");
         String otpCode = (String) registrationResult.get("otpCode");
         
         Map<String, Object> response = new java.util.HashMap<>();
         response.put("message", "Registration successful. OTP sent to mobile number.");
-        response.put("userId", userId);
+        response.put("citizenId", citizenId);
         response.put("otpCode", otpCode); // Temporary - OTP included in response for testing
         response.put("expiryMinutes", 5);
         response.put("note", "OTP is also logged to console. This is temporary until SMS API is integrated.");
@@ -106,10 +106,10 @@ public class AuthenticationController {
                     content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class))
             )
     })
-    @PostMapping("/registration/send-otp")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> sendRegistrationOtp(
+    @PostMapping("/citizen/registration/send-otp")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> sendCitizenRegistrationOtp(
             @RequestBody OtpRequestDTO request) {
-        log.info("Registration OTP request received for mobile: {}", maskMobile(request.getMobileNumber()));
+        log.info("Citizen registration OTP request received for mobile: {}", maskMobile(request.getMobileNumber()));
         
         // Validate mobile number
         if (request.getMobileNumber() == null || request.getMobileNumber().trim().isEmpty()) {
@@ -123,18 +123,18 @@ public class AuthenticationController {
             throw new IllegalArgumentException("Mobile number must be 10 digits starting with 6-9");
         }
         
-        // For registration verification, userType is always CITIZEN (operators don't register)
+        // For registration verification, citizenType is always CITIZEN (operators don't register)
         // If not provided or null, default to CITIZEN
-        User.UserType userType = request.getUserType();
-        if (userType == null) {
-            userType = User.UserType.CITIZEN;
-            log.info("UserType not provided, defaulting to CITIZEN for registration verification");
+        Citizen.CitizenType citizenType = request.getCitizenType();
+        if (citizenType == null) {
+            citizenType = Citizen.CitizenType.CITIZEN;
+            log.info("CitizenType not provided, defaulting to CITIZEN for registration verification");
         }
         
-        // For registration verification, allow OTP generation even if user lookup fails
-        // (user might be in registration process or transaction not committed yet)
+        // For registration verification, allow OTP generation even if citizen lookup fails
+        // (citizen might be in registration process or transaction not committed yet)
         // OtpService will handle this gracefully with allowInactive=true
-        String otpCode = otpService.generateOtp(trimmedMobile, userType, true);
+        String otpCode = otpService.generateOtp(trimmedMobile, citizenType, true);
         
         Map<String, Object> response = new java.util.HashMap<>();
         response.put("message", "OTP sent successfully for registration verification");
@@ -146,13 +146,13 @@ public class AuthenticationController {
     }
 
     /**
-     * Send OTP for Mobile Login (For Active Users)
-     * POST /api/auth/mobile/send-otp
-     * Use this endpoint for LOGIN when user account is already active
+     * Send OTP for Citizen Login
+     * POST /api/auth/citizen/send-otp
+     * Use this endpoint for LOGIN when citizen account is already active
      */
     @Operation(
-            summary = "Send OTP for Login",
-            description = "Send OTP to mobile number for login. Use this for LOGIN when user account is already active and verified. Rate limited to 3 requests per 15 minutes."
+            summary = "Send OTP for Citizen Login",
+            description = "Send OTP to mobile number for citizen login. Use this for LOGIN when citizen account is already active and verified."
     )
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -164,39 +164,34 @@ public class AuthenticationController {
                     responseCode = "401",
                     description = "Account not active or mobile number not registered",
                     content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class))
-            ),
-            @io.swagger.v3.oas.annotations.responses.ApiResponse(
-                    responseCode = "429",
-                    description = "Too many OTP requests",
-                    content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class))
             )
     })
-    @PostMapping("/mobile/send-otp")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> sendLoginOtp(
+    @PostMapping("/citizen/send-otp")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> sendCitizenLoginOtp(
             @Valid @RequestBody OtpRequestDTO request) {
-        log.info("Login OTP request received for mobile: {}", maskMobile(request.getMobileNumber()));
+        log.info("Citizen login OTP request received for mobile: {}", maskMobile(request.getMobileNumber()));
         
         String trimmedMobile = request.getMobileNumber().trim();
         
-        // For login, require active user (allowInactive=false)
-        String otpCode = otpService.generateOtp(trimmedMobile, request.getUserType(), false);
+        // For login, require active citizen (allowInactive=false)
+        String otpCode = otpService.generateOtp(trimmedMobile, request.getCitizenType(), false);
         
         Map<String, Object> response = new java.util.HashMap<>();
-        response.put("message", "OTP sent successfully for login");
+        response.put("message", "OTP sent successfully for citizen login");
         response.put("otpCode", otpCode); // TODO: Remove this when SMS API is integrated - OTP should not be in response
         response.put("expiryMinutes", 5);
         response.put("note", "OTP is also logged to console. This is temporary until SMS API is integrated.");
         
-        return ResponseEntity.ok(ApiResponse.success("OTP sent successfully for login", response));
+        return ResponseEntity.ok(ApiResponse.success("OTP sent successfully for citizen login", response));
     }
 
     /**
-     * Verify OTP and Login
-     * POST /api/auth/mobile/verify-otp
+     * Citizen Login (OTP-based)
+     * POST /api/auth/citizen/otp-login
      */
     @Operation(
-            summary = "Verify OTP and Login",
-            description = "Verify OTP code and login. Returns JWT access token and refresh token."
+            summary = "Citizen OTP Login",
+            description = "Login for citizens by verifying OTP code sent to mobile number. Returns JWT access token and refresh token."
     )
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -215,23 +210,23 @@ public class AuthenticationController {
                     content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class))
             )
     })
-    @PostMapping("/mobile/verify-otp")
-    public ResponseEntity<ApiResponse<AuthResponseDTO>> verifyOtpAndLogin(
+    @PostMapping("/citizen/otp-login")
+    public ResponseEntity<ApiResponse<AuthResponseDTO>> citizenOtpLogin(
             @Valid @RequestBody OtpVerificationDTO request) {
-        log.info("OTP verification request received for mobile: {}", maskMobile(request.getMobileNumber()));
+        log.info("Citizen OTP login request received for mobile: {}", maskMobile(request.getMobileNumber()));
         
         AuthResponseDTO response = authService.loginWithOtp(request);
         
-        return ResponseEntity.ok(ApiResponse.success("Login successful", response));
+        return ResponseEntity.ok(ApiResponse.success("Citizen login successful", response));
     }
 
     /**
-     * Mobile/Email & Password Login
-     * POST /api/auth/password/login
+     * Citizen Login (Password-based)
+     * POST /api/auth/citizen/login
      */
     @Operation(
-            summary = "Password Login",
-            description = "Login with mobile number/email and password. Returns JWT access token and refresh token."
+            summary = "Citizen Login",
+            description = "Login for citizens with mobile number/email and password. Returns JWT access token and refresh token."
     )
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -250,14 +245,14 @@ public class AuthenticationController {
                     content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class))
             )
     })
-    @PostMapping("/password/login")
-    public ResponseEntity<ApiResponse<AuthResponseDTO>> loginWithPassword(
+    @PostMapping("/citizen/login")
+    public ResponseEntity<ApiResponse<AuthResponseDTO>> citizenLogin(
             @Valid @RequestBody LoginRequestDTO request) {
-        log.info("Password login request received for username: {}", maskUsername(request.getUsername()));
+        log.info("Citizen login request received for username: {}", maskUsername(request.getUsername()));
         
         AuthResponseDTO response = authService.loginWithPassword(request);
         
-        return ResponseEntity.ok(ApiResponse.success("Login successful", response));
+        return ResponseEntity.ok(ApiResponse.success("Citizen login successful", response));
     }
 
     /**
@@ -294,12 +289,12 @@ public class AuthenticationController {
     }
 
     /**
-     * Verify Mobile OTP (for registration)
-     * POST /api/auth/verify-registration-otp
+     * Verify Citizen Registration OTP
+     * POST /api/auth/citizen/registration/verify-otp
      */
     @Operation(
             summary = "Verify Registration OTP",
-            description = "Verify mobile OTP sent during registration. Activates the account."
+            description = "Verify mobile OTP sent during citizen registration. Activates the citizen account."
     )
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
@@ -313,8 +308,8 @@ public class AuthenticationController {
                     content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class))
             )
     })
-    @PostMapping("/verify-registration-otp")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> verifyRegistrationOtp(
+    @PostMapping("/citizen/registration/verify-otp")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> verifyCitizenRegistrationOtp(
             @RequestBody Map<String, String> request) {
         String mobileNumber = request.get("mobileNumber");
         String otp = request.get("otp");
@@ -323,16 +318,16 @@ public class AuthenticationController {
             throw new IllegalArgumentException("Mobile number and OTP are required");
         }
         
-        log.info("Registration OTP verification request for mobile: {}", maskMobile(mobileNumber));
+        log.info("Citizen registration OTP verification request for mobile: {}", maskMobile(mobileNumber));
         
-        userService.verifyMobileOtp(mobileNumber, otp);
+        citizenService.verifyMobileOtp(mobileNumber, otp);
         
         Map<String, Object> response = Map.of(
-                "message", "Mobile number verified successfully",
+                "message", "Mobile number verified successfully. Citizen account activated.",
                 "mobileNumber", mobileNumber
         );
         
-        return ResponseEntity.ok(ApiResponse.success("Mobile number verified successfully", response));
+        return ResponseEntity.ok(ApiResponse.success("Mobile number verified successfully. Citizen account activated.", response));
     }
 
     /**

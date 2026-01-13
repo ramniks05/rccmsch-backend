@@ -3,7 +3,7 @@ package in.gov.manipur.rccms.service;
 import in.gov.manipur.rccms.dto.AuthResponseDTO;
 import in.gov.manipur.rccms.dto.LoginRequestDTO;
 import in.gov.manipur.rccms.dto.OtpVerificationDTO;
-import in.gov.manipur.rccms.entity.User;
+import in.gov.manipur.rccms.entity.Citizen;
 import in.gov.manipur.rccms.exception.InvalidCredentialsException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Authentication Service
- * Handles user authentication (password and OTP login)
+ * Handles citizen authentication (password and OTP login)
  */
 @Slf4j
 @Service
@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class AuthService {
 
-    private final UserService userService;
+    private final CitizenService citizenService;
     private final OtpService otpService;
     private final CaptchaService captchaService;
     private final JwtService jwtService;
@@ -43,40 +43,40 @@ public class AuthService {
         // Mark CAPTCHA as used
         captchaService.markCaptchaAsUsed(request.getCaptchaId(), request.getCaptcha());
 
-        // Find and verify user
-        User user = userService.findByEmailOrMobile(request.getUsername().trim());
+        // Find and verify citizen
+        Citizen citizen = citizenService.findByEmailOrMobile(request.getUsername().trim());
         
-        // Verify user type matches
-        if (!user.getUserType().equals(request.getUserType())) {
-            log.warn("Login failed: User type mismatch for user ID: {}", user.getId());
-            throw new InvalidCredentialsException("Invalid user type");
+        // Verify citizen type matches
+        if (!citizen.getCitizenType().equals(request.getCitizenType())) {
+            log.warn("Login failed: Citizen type mismatch for citizen ID: {}", citizen.getId());
+            throw new InvalidCredentialsException("Invalid citizen type");
         }
 
         // Check if account is active
-        if (!user.getIsActive()) {
-            log.warn("Login failed: Account is inactive for user ID: {}", user.getId());
+        if (!citizen.getIsActive()) {
+            log.warn("Login failed: Account is inactive for citizen ID: {}", citizen.getId());
             throw new InvalidCredentialsException("Account is not active. Please verify your mobile number.");
         }
 
         // Verify password
-        if (!userService.verifyUserCredentials(request.getUsername().trim(), request.getPassword()).equals(user)) {
-            log.warn("Login failed: Invalid password for user ID: {}", user.getId());
+        if (!citizenService.verifyCitizenCredentials(request.getUsername().trim(), request.getPassword()).equals(citizen)) {
+            log.warn("Login failed: Invalid password for citizen ID: {}", citizen.getId());
             throw new InvalidCredentialsException("Invalid username or password");
         }
 
         // Generate tokens
-        String accessToken = jwtService.generateToken(user.getId(), user.getEmail(), user.getUserType().name());
-        String refreshToken = jwtService.generateRefreshToken(user.getId(), user.getEmail());
+        String accessToken = jwtService.generateToken(citizen.getId(), citizen.getEmail(), citizen.getCitizenType().name());
+        String refreshToken = jwtService.generateRefreshToken(citizen.getId(), citizen.getEmail());
 
-        log.info("Password login successful for user ID: {}", user.getId());
+        log.info("Password login successful for citizen ID: {}", citizen.getId());
 
         return AuthResponseDTO.builder()
                 .token(accessToken)
                 .refreshToken(refreshToken)
-                .userId(user.getId())
-                .userType(user.getUserType())
-                .email(user.getEmail())
-                .mobileNumber(user.getMobileNumber())
+                .userId(citizen.getId())
+                .citizenType(citizen.getCitizenType())
+                .email(citizen.getEmail())
+                .mobileNumber(citizen.getMobileNumber())
                 .expiresIn(3600) // 1 hour in seconds
                 .build();
     }
@@ -104,7 +104,7 @@ public class AuthService {
         boolean isValidOtp = otpService.verifyOtp(
                 request.getMobileNumber().trim(), 
                 request.getOtp().trim(), 
-                request.getUserType()
+                request.getCitizenType()
         );
         
         if (!isValidOtp) {
@@ -112,37 +112,37 @@ public class AuthService {
             throw new InvalidCredentialsException("Invalid or expired OTP");
         }
 
-        // Find user
-        User user = userService.findByEmailOrMobile(request.getMobileNumber().trim());
+        // Find citizen
+        Citizen citizen = citizenService.findByEmailOrMobile(request.getMobileNumber().trim());
         
-        // Verify user type matches
-        if (!user.getUserType().equals(request.getUserType())) {
-            log.warn("OTP login failed: User type mismatch for user ID: {}", user.getId());
-            throw new InvalidCredentialsException("Invalid user type");
+        // Verify citizen type matches
+        if (!citizen.getCitizenType().equals(request.getCitizenType())) {
+            log.warn("OTP login failed: Citizen type mismatch for citizen ID: {}", citizen.getId());
+            throw new InvalidCredentialsException("Invalid citizen type");
         }
 
         // Check if account is active
-        if (!user.getIsActive()) {
-            log.warn("OTP login failed: Account is inactive for user ID: {}", user.getId());
+        if (!citizen.getIsActive()) {
+            log.warn("OTP login failed: Account is inactive for citizen ID: {}", citizen.getId());
             throw new InvalidCredentialsException("Account is not active. Please contact support.");
         }
 
         // Mark OTP as used
-        otpService.markOtpAsUsed(request.getMobileNumber().trim(), request.getOtp().trim(), request.getUserType());
+        otpService.markOtpAsUsed(request.getMobileNumber().trim(), request.getOtp().trim(), request.getCitizenType());
 
         // Generate tokens
-        String accessToken = jwtService.generateToken(user.getId(), user.getEmail(), user.getUserType().name());
-        String refreshToken = jwtService.generateRefreshToken(user.getId(), user.getEmail());
+        String accessToken = jwtService.generateToken(citizen.getId(), citizen.getEmail(), citizen.getCitizenType().name());
+        String refreshToken = jwtService.generateRefreshToken(citizen.getId(), citizen.getEmail());
 
-        log.info("OTP login successful for user ID: {}", user.getId());
+        log.info("OTP login successful for citizen ID: {}", citizen.getId());
 
         return AuthResponseDTO.builder()
                 .token(accessToken)
                 .refreshToken(refreshToken)
-                .userId(user.getId())
-                .userType(user.getUserType())
-                .email(user.getEmail())
-                .mobileNumber(user.getMobileNumber())
+                .userId(citizen.getId())
+                .citizenType(citizen.getCitizenType())
+                .email(citizen.getEmail())
+                .mobileNumber(citizen.getMobileNumber())
                 .expiresIn(3600) // 1 hour in seconds
                 .build();
     }
@@ -160,24 +160,24 @@ public class AuthService {
             throw new InvalidCredentialsException("Invalid or expired refresh token");
         }
 
-        // Extract user info from refresh token
-        Long userId = jwtService.extractUserId(refreshToken);
+        // Extract citizen info from refresh token
+        Long citizenId = jwtService.extractUserId(refreshToken);
         String username = jwtService.extractUsername(refreshToken);
         
-        User user = userService.findById(userId);
+        Citizen citizen = citizenService.findById(citizenId);
 
         // Generate new access token
-        String newAccessToken = jwtService.generateToken(user.getId(), username, user.getUserType().name());
+        String newAccessToken = jwtService.generateToken(citizen.getId(), username, citizen.getCitizenType().name());
 
-        log.info("Token refreshed for user ID: {}", userId);
+        log.info("Token refreshed for citizen ID: {}", citizenId);
 
         return AuthResponseDTO.builder()
                 .token(newAccessToken)
                 .refreshToken(refreshToken) // Return same refresh token
-                .userId(user.getId())
-                .userType(user.getUserType())
-                .email(user.getEmail())
-                .mobileNumber(user.getMobileNumber())
+                .userId(citizen.getId())
+                .citizenType(citizen.getCitizenType())
+                .email(citizen.getEmail())
+                .mobileNumber(citizen.getMobileNumber())
                 .expiresIn(3600)
                 .build();
     }
