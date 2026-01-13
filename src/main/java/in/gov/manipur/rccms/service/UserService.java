@@ -28,10 +28,10 @@ public class UserService {
     /**
      * Register a new citizen
      * @param dto registration DTO
-     * @return User ID
+     * @return Map containing userId and otpCode (temporary - until SMS API is integrated)
      * @throws DuplicateUserException if email/mobile/aadhar already exists
      */
-    public Long registerCitizen(UserRegistrationDTO dto) {
+    public java.util.Map<String, Object> registerCitizen(UserRegistrationDTO dto) {
         if (dto == null) {
             throw new IllegalArgumentException("Registration data cannot be null");
         }
@@ -97,12 +97,13 @@ public class UserService {
 
         // Generate and send DUMMY OTP for mobile verification (logged to console)
         // Allow inactive users for registration flow (allowInactive = true)
+        String otpCode = null;
         try {
             log.info("");
             log.info("════════════════════════════════════════════════════════════");
             log.info("GENERATING DUMMY OTP FOR REGISTRATION VERIFICATION");
             log.info("════════════════════════════════════════════════════════════");
-            otpService.generateOtp(savedUser.getMobileNumber(), User.UserType.CITIZEN, true);
+            otpCode = otpService.generateOtp(savedUser.getMobileNumber(), User.UserType.CITIZEN, true);
             log.info("════════════════════════════════════════════════════════════");
             log.info("DUMMY OTP GENERATED AND LOGGED TO CONSOLE");
             log.info("════════════════════════════════════════════════════════════");
@@ -112,7 +113,12 @@ public class UserService {
             // Don't fail registration if OTP sending fails - registration is already successful
         }
 
-        return savedUser.getId();
+        // Return userId and OTP code (temporary - until SMS API is integrated)
+        // OTP will be included in API response for testing purposes
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        result.put("userId", savedUser.getId());
+        result.put("otpCode", otpCode); // May be null if OTP generation failed
+        return result;
     }
 
     /**

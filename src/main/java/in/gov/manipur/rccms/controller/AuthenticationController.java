@@ -64,12 +64,16 @@ public class AuthenticationController {
             @Valid @RequestBody UserRegistrationDTO request) {
         log.info("Citizen registration request received for email: {}", maskEmail(request.getEmail()));
         
-        Long userId = userService.registerCitizen(request);
+        Map<String, Object> registrationResult = userService.registerCitizen(request);
+        Long userId = (Long) registrationResult.get("userId");
+        String otpCode = (String) registrationResult.get("otpCode");
         
-        Map<String, Object> response = Map.of(
-                "message", "Registration successful. OTP sent to mobile number.",
-                "userId", userId
-        );
+        Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "Registration successful. OTP sent to mobile number.");
+        response.put("userId", userId);
+        response.put("otpCode", otpCode); // Temporary - OTP included in response for testing
+        response.put("expiryMinutes", 5);
+        response.put("note", "OTP is also logged to console. This is temporary until SMS API is integrated.");
         
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Registration successful. OTP sent to mobile number.", response));
@@ -130,12 +134,13 @@ public class AuthenticationController {
         // For registration verification, allow OTP generation even if user lookup fails
         // (user might be in registration process or transaction not committed yet)
         // OtpService will handle this gracefully with allowInactive=true
-        otpService.generateOtp(trimmedMobile, userType, true);
+        String otpCode = otpService.generateOtp(trimmedMobile, userType, true);
         
-        Map<String, Object> response = Map.of(
-                "message", "OTP sent successfully for registration verification",
-                "expiryMinutes", 5
-        );
+        Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "OTP sent successfully for registration verification");
+        response.put("otpCode", otpCode); // TODO: Remove this when SMS API is integrated - OTP should not be in response
+        response.put("expiryMinutes", 5);
+        response.put("note", "OTP is also logged to console. This is temporary until SMS API is integrated.");
         
         return ResponseEntity.ok(ApiResponse.success("OTP sent successfully for registration verification", response));
     }
@@ -174,12 +179,13 @@ public class AuthenticationController {
         String trimmedMobile = request.getMobileNumber().trim();
         
         // For login, require active user (allowInactive=false)
-        otpService.generateOtp(trimmedMobile, request.getUserType(), false);
+        String otpCode = otpService.generateOtp(trimmedMobile, request.getUserType(), false);
         
-        Map<String, Object> response = Map.of(
-                "message", "OTP sent successfully for login",
-                "expiryMinutes", 5
-        );
+        Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "OTP sent successfully for login");
+        response.put("otpCode", otpCode); // TODO: Remove this when SMS API is integrated - OTP should not be in response
+        response.put("expiryMinutes", 5);
+        response.put("note", "OTP is also logged to console. This is temporary until SMS API is integrated.");
         
         return ResponseEntity.ok(ApiResponse.success("OTP sent successfully for login", response));
     }

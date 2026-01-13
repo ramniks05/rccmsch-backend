@@ -40,9 +40,10 @@ public class OtpService {
      * 
      * @param mobileNumber Mobile number
      * @param userType User type (CITIZEN or OPERATOR)
+     * @return Generated OTP code
      */
-    public void generateOtp(String mobileNumber, User.UserType userType) {
-        generateOtp(mobileNumber, userType, false);
+    public String generateOtp(String mobileNumber, User.UserType userType) {
+        return generateOtp(mobileNumber, userType, false);
     }
 
     /**
@@ -52,8 +53,9 @@ public class OtpService {
      * @param mobileNumber Mobile number
      * @param userType User type (CITIZEN or OPERATOR)
      * @param allowInactive If true, allows OTP generation for inactive users (for registration flow)
+     * @return Generated OTP code
      */
-    public void generateOtp(String mobileNumber, User.UserType userType, boolean allowInactive) {
+    public String generateOtp(String mobileNumber, User.UserType userType, boolean allowInactive) {
         if (mobileNumber == null || mobileNumber.trim().isEmpty()) {
             throw new IllegalArgumentException("Mobile number cannot be null or empty");
         }
@@ -130,6 +132,9 @@ public class OtpService {
 
         // Send OTP via SMS service (currently logs to console - DUMMY)
         smsService.sendSms(trimmedMobile, "Your RCCMS OTP is: " + otpCode + ". Valid for " + OTP_EXPIRY_MINUTES + " minutes.");
+
+        // Return OTP code for API response (temporary - until SMS API is integrated)
+        return otpCode;
     }
 
     /**
