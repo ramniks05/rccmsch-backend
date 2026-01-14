@@ -1,7 +1,11 @@
 package in.gov.manipur.rccms.controller;
 
 import in.gov.manipur.rccms.dto.*;
+import in.gov.manipur.rccms.entity.RoleMaster;
+import in.gov.manipur.rccms.repository.RoleMasterRepository;
 import in.gov.manipur.rccms.service.AdminAuthService;
+import in.gov.manipur.rccms.service.AdminUnitService;
+import in.gov.manipur.rccms.service.CaseTypeService;
 import in.gov.manipur.rccms.service.OfficerService;
 import in.gov.manipur.rccms.service.PostBasedAuthService;
 import in.gov.manipur.rccms.service.PostingService;
@@ -33,6 +37,9 @@ public class AdminController {
     private final PostingService postingService;
     private final PostBasedAuthService postBasedAuthService;
     private final AdminAuthService adminAuthService;
+    private final AdminUnitService adminUnitService;
+    private final CaseTypeService caseTypeService;
+    private final RoleMasterRepository roleMasterRepository;
 
     // ==================== User Master (Person) Management ====================
 
@@ -75,6 +82,64 @@ public class AdminController {
     public ResponseEntity<ApiResponse<OfficerDTO>> getOfficerById(@PathVariable Long id) {
         OfficerDTO officer = officerService.getOfficerById(id);
         return ResponseEntity.ok(ApiResponse.success("Officer retrieved successfully", officer));
+    }
+
+    /**
+     * Update officer
+     * PUT /api/admin/officers/{id}
+     */
+    @Operation(summary = "Update Officer", description = "Update an existing officer")
+    @PutMapping("/officers/{id}")
+    public ResponseEntity<ApiResponse<OfficerDTO>> updateOfficer(
+            @PathVariable Long id,
+            @Valid @RequestBody OfficerDTO request) {
+        log.info("Update officer request for ID: {}", id);
+        
+        OfficerDTO updated = officerService.updateOfficer(id, request);
+        
+        return ResponseEntity.ok(ApiResponse.success("Officer updated successfully", updated));
+    }
+
+    /**
+     * Deactivate/Activate officer
+     * PATCH /api/admin/officers/{id}/status
+     */
+    @Operation(summary = "Update Officer Status", description = "Activate or deactivate an officer")
+    @PatchMapping("/officers/{id}/status")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateOfficerStatus(
+            @PathVariable Long id,
+            @RequestBody Map<String, Boolean> request) {
+        Boolean isActive = request.get("isActive");
+        if (isActive == null) {
+            throw new IllegalArgumentException("isActive field is required");
+        }
+        
+        log.info("Update officer status request for ID: {}, isActive: {}", id, isActive);
+        
+        OfficerDTO officer = officerService.getOfficerById(id);
+        officer.setIsActive(isActive);
+        OfficerDTO updated = officerService.updateOfficer(id, officer);
+        
+        Map<String, Object> response = Map.of(
+                "id", updated.getId(),
+                "isActive", updated.getIsActive(),
+                "message", isActive ? "Officer activated successfully" : "Officer deactivated successfully"
+        );
+        
+        return ResponseEntity.ok(ApiResponse.success(
+                isActive ? "Officer activated successfully" : "Officer deactivated successfully", 
+                response));
+    }
+
+    /**
+     * Get active officers
+     * GET /api/admin/officers/active
+     */
+    @Operation(summary = "Get Active Officers", description = "Retrieve all active officers")
+    @GetMapping("/officers/active")
+    public ResponseEntity<ApiResponse<List<OfficerDTO>>> getActiveOfficers() {
+        List<OfficerDTO> officers = officerService.getActiveOfficers();
+        return ResponseEntity.ok(ApiResponse.success("Active officers retrieved successfully", officers));
     }
 
     // ==================== Posting Management ====================
@@ -269,6 +334,295 @@ public class AdminController {
         );
         
         return ResponseEntity.ok(ApiResponse.success("Mobile number verified successfully", response));
+    }
+
+    // ==================== Administrative Units Management ====================
+
+    /**
+     * Create administrative unit
+     * POST /api/admin/admin-units
+     */
+    @Operation(summary = "Create Administrative Unit", description = "Create a new administrative unit")
+    @PostMapping("/admin-units")
+    public ResponseEntity<ApiResponse<AdminUnitDTO>> createAdminUnit(
+            @Valid @RequestBody AdminUnitDTO request) {
+        log.info("Create admin unit request: {}", request.getUnitCode());
+        
+        AdminUnitDTO created = adminUnitService.createAdminUnit(request);
+        
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Admin unit created successfully", created));
+    }
+
+    /**
+     * Get all administrative units
+     * GET /api/admin/admin-units
+     */
+    @Operation(summary = "Get All Administrative Units", description = "Retrieve all administrative units")
+    @GetMapping("/admin-units")
+    public ResponseEntity<ApiResponse<List<AdminUnitDTO>>> getAllAdminUnits() {
+        List<AdminUnitDTO> adminUnits = adminUnitService.getAllAdminUnits();
+        return ResponseEntity.ok(ApiResponse.success("Admin units retrieved successfully", adminUnits));
+    }
+
+    /**
+     * Get administrative unit by ID
+     * GET /api/admin/admin-units/{id}
+     */
+    @Operation(summary = "Get Administrative Unit by ID", description = "Retrieve an administrative unit by ID")
+    @GetMapping("/admin-units/{id}")
+    public ResponseEntity<ApiResponse<AdminUnitDTO>> getAdminUnitById(@PathVariable Long id) {
+        AdminUnitDTO adminUnit = adminUnitService.getAdminUnitById(id);
+        return ResponseEntity.ok(ApiResponse.success("Admin unit retrieved successfully", adminUnit));
+    }
+
+    /**
+     * Update administrative unit
+     * PUT /api/admin/admin-units/{id}
+     */
+    @Operation(summary = "Update Administrative Unit", description = "Update an existing administrative unit")
+    @PutMapping("/admin-units/{id}")
+    public ResponseEntity<ApiResponse<AdminUnitDTO>> updateAdminUnit(
+            @PathVariable Long id,
+            @Valid @RequestBody AdminUnitDTO request) {
+        log.info("Update admin unit request for ID: {}", id);
+        
+        AdminUnitDTO updated = adminUnitService.updateAdminUnit(id, request);
+        
+        return ResponseEntity.ok(ApiResponse.success("Admin unit updated successfully", updated));
+    }
+
+    /**
+     * Delete administrative unit (soft delete)
+     * DELETE /api/admin/admin-units/{id}
+     */
+    @Operation(summary = "Delete Administrative Unit", description = "Soft delete an administrative unit")
+    @DeleteMapping("/admin-units/{id}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteAdminUnit(@PathVariable Long id) {
+        log.info("Delete admin unit request for ID: {}", id);
+        
+        adminUnitService.deleteAdminUnit(id);
+        
+        Map<String, Object> response = Map.of(
+                "message", "Admin unit deleted successfully",
+                "id", id
+        );
+        
+        return ResponseEntity.ok(ApiResponse.success("Admin unit deleted successfully", response));
+    }
+
+    /**
+     * Get administrative units by level
+     * GET /api/admin/admin-units/level/{level}
+     */
+    @Operation(summary = "Get Administrative Units by Level", description = "Retrieve units by level")
+    @GetMapping("/admin-units/level/{level}")
+    public ResponseEntity<ApiResponse<List<AdminUnitDTO>>> getAdminUnitsByLevel(
+            @PathVariable in.gov.manipur.rccms.entity.AdminUnit.UnitLevel level) {
+        List<AdminUnitDTO> adminUnits = adminUnitService.getAdminUnitsByLevel(level);
+        return ResponseEntity.ok(ApiResponse.success("Admin units retrieved successfully", adminUnits));
+    }
+
+    /**
+     * Get administrative units by parent
+     * GET /api/admin/admin-units/parent/{parentId}
+     */
+    @Operation(summary = "Get Administrative Units by Parent", description = "Retrieve child units by parent ID")
+    @GetMapping("/admin-units/parent/{parentId}")
+    public ResponseEntity<ApiResponse<List<AdminUnitDTO>>> getAdminUnitsByParent(@PathVariable Long parentId) {
+        List<AdminUnitDTO> adminUnits = adminUnitService.getAdminUnitsByParent(parentId);
+        return ResponseEntity.ok(ApiResponse.success("Admin units retrieved successfully", adminUnits));
+    }
+
+    // ==================== Case Types Management ====================
+
+    /**
+     * Create case type
+     * POST /api/admin/case-types
+     */
+    @Operation(summary = "Create Case Type", description = "Create a new case type")
+    @PostMapping("/case-types")
+    public ResponseEntity<ApiResponse<CaseTypeDTO>> createCaseType(
+            @Valid @RequestBody CaseTypeDTO request) {
+        log.info("Create case type request: {}", request.getCode());
+        
+        CaseTypeDTO created = caseTypeService.createCaseType(request);
+        
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Case type created successfully", created));
+    }
+
+    /**
+     * Get all case types
+     * GET /api/admin/case-types
+     */
+    @Operation(summary = "Get All Case Types", description = "Retrieve all case types")
+    @GetMapping("/case-types")
+    public ResponseEntity<ApiResponse<List<CaseTypeDTO>>> getAllCaseTypes() {
+        List<CaseTypeDTO> caseTypes = caseTypeService.getAllCaseTypes();
+        return ResponseEntity.ok(ApiResponse.success("Case types retrieved successfully", caseTypes));
+    }
+
+    /**
+     * Get case type by ID
+     * GET /api/admin/case-types/{id}
+     */
+    @Operation(summary = "Get Case Type by ID", description = "Retrieve a case type by ID")
+    @GetMapping("/case-types/{id}")
+    public ResponseEntity<ApiResponse<CaseTypeDTO>> getCaseTypeById(@PathVariable Long id) {
+        CaseTypeDTO caseType = caseTypeService.getCaseTypeById(id);
+        return ResponseEntity.ok(ApiResponse.success("Case type retrieved successfully", caseType));
+    }
+
+    /**
+     * Update case type
+     * PUT /api/admin/case-types/{id}
+     */
+    @Operation(summary = "Update Case Type", description = "Update an existing case type")
+    @PutMapping("/case-types/{id}")
+    public ResponseEntity<ApiResponse<CaseTypeDTO>> updateCaseType(
+            @PathVariable Long id,
+            @Valid @RequestBody CaseTypeDTO request) {
+        log.info("Update case type request for ID: {}", id);
+        
+        CaseTypeDTO updated = caseTypeService.updateCaseType(id, request);
+        
+        return ResponseEntity.ok(ApiResponse.success("Case type updated successfully", updated));
+    }
+
+    /**
+     * Delete case type (soft delete)
+     * DELETE /api/admin/case-types/{id}
+     */
+    @Operation(summary = "Delete Case Type", description = "Soft delete a case type")
+    @DeleteMapping("/case-types/{id}")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteCaseType(@PathVariable Long id) {
+        log.info("Delete case type request for ID: {}", id);
+        
+        caseTypeService.deleteCaseType(id);
+        
+        Map<String, Object> response = Map.of(
+                "message", "Case type deleted successfully",
+                "id", id
+        );
+        
+        return ResponseEntity.ok(ApiResponse.success("Case type deleted successfully", response));
+    }
+
+    /**
+     * Get active case types
+     * GET /api/admin/case-types/active
+     */
+    @Operation(summary = "Get Active Case Types", description = "Retrieve only active case types")
+    @GetMapping("/case-types/active")
+    public ResponseEntity<ApiResponse<List<CaseTypeDTO>>> getActiveCaseTypes() {
+        List<CaseTypeDTO> caseTypes = caseTypeService.getActiveCaseTypes();
+        return ResponseEntity.ok(ApiResponse.success("Active case types retrieved successfully", caseTypes));
+    }
+
+    // ==================== Role Master Management ====================
+
+    /**
+     * Get all roles
+     * GET /api/admin/roles
+     */
+    @Operation(summary = "Get All Roles", description = "Retrieve all system roles (read-only)")
+    @GetMapping("/roles")
+    public ResponseEntity<ApiResponse<List<RoleMasterDTO>>> getAllRoles() {
+        List<RoleMaster> roles = roleMasterRepository.findAllByOrderByRoleCodeAsc();
+        List<RoleMasterDTO> roleDTOs = roles.stream()
+                .map(role -> {
+                    RoleMasterDTO dto = new RoleMasterDTO();
+                    dto.setId(role.getId());
+                    dto.setRoleCode(role.getRoleCode());
+                    dto.setRoleName(role.getRoleName());
+                    dto.setUnitLevel(role.getUnitLevel());
+                    dto.setDescription(role.getDescription());
+                    return dto;
+                })
+                .collect(java.util.stream.Collectors.toList());
+        
+        return ResponseEntity.ok(ApiResponse.success("Roles retrieved successfully", roleDTOs));
+    }
+
+    /**
+     * Get role by ID
+     * GET /api/admin/roles/{id}
+     */
+    @Operation(summary = "Get Role by ID", description = "Retrieve a role by ID")
+    @GetMapping("/roles/{id}")
+    public ResponseEntity<ApiResponse<RoleMasterDTO>> getRoleById(@PathVariable Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("Role ID cannot be null");
+        }
+        
+        RoleMaster role = roleMasterRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Role not found with ID: " + id));
+        
+        RoleMasterDTO dto = new RoleMasterDTO();
+        dto.setId(role.getId());
+        dto.setRoleCode(role.getRoleCode());
+        dto.setRoleName(role.getRoleName());
+        dto.setUnitLevel(role.getUnitLevel());
+        dto.setDescription(role.getDescription());
+        
+        return ResponseEntity.ok(ApiResponse.success("Role retrieved successfully", dto));
+    }
+
+    /**
+     * Get roles by unit level
+     * GET /api/admin/roles/level/{level}
+     */
+    @Operation(summary = "Get Roles by Unit Level", description = "Retrieve roles by unit level")
+    @GetMapping("/roles/level/{level}")
+    public ResponseEntity<ApiResponse<List<RoleMasterDTO>>> getRolesByLevel(
+            @PathVariable in.gov.manipur.rccms.entity.AdminUnit.UnitLevel level) {
+        List<RoleMaster> roles = roleMasterRepository.findByUnitLevel(level);
+        List<RoleMasterDTO> roleDTOs = roles.stream()
+                .map(role -> {
+                    RoleMasterDTO dto = new RoleMasterDTO();
+                    dto.setId(role.getId());
+                    dto.setRoleCode(role.getRoleCode());
+                    dto.setRoleName(role.getRoleName());
+                    dto.setUnitLevel(role.getUnitLevel());
+                    dto.setDescription(role.getDescription());
+                    return dto;
+                })
+                .collect(java.util.stream.Collectors.toList());
+        
+        return ResponseEntity.ok(ApiResponse.success("Roles retrieved successfully", roleDTOs));
+    }
+
+    // ==================== Dashboard / Statistics ====================
+
+    /**
+     * Get dashboard statistics
+     * GET /api/admin/dashboard/stats
+     */
+    @Operation(summary = "Get Dashboard Statistics", description = "Retrieve dashboard statistics for admin")
+    @GetMapping("/dashboard/stats")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getDashboardStats() {
+        long totalOfficers = officerService.getAllOfficers().size();
+        long activeOfficers = officerService.getActiveOfficers().size();
+        long totalPostings = postingService.getAllActivePostings().size();
+        long totalAdminUnits = adminUnitService.getAllAdminUnits().size();
+        long activeAdminUnits = adminUnitService.getActiveAdminUnits().size();
+        long totalCaseTypes = caseTypeService.getAllCaseTypes().size();
+        long activeCaseTypes = caseTypeService.getActiveCaseTypes().size();
+        long totalRoles = roleMasterRepository.count();
+        
+        Map<String, Object> stats = new java.util.HashMap<>();
+        stats.put("totalOfficers", totalOfficers);
+        stats.put("activeOfficers", activeOfficers);
+        stats.put("inactiveOfficers", totalOfficers - activeOfficers);
+        stats.put("totalActivePostings", totalPostings);
+        stats.put("totalAdminUnits", totalAdminUnits);
+        stats.put("activeAdminUnits", activeAdminUnits);
+        stats.put("totalCaseTypes", totalCaseTypes);
+        stats.put("activeCaseTypes", activeCaseTypes);
+        stats.put("totalRoles", totalRoles);
+        
+        return ResponseEntity.ok(ApiResponse.success("Dashboard statistics retrieved successfully", stats));
     }
 }
 

@@ -291,16 +291,32 @@ public class AuthenticationController {
     /**
      * Verify Citizen Registration OTP
      * POST /api/auth/citizen/registration/verify-otp
+     * 
+     * This endpoint verifies the OTP sent during citizen registration.
+     * Upon successful verification:
+     * - Marks mobile number as verified
+     * - Activates the citizen account (sets isActive = true)
+     * - Marks the OTP as used
      */
     @Operation(
             summary = "Verify Registration OTP",
-            description = "Verify mobile OTP sent during citizen registration. Activates the citizen account."
+            description = "Verify mobile OTP sent during citizen registration. This endpoint activates the citizen account after successful OTP verification. The OTP must be valid (not expired, not used) and match the mobile number used during registration."
     )
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "200",
-                    description = "Mobile number verified successfully",
+                    description = "Mobile number verified successfully. Citizen account activated.",
                     content = @Content(schema = @Schema(implementation = ApiResponse.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "400",
+                    description = "Invalid request - missing or invalid mobile number/OTP format",
+                    content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class))
+            ),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(
+                    responseCode = "404",
+                    description = "Citizen not found with the provided mobile number",
+                    content = @Content(schema = @Schema(implementation = ErrorResponseDTO.class))
             ),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(
                     responseCode = "400",
@@ -310,22 +326,19 @@ public class AuthenticationController {
     })
     @PostMapping("/citizen/registration/verify-otp")
     public ResponseEntity<ApiResponse<Map<String, Object>>> verifyCitizenRegistrationOtp(
-            @RequestBody Map<String, String> request) {
-        String mobileNumber = request.get("mobileNumber");
-        String otp = request.get("otp");
+            @Valid @RequestBody RegistrationOtpVerificationDTO request) {
+        log.info("Citizen registration OTP verification request for mobile: {}", maskMobile(request.getMobileNumber()));
         
-        if (mobileNumber == null || otp == null) {
-            throw new IllegalArgumentException("Mobile number and OTP are required");
-        }
+        // Verify OTP and activate account
+        citizenService.verifyMobileOtp(request.getMobileNumber().trim(), request.getOtp().trim());
         
-        log.info("Citizen registration OTP verification request for mobile: {}", maskMobile(mobileNumber));
+        Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "Mobile number verified successfully. Citizen account activated.");
+        response.put("mobileNumber", request.getMobileNumber());
+        response.put("status", "ACTIVE");
+        response.put("isMobileVerified", true);
         
-        citizenService.verifyMobileOtp(mobileNumber, otp);
-        
-        Map<String, Object> response = Map.of(
-                "message", "Mobile number verified successfully. Citizen account activated.",
-                "mobileNumber", mobileNumber
-        );
+        log.info("Registration OTP verified successfully for mobile: {}", maskMobile(request.getMobileNumber()));
         
         return ResponseEntity.ok(ApiResponse.success("Mobile number verified successfully. Citizen account activated.", response));
     }
