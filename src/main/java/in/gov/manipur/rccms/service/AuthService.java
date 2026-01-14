@@ -28,6 +28,7 @@ public class AuthService {
     /**
      * Login with password
      */
+    @Transactional
     public AuthResponseDTO loginWithPassword(LoginRequestDTO request) {
         if (request == null) {
             throw new IllegalArgumentException("Login request cannot be null");
@@ -52,17 +53,11 @@ public class AuthService {
             throw new InvalidCredentialsException("Invalid citizen type");
         }
 
-        // Check if account is active
-        if (!citizen.getIsActive()) {
-            log.warn("Login failed: Account is inactive for citizen ID: {}", citizen.getId());
-            throw new InvalidCredentialsException("Account is not active. Please verify your mobile number.");
-        }
+        // Note: Password login does not require mobile verification
+        // Users can login with password even if mobile number is not verified
 
-        // Verify password
-        if (!citizenService.verifyCitizenCredentials(request.getUsername().trim(), request.getPassword()).equals(citizen)) {
-            log.warn("Login failed: Invalid password for citizen ID: {}", citizen.getId());
-            throw new InvalidCredentialsException("Invalid username or password");
-        }
+        // Verify password (this will throw exception if password is invalid)
+        citizenService.verifyCitizenCredentials(request.getUsername().trim(), request.getPassword());
 
         // Generate tokens
         String accessToken = jwtService.generateToken(citizen.getId(), citizen.getEmail(), citizen.getCitizenType().name());
