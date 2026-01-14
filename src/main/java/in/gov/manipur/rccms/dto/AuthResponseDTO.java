@@ -22,5 +22,8 @@ public class AuthResponseDTO {
     private String email;
     private String mobileNumber;
     private Integer expiresIn; // in seconds
+    
+    // Posting details (for officer login)
+    private PostingDetailsDTO posting;
 }
 

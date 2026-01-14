@@ -1,12 +1,18 @@
 package in.gov.manipur.rccms.service;
 
 import in.gov.manipur.rccms.dto.AuthResponseDTO;
+import in.gov.manipur.rccms.dto.PostingDetailsDTO;
+import in.gov.manipur.rccms.dto.PostingHierarchyDTO;
 import in.gov.manipur.rccms.dto.PostBasedLoginDTO;
+import in.gov.manipur.rccms.entity.AdminUnit;
 import in.gov.manipur.rccms.entity.Officer;
 import in.gov.manipur.rccms.entity.OfficerDaHistory;
+import in.gov.manipur.rccms.entity.RoleMaster;
 import in.gov.manipur.rccms.exception.InvalidCredentialsException;
+import in.gov.manipur.rccms.repository.AdminUnitRepository;
 import in.gov.manipur.rccms.repository.OfficerDaHistoryRepository;
 import in.gov.manipur.rccms.repository.OfficerRepository;
+import in.gov.manipur.rccms.repository.RoleMasterRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,6 +31,8 @@ public class PostBasedAuthService {
 
     private final OfficerDaHistoryRepository postingRepository;
     private final OfficerRepository officerRepository;
+    private final AdminUnitRepository adminUnitRepository;
+    private final RoleMasterRepository roleMasterRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
@@ -40,12 +48,22 @@ public class PostBasedAuthService {
 
         log.info("Post-based login attempt for UserID: {}", request.getUserid());
 
-        // Find active posting by UserID
+        // Find active posting by UserID - eagerly fetches unit and officer
         OfficerDaHistory posting = postingRepository.findByPostingUseridAndIsCurrentTrue(request.getUserid())
                 .orElseThrow(() -> {
                     log.warn("Login failed: Active posting not found for UserID: {}", request.getUserid());
                     return new InvalidCredentialsException("Invalid UserID or posting is not active");
                 });
+
+        // Get unit (already eagerly fetched)
+        AdminUnit unit = posting.getUnit();
+        if (unit == null) {
+            throw new RuntimeException("Unit not found for posting UserID: " + request.getUserid());
+        }
+        
+        // Eagerly fetch role
+        RoleMaster role = roleMasterRepository.findByRoleCode(posting.getRoleCode())
+                .orElseThrow(() -> new RuntimeException("Role not found for role code: " + posting.getRoleCode()));
 
         // Get officer (person)
         Officer officer = posting.getOfficer();
@@ -78,11 +96,34 @@ public class PostBasedAuthService {
                 posting.getPostingUserid(),
                 posting.getRoleCode(),
                 posting.getUnitId(),
-                posting.getUnit() != null ? posting.getUnit().getUnitLevel().name() : null,
+                unit.getUnitLevel().name(),
                 officer.getId()
         );
         
         String refreshToken = jwtService.generateRefreshToken(officer.getId(), officer.getEmail());
+
+        // Build hierarchy chain (State → District → Sub-Division → Circle)
+        PostingHierarchyDTO hierarchy = buildHierarchy(unit);
+
+        // Build posting details
+        PostingDetailsDTO postingDetails = PostingDetailsDTO.builder()
+                .postingId(posting.getId())
+                .postingUserid(posting.getPostingUserid())
+                .fromDate(posting.getFromDate())
+                .toDate(posting.getToDate())
+                .isCurrent(posting.getIsCurrent())
+                .roleCode(role.getRoleCode())
+                .roleName(role.getRoleName())
+                .unitId(unit.getUnitId())
+                .unitCode(unit.getUnitCode())
+                .unitName(unit.getUnitName())
+                .unitLgdCode(unit.getLgdCode())
+                .hierarchy(hierarchy)
+                .officerId(officer.getId())
+                .officerName(officer.getFullName())
+                .officerEmail(officer.getEmail())
+                .officerMobile(officer.getMobileNo())
+                .build();
 
         log.info("Post-based login successful for UserID: {}, Officer: {}", request.getUserid(), officer.getFullName());
 
@@ -94,6 +135,7 @@ public class PostBasedAuthService {
                 .email(officer.getEmail())
                 .mobileNumber(officer.getMobileNo())
                 .expiresIn(3600) // 1 hour in seconds
+                .posting(postingDetails)
                 .build();
     }
 
@@ -143,6 +185,73 @@ public class PostBasedAuthService {
         officerRepository.save(officer);
 
         log.info("Mobile number verified for UserID: {}", userid);
+    }
+
+    /**
+     * Build hierarchy chain from unit (State → District → Sub-Division → Circle)
+     * Traverses up the parent chain to build complete hierarchy
+     */
+    private PostingHierarchyDTO buildHierarchy(AdminUnit unit) {
+        if (unit == null) {
+            return null;
+        }
+
+        PostingHierarchyDTO.PostingHierarchyDTOBuilder builder = PostingHierarchyDTO.builder()
+                .unitId(unit.getUnitId())
+                .unitCode(unit.getUnitCode())
+                .unitName(unit.getUnitName())
+                .unitLevel(unit.getUnitLevel())
+                .lgdCode(unit.getLgdCode());
+
+        // Traverse up the parent chain to build hierarchy
+        AdminUnit current = unit;
+        PostingHierarchyDTO circle = null;
+        PostingHierarchyDTO subDivision = null;
+        PostingHierarchyDTO district = null;
+        PostingHierarchyDTO state = null;
+
+        // Start from current unit and traverse up
+        while (current != null) {
+            PostingHierarchyDTO hierarchyItem = PostingHierarchyDTO.builder()
+                    .unitId(current.getUnitId())
+                    .unitCode(current.getUnitCode())
+                    .unitName(current.getUnitName())
+                    .unitLevel(current.getUnitLevel())
+                    .lgdCode(current.getLgdCode())
+                    .build();
+
+            // Assign based on level
+            switch (current.getUnitLevel()) {
+                case CIRCLE:
+                    circle = hierarchyItem;
+                    break;
+                case SUB_DIVISION:
+                    subDivision = hierarchyItem;
+                    break;
+                case DISTRICT:
+                    district = hierarchyItem;
+                    break;
+                case STATE:
+                    state = hierarchyItem;
+                    break;
+            }
+
+            // Move to parent
+            Long parentUnitId = current.getParentUnitId();
+            if (parentUnitId != null) {
+                current = adminUnitRepository.findById(parentUnitId).orElse(null);
+            } else {
+                current = null;
+            }
+        }
+
+        // Set hierarchy in builder
+        builder.circle(circle)
+                .subDivision(subDivision)
+                .district(district)
+                .state(state);
+
+        return builder.build();
     }
 }
 

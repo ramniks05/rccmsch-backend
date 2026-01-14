@@ -171,7 +171,7 @@ public class JwtService {
     /**
      * Extract all claims from token
      */
-    private Claims extractAllClaims(String token) {
+    public Claims extractAllClaims(String token) {
         return Jwts.parser()
                 .verifyWith(getSigningKey())
                 .build()

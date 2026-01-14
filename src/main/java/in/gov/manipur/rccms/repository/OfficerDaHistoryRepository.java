@@ -23,9 +23,13 @@ public interface OfficerDaHistoryRepository extends JpaRepository<OfficerDaHisto
     Optional<OfficerDaHistory> findByPostingUserid(@Param("userid") String userid);
 
     /**
-     * Find active posting by UserID
+     * Find active posting by UserID (with eager fetching of unit and officer)
      */
-    @Query("SELECT p FROM OfficerDaHistory p WHERE p.postingUserid = :userid AND p.isCurrent = true")
+    @Query("SELECT p FROM OfficerDaHistory p " +
+           "LEFT JOIN FETCH p.unit u " +
+           "LEFT JOIN FETCH u.parentUnit " +
+           "LEFT JOIN FETCH p.officer " +
+           "WHERE p.postingUserid = :userid AND p.isCurrent = true")
     Optional<OfficerDaHistory> findByPostingUseridAndIsCurrentTrue(@Param("userid") String userid);
 
     /**
