@@ -1,0 +1,631 @@
+package in.gov.manipur.rccms.config;
+
+import in.gov.manipur.rccms.entity.AdminUnit;
+import in.gov.manipur.rccms.entity.WorkflowDefinition;
+import in.gov.manipur.rccms.entity.WorkflowState;
+import in.gov.manipur.rccms.entity.WorkflowTransition;
+import in.gov.manipur.rccms.entity.WorkflowPermission;
+import in.gov.manipur.rccms.repository.CaseTypeRepository;
+import in.gov.manipur.rccms.repository.WorkflowDefinitionRepository;
+import in.gov.manipur.rccms.repository.WorkflowStateRepository;
+import in.gov.manipur.rccms.repository.WorkflowTransitionRepository;
+import in.gov.manipur.rccms.repository.WorkflowPermissionRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Workflow Data Initializer
+ * Automatically initializes all workflow definitions, states, transitions, and permissions
+ * for all 9 case types when application starts
+ */
+@Slf4j
+@Component
+@RequiredArgsConstructor
+@Order(3) // Initialize after roles and case types
+public class WorkflowDataInitializer implements CommandLineRunner {
+
+    private final WorkflowDefinitionRepository workflowDefinitionRepository;
+    private final WorkflowStateRepository workflowStateRepository;
+    private final WorkflowTransitionRepository transitionRepository;
+    private final WorkflowPermissionRepository permissionRepository;
+    private final CaseTypeRepository caseTypeRepository;
+
+    @Override
+    @Transactional
+    public void run(String... args) {
+        log.info("========================================");
+        log.info("Initializing Workflow Data...");
+        log.info("========================================");
+
+        try {
+            initializeMutationGiftSaleWorkflow();
+            initializeMutationDeathWorkflow();
+            initializePartitionWorkflow();
+            initializeClassificationBefore2014Workflow();
+            initializeClassificationAfter2014Workflow();
+            initializeCourtOrderWorkflow();
+            initializeAllotmentWorkflow();
+            initializeAcquisitionRFCTLARRWorkflow();
+            initializeAcquisitionDirectPurchaseWorkflow();
+
+            log.info("========================================");
+            log.info("Workflow Data initialization completed!");
+            log.info("========================================");
+        } catch (Exception e) {
+            log.error("Error initializing workflow data: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * I. Mutation (after Gift/Sale Deeds) Workflow
+     */
+    private void initializeMutationGiftSaleWorkflow() {
+        String workflowCode = "MUTATION_GIFT_SALE";
+        log.info("Initializing workflow: {}", workflowCode);
+
+        WorkflowDefinition workflow = createOrGetWorkflow(
+            workflowCode,
+            "Mutation (after Gift/Sale Deeds)",
+            "Workflow for mutation after gift/sale deeds registration"
+        );
+
+        Map<String, WorkflowState> states = createStates(workflow, new String[][]{
+            {"CITIZEN_APPLICATION", "Citizen Application", "1", "true", "false"},
+            {"DA_ENTRY", "DA Entry", "2", "false", "false"},
+            {"MANDOL_RECEIVED", "Mandol Received", "3", "false", "false"},
+            {"NOTICE_GENERATED", "Notice Generated", "4", "false", "false"},
+            {"HEARING_SCHEDULED", "Hearing Scheduled", "5", "false", "false"},
+            {"HEARING_COMPLETED", "Hearing Completed", "6", "false", "false"},
+            {"DECISION_PENDING", "Decision Pending", "7", "false", "false"},
+            {"APPROVED", "Approved", "8", "false", "false"},
+            {"MANDOL_UPDATE", "Mandol Update", "9", "false", "false"},
+            {"LAND_RECORD_UPDATED", "Land Record Updated", "10", "false", "false"},
+            {"PATTA_PREPARATION", "Patta Preparation", "11", "false", "false"},
+            {"COMPLETED", "Completed", "12", "false", "true"},
+            {"REJECTED", "Rejected", "13", "false", "true"}
+        });
+
+        createTransitions(workflow, states, new String[][]{
+            {"SUBMIT_APPLICATION", "Submit Application", "CITIZEN_APPLICATION", "DA_ENTRY", "false"},
+            {"ENTER_IN_REGISTER", "Enter in Register", "DA_ENTRY", "MANDOL_RECEIVED", "false"},
+            {"RECEIVE_BY_MANDOL", "Receive by Mandol", "MANDOL_RECEIVED", "NOTICE_GENERATED", "false"},
+            {"GENERATE_NOTICE", "Generate Notice", "NOTICE_GENERATED", "HEARING_SCHEDULED", "false"},
+            {"SCHEDULE_HEARING", "Schedule Hearing", "HEARING_SCHEDULED", "HEARING_COMPLETED", "false"},
+            {"COMPLETE_HEARING", "Complete Hearing", "HEARING_COMPLETED", "DECISION_PENDING", "false"},
+            {"APPROVE", "Approve", "DECISION_PENDING", "APPROVED", "true"},
+            {"REJECT", "Reject", "DECISION_PENDING", "REJECTED", "true"},
+            {"PASS_TO_MANDOL", "Pass to Mandol", "APPROVED", "MANDOL_UPDATE", "false"},
+            {"UPDATE_LAND_RECORD", "Update Land Record", "MANDOL_UPDATE", "LAND_RECORD_UPDATED", "false"},
+            {"PREPARE_PATTA", "Prepare Patta", "LAND_RECORD_UPDATED", "PATTA_PREPARATION", "false"},
+            {"COMPLETE", "Complete", "PATTA_PREPARATION", "COMPLETED", "false"}
+        });
+
+        // Update CaseType with workflow code
+        updateCaseTypeWorkflowCode("MUTATION_GIFT_SALE", workflowCode);
+    }
+
+    /**
+     * II. Mutation (after death of landowner) Workflow
+     */
+    private void initializeMutationDeathWorkflow() {
+        String workflowCode = "MUTATION_DEATH";
+        log.info("Initializing workflow: {}", workflowCode);
+
+        WorkflowDefinition workflow = createOrGetWorkflow(
+            workflowCode,
+            "Mutation (after death of landowner)",
+            "Workflow for mutation after death of landowner"
+        );
+
+        Map<String, WorkflowState> states = createStates(workflow, new String[][]{
+            {"CITIZEN_APPLICATION", "Citizen Application", "1", "true", "false"},
+            {"MANDOL_REPORT", "Mandol Report", "2", "false", "false"},
+            {"NOTICE_PUBLISHED", "Notice Published", "3", "false", "false"},
+            {"OBJECTION_PERIOD", "Objection Period", "4", "false", "false"},
+            {"DECISION_PENDING", "Decision Pending", "5", "false", "false"},
+            {"APPROVED", "Approved", "6", "false", "false"},
+            {"LAND_RECORD_UPDATED", "Land Record Updated", "7", "false", "false"},
+            {"COMPLETED", "Completed", "8", "false", "true"},
+            {"REJECTED", "Rejected", "9", "false", "true"}
+        });
+
+        createTransitions(workflow, states, new String[][]{
+            {"SUBMIT_APPLICATION", "Submit Application", "CITIZEN_APPLICATION", "MANDOL_REPORT", "false"},
+            {"PREPARE_REPORT", "Prepare Report", "MANDOL_REPORT", "NOTICE_PUBLISHED", "false"},
+            {"PUBLISH_NOTICE", "Publish Notice", "NOTICE_PUBLISHED", "OBJECTION_PERIOD", "false"},
+            {"WAIT_FOR_OBJECTIONS", "Wait for Objections", "OBJECTION_PERIOD", "DECISION_PENDING", "false"},
+            {"APPROVE", "Approve", "DECISION_PENDING", "APPROVED", "true"},
+            {"REJECT", "Reject", "DECISION_PENDING", "REJECTED", "true"},
+            {"UPDATE_LAND_RECORD", "Update Land Record", "APPROVED", "LAND_RECORD_UPDATED", "false"},
+            {"COMPLETE", "Complete", "LAND_RECORD_UPDATED", "COMPLETED", "false"}
+        });
+
+        updateCaseTypeWorkflowCode("MUTATION_DEATH", workflowCode);
+    }
+
+    /**
+     * III. Partition (division of land parcel) Workflow
+     */
+    private void initializePartitionWorkflow() {
+        String workflowCode = "PARTITION";
+        log.info("Initializing workflow: {}", workflowCode);
+
+        WorkflowDefinition workflow = createOrGetWorkflow(
+            workflowCode,
+            "Partition (division of land parcel)",
+            "Workflow for partition of land parcel"
+        );
+
+        Map<String, WorkflowState> states = createStates(workflow, new String[][]{
+            {"CITIZEN_APPLICATION", "Citizen Application", "1", "true", "false"},
+            {"DA_ENTRY", "DA Entry", "2", "false", "false"},
+            {"MANDOL_RECEIVED", "Mandol Received", "3", "false", "false"},
+            {"NOTICE_GENERATED", "Notice Generated", "4", "false", "false"},
+            {"HEARING_SCHEDULED", "Hearing Scheduled", "5", "false", "false"},
+            {"HEARING_COMPLETED", "Hearing Completed", "6", "false", "false"},
+            {"SDC_DECISION_PENDING", "SDC Decision Pending", "7", "false", "false"},
+            {"SDC_APPROVED", "SDC Approved", "8", "false", "false"},
+            {"SDO_DECISION_PENDING", "SDO Decision Pending", "9", "false", "false"},
+            {"SDO_APPROVED", "SDO Approved", "10", "false", "false"},
+            {"MANDOL_UPDATE", "Mandol Update", "11", "false", "false"},
+            {"LAND_RECORD_UPDATED", "Land Record Updated", "12", "false", "false"},
+            {"COMPLETED", "Completed", "13", "false", "true"},
+            {"REJECTED", "Rejected", "14", "false", "true"}
+        });
+
+        createTransitions(workflow, states, new String[][]{
+            {"SUBMIT_APPLICATION", "Submit Application", "CITIZEN_APPLICATION", "DA_ENTRY", "false"},
+            {"ENTER_IN_REGISTER", "Enter in Register", "DA_ENTRY", "MANDOL_RECEIVED", "false"},
+            {"RECEIVE_BY_MANDOL", "Receive by Mandol", "MANDOL_RECEIVED", "NOTICE_GENERATED", "false"},
+            {"GENERATE_NOTICE", "Generate Notice", "NOTICE_GENERATED", "HEARING_SCHEDULED", "false"},
+            {"SCHEDULE_HEARING", "Schedule Hearing", "HEARING_SCHEDULED", "HEARING_COMPLETED", "false"},
+            {"COMPLETE_HEARING", "Complete Hearing", "HEARING_COMPLETED", "SDC_DECISION_PENDING", "false"},
+            {"SDC_APPROVE", "SDC Approve", "SDC_DECISION_PENDING", "SDC_APPROVED", "true"},
+            {"SDC_REJECT", "SDC Reject", "SDC_DECISION_PENDING", "REJECTED", "true"},
+            {"FORWARD_TO_SDO", "Forward to SDO", "SDC_APPROVED", "SDO_DECISION_PENDING", "false"},
+            {"SDO_APPROVE", "SDO Approve", "SDO_DECISION_PENDING", "SDO_APPROVED", "true"},
+            {"SDO_REJECT", "SDO Reject", "SDO_DECISION_PENDING", "REJECTED", "true"},
+            {"PASS_TO_MANDOL", "Pass to Mandol", "SDO_APPROVED", "MANDOL_UPDATE", "false"},
+            {"UPDATE_LAND_RECORD", "Update Land Record", "MANDOL_UPDATE", "LAND_RECORD_UPDATED", "false"},
+            {"COMPLETE", "Complete", "LAND_RECORD_UPDATED", "COMPLETED", "false"}
+        });
+
+        updateCaseTypeWorkflowCode("PARTITION", workflowCode);
+    }
+
+    /**
+     * IV. Change in Classification of Land (before 2014) Workflow
+     */
+    private void initializeClassificationBefore2014Workflow() {
+        String workflowCode = "CLASSIFICATION_BEFORE_2014";
+        log.info("Initializing workflow: {}", workflowCode);
+
+        WorkflowDefinition workflow = createOrGetWorkflow(
+            workflowCode,
+            "Change in Classification of Land (before 2014)",
+            "Workflow for change in land classification before 2014"
+        );
+
+        Map<String, WorkflowState> states = createStates(workflow, new String[][]{
+            {"REVENUE_APPROVAL", "Revenue Department Approval", "1", "true", "false"},
+            {"FEES_PAID", "Fees Paid", "2", "false", "false"},
+            {"DC_ORDER", "DC Order", "3", "false", "false"},
+            {"SDC_FORWARD", "SDC Forward", "4", "false", "false"},
+            {"MANDOL_UPDATE", "Mandol Update", "5", "false", "false"},
+            {"LAND_RECORD_UPDATED", "Land Record Updated", "6", "false", "false"},
+            {"COMPLETED", "Completed", "7", "false", "true"}
+        });
+
+        createTransitions(workflow, states, new String[][]{
+            {"REVENUE_APPROVE", "Revenue Approve", "REVENUE_APPROVAL", "FEES_PAID", "false"},
+            {"PAY_FEES", "Pay Fees", "FEES_PAID", "DC_ORDER", "false"},
+            {"DC_ISSUE_ORDER", "DC Issue Order", "DC_ORDER", "SDC_FORWARD", "false"},
+            {"SDC_FORWARD_ORDER", "SDC Forward Order", "SDC_FORWARD", "MANDOL_UPDATE", "false"},
+            {"UPDATE_LAND_RECORD", "Update Land Record", "MANDOL_UPDATE", "LAND_RECORD_UPDATED", "false"},
+            {"COMPLETE", "Complete", "LAND_RECORD_UPDATED", "COMPLETED", "false"}
+        });
+
+        updateCaseTypeWorkflowCode("CLASSIFICATION_CHANGE_BEFORE_2014", workflowCode);
+    }
+
+    /**
+     * V. Change in Classification of Land (after 2014) Workflow
+     */
+    private void initializeClassificationAfter2014Workflow() {
+        String workflowCode = "CLASSIFICATION_AFTER_2014";
+        log.info("Initializing workflow: {}", workflowCode);
+
+        WorkflowDefinition workflow = createOrGetWorkflow(
+            workflowCode,
+            "Change in Classification of Land (after 2014)",
+            "Workflow for change in land classification after 2014"
+        );
+
+        Map<String, WorkflowState> states = createStates(workflow, new String[][]{
+            {"REVENUE_APPROVAL", "Revenue Department Approval", "1", "true", "false"},
+            {"FEES_PAID", "Fees Paid", "2", "false", "false"},
+            {"DC_ORDER", "DC Order", "3", "false", "true"}
+        });
+
+        createTransitions(workflow, states, new String[][]{
+            {"REVENUE_APPROVE", "Revenue Approve", "REVENUE_APPROVAL", "FEES_PAID", "false"},
+            {"PAY_FEES", "Pay Fees", "FEES_PAID", "DC_ORDER", "false"}
+        });
+
+        updateCaseTypeWorkflowCode("CLASSIFICATION_CHANGE_AFTER_2014", workflowCode);
+    }
+
+    /**
+     * VI. Implementation of order passed by a Higher Court Workflow
+     */
+    private void initializeCourtOrderWorkflow() {
+        String workflowCode = "COURT_ORDER";
+        log.info("Initializing workflow: {}", workflowCode);
+
+        WorkflowDefinition workflow = createOrGetWorkflow(
+            workflowCode,
+            "Implementation of order passed by a Higher Court",
+            "Workflow for implementing higher court orders"
+        );
+
+        Map<String, WorkflowState> states = createStates(workflow, new String[][]{
+            {"COURT_ORDER_RECEIVED", "Court Order Received", "1", "true", "false"},
+            {"SDC_MUTATION_CASE", "SDC Mutation Case", "2", "false", "false"},
+            {"FOLLOW_MUTATION_WORKFLOW", "Follow Mutation Workflow", "3", "false", "true"}
+        });
+
+        createTransitions(workflow, states, new String[][]{
+            {"RECEIVE_COURT_ORDER", "Receive Court Order", "COURT_ORDER_RECEIVED", "SDC_MUTATION_CASE", "false"},
+            {"CREATE_MUTATION_CASE", "Create Mutation Case", "SDC_MUTATION_CASE", "FOLLOW_MUTATION_WORKFLOW", "false"}
+        });
+
+        updateCaseTypeWorkflowCode("HIGHER_COURT_ORDER", workflowCode);
+    }
+
+    /**
+     * VII. Allotment of Land Workflow
+     */
+    private void initializeAllotmentWorkflow() {
+        String workflowCode = "ALLOTMENT";
+        log.info("Initializing workflow: {}", workflowCode);
+
+        WorkflowDefinition workflow = createOrGetWorkflow(
+            workflowCode,
+            "Allotment of Land",
+            "Workflow for land allotment"
+        );
+
+        Map<String, WorkflowState> states = createStates(workflow, new String[][]{
+            {"GOVERNMENT_APPROVAL", "Government Approval", "1", "true", "false"},
+            {"PREMIUM_PAID", "Premium Paid", "2", "false", "false"},
+            {"DEED_SIGNED", "Deed Signed", "3", "false", "false"},
+            {"REGISTERED", "Registered", "4", "false", "false"},
+            {"APPLICATION_TO_DC", "Application to DC", "5", "false", "false"},
+            {"MANDOL_ENTRY", "Mandol Entry", "6", "false", "false"},
+            {"SDC_APPROVAL", "SDC Approval", "7", "false", "false"},
+            {"DC_APPROVAL", "DC Approval", "8", "false", "false"},
+            {"LAND_RECORD_UPDATED", "Land Record Updated", "9", "false", "false"},
+            {"COMPLETED", "Completed", "10", "false", "true"}
+        });
+
+        createTransitions(workflow, states, new String[][]{
+            {"GOVERNMENT_APPROVE", "Government Approve", "GOVERNMENT_APPROVAL", "PREMIUM_PAID", "false"},
+            {"PAY_PREMIUM", "Pay Premium", "PREMIUM_PAID", "DEED_SIGNED", "false"},
+            {"SIGN_DEED", "Sign Deed", "DEED_SIGNED", "REGISTERED", "false"},
+            {"REGISTER_DEED", "Register Deed", "REGISTERED", "APPLICATION_TO_DC", "false"},
+            {"APPLY_TO_DC", "Apply to DC", "APPLICATION_TO_DC", "MANDOL_ENTRY", "false"},
+            {"MANDOL_MAKE_ENTRY", "Mandol Make Entry", "MANDOL_ENTRY", "SDC_APPROVAL", "false"},
+            {"SDC_APPROVE", "SDC Approve", "SDC_APPROVAL", "DC_APPROVAL", "false"},
+            {"DC_APPROVE", "DC Approve", "DC_APPROVAL", "LAND_RECORD_UPDATED", "true"},
+            {"UPDATE_LAND_RECORD", "Update Land Record", "LAND_RECORD_UPDATED", "COMPLETED", "false"}
+        });
+
+        updateCaseTypeWorkflowCode("ALLOTMENT", workflowCode);
+    }
+
+    /**
+     * VIII. Land Acquisition (under RFCTLARR Act, 2013 or National Highways Act, 1956) Workflow
+     */
+    private void initializeAcquisitionRFCTLARRWorkflow() {
+        String workflowCode = "ACQUISITION_RFCTLARR";
+        log.info("Initializing workflow: {}", workflowCode);
+
+        WorkflowDefinition workflow = createOrGetWorkflow(
+            workflowCode,
+            "Land Acquisition (under RFCTLARR Act, 2013 or National Highways Act, 1956)",
+            "Workflow for land acquisition under RFCTLARR or National Highways Act"
+        );
+
+        Map<String, WorkflowState> states = createStates(workflow, new String[][]{
+            {"DC_COMPENSATION_ORDER", "DC Compensation Order", "1", "true", "false"},
+            {"DC_HANDOVER_ORDER", "DC Handover Order", "2", "false", "false"},
+            {"SDC_MUTATION_ORDER", "SDC Mutation Order", "3", "false", "false"},
+            {"MUTATION_UPDATED", "Mutation Updated", "4", "false", "false"},
+            {"SDO_PARTITION_ORDER", "SDO Partition Order", "5", "false", "false"},
+            {"PARTITION_UPDATED", "Partition Updated", "6", "false", "false"},
+            {"COMPLETED", "Completed", "7", "false", "true"}
+        });
+
+        createTransitions(workflow, states, new String[][]{
+            {"DC_COMPENSATION_AWARD", "DC Compensation Award", "DC_COMPENSATION_ORDER", "DC_HANDOVER_ORDER", "false"},
+            {"DC_HANDOVER", "DC Handover", "DC_HANDOVER_ORDER", "SDC_MUTATION_ORDER", "false"},
+            {"SDC_MUTATION", "SDC Mutation", "SDC_MUTATION_ORDER", "MUTATION_UPDATED", "false"},
+            {"UPDATE_MUTATION", "Update Mutation", "MUTATION_UPDATED", "SDO_PARTITION_ORDER", "false"},
+            {"SDO_PARTITION", "SDO Partition", "SDO_PARTITION_ORDER", "PARTITION_UPDATED", "false"},
+            {"UPDATE_PARTITION", "Update Partition", "PARTITION_UPDATED", "COMPLETED", "false"}
+        });
+
+        updateCaseTypeWorkflowCode("LAND_ACQUISITION_RFCTLARR_NHA", workflowCode);
+    }
+
+    /**
+     * IX. Land Acquisition (under Direct Purchase) Workflow
+     */
+    private void initializeAcquisitionDirectPurchaseWorkflow() {
+        String workflowCode = "ACQUISITION_DIRECT_PURCHASE";
+        log.info("Initializing workflow: {}", workflowCode);
+
+        WorkflowDefinition workflow = createOrGetWorkflow(
+            workflowCode,
+            "Land Acquisition (under Direct Purchase)",
+            "Workflow for land acquisition under direct purchase"
+        );
+
+        Map<String, WorkflowState> states = createStates(workflow, new String[][]{
+            {"GOVERNMENT_APPROVAL", "Government Approval", "1", "true", "false"},
+            {"SALE_DEED_REGISTERED", "Sale Deed Registered", "2", "false", "false"},
+            {"SDC_MUTATION_ORDER", "SDC Mutation Order", "3", "false", "false"},
+            {"SDO_PARTITION_ORDER", "SDO Partition Order", "4", "false", "false"},
+            {"NEW_PATTA_COMPUTERIZATION", "New Patta Computerization", "5", "false", "false"},
+            {"MANDOL_REPORT", "Mandol Report", "6", "false", "false"},
+            {"DC_APPROVAL", "DC Approval", "7", "false", "false"},
+            {"LAND_RECORD_UPDATED", "Land Record Updated", "8", "false", "false"},
+            {"COMPLETED", "Completed", "9", "false", "true"}
+        });
+
+        createTransitions(workflow, states, new String[][]{
+            {"GOVERNMENT_APPROVE", "Government Approve", "GOVERNMENT_APPROVAL", "SALE_DEED_REGISTERED", "false"},
+            {"REGISTER_SALE_DEED", "Register Sale Deed", "SALE_DEED_REGISTERED", "SDC_MUTATION_ORDER", "false"},
+            {"SDC_MUTATION", "SDC Mutation", "SDC_MUTATION_ORDER", "SDO_PARTITION_ORDER", "false"},
+            {"SDO_PARTITION", "SDO Partition", "SDO_PARTITION_ORDER", "NEW_PATTA_COMPUTERIZATION", "false"},
+            {"APPLY_COMPUTERIZATION", "Apply Computerization", "NEW_PATTA_COMPUTERIZATION", "MANDOL_REPORT", "false"},
+            {"MANDOL_PREPARE_REPORT", "Mandol Prepare Report", "MANDOL_REPORT", "DC_APPROVAL", "false"},
+            {"DC_APPROVE", "DC Approve", "DC_APPROVAL", "LAND_RECORD_UPDATED", "true"},
+            {"UPDATE_LAND_RECORD", "Update Land Record", "LAND_RECORD_UPDATED", "COMPLETED", "false"}
+        });
+
+        updateCaseTypeWorkflowCode("ACQUISITION_DIRECT_PURCHASE", workflowCode);
+    }
+
+    /**
+     * Helper method to create or get workflow definition
+     */
+    private WorkflowDefinition createOrGetWorkflow(String code, String name, String description) {
+        return workflowDefinitionRepository.findByWorkflowCode(code)
+            .orElseGet(() -> {
+                WorkflowDefinition workflow = new WorkflowDefinition();
+                workflow.setWorkflowCode(code);
+                workflow.setWorkflowName(name);
+                workflow.setDescription(description);
+                workflow.setIsActive(true);
+                workflow.setVersion(1);
+                workflow.setCreatedAt(LocalDateTime.now());
+                workflow.setUpdatedAt(LocalDateTime.now());
+                WorkflowDefinition saved = workflowDefinitionRepository.save(workflow);
+                log.info("Created workflow: {} - {}", code, name);
+                return saved;
+            });
+    }
+
+    /**
+     * Helper method to create states for a workflow
+     */
+    private Map<String, WorkflowState> createStates(WorkflowDefinition workflow, String[][] stateData) {
+        Map<String, WorkflowState> states = new HashMap<>();
+        
+        for (String[] data : stateData) {
+            String stateCode = data[0];
+            String stateName = data[1];
+            int stateOrder = Integer.parseInt(data[2]);
+            boolean isInitial = Boolean.parseBoolean(data[3]);
+            boolean isFinal = Boolean.parseBoolean(data[4]);
+
+            WorkflowState state = workflowStateRepository
+                .findByWorkflowIdAndStateCode(workflow.getId(), stateCode)
+                .orElseGet(() -> {
+                    WorkflowState newState = new WorkflowState();
+                    newState.setWorkflow(workflow);
+                    newState.setWorkflowId(workflow.getId());
+                    newState.setStateCode(stateCode);
+                    newState.setStateName(stateName);
+                    newState.setStateOrder(stateOrder);
+                    newState.setIsInitialState(isInitial);
+                    newState.setIsFinalState(isFinal);
+                    newState.setDescription(stateName);
+                    newState.setCreatedAt(LocalDateTime.now());
+                    WorkflowState saved = workflowStateRepository.save(newState);
+                    log.debug("Created state: {} - {}", stateCode, stateName);
+                    return saved;
+                });
+            
+            states.put(stateCode, state);
+        }
+        
+        return states;
+    }
+
+    /**
+     * Helper method to create transitions for a workflow
+     */
+    private void createTransitions(WorkflowDefinition workflow, Map<String, WorkflowState> states, 
+                                   String[][] transitionData) {
+        for (String[] data : transitionData) {
+            String transitionCode = data[0];
+            String transitionName = data[1];
+            String fromStateCode = data[2];
+            String toStateCode = data[3];
+            boolean requiresComment = Boolean.parseBoolean(data[4]);
+
+            WorkflowState fromState = states.get(fromStateCode);
+            WorkflowState toState = states.get(toStateCode);
+
+            if (fromState == null || toState == null) {
+                log.warn("State not found for transition: {} (from: {}, to: {})", 
+                    transitionCode, fromStateCode, toStateCode);
+                continue;
+            }
+
+            transitionRepository.findByWorkflowIdAndTransitionCode(workflow.getId(), transitionCode)
+                .orElseGet(() -> {
+                    WorkflowTransition transition = new WorkflowTransition();
+                    transition.setWorkflow(workflow);
+                    transition.setWorkflowId(workflow.getId());
+                    transition.setFromState(fromState);
+                    transition.setFromStateId(fromState.getId());
+                    transition.setToState(toState);
+                    transition.setToStateId(toState.getId());
+                    transition.setTransitionCode(transitionCode);
+                    transition.setTransitionName(transitionName);
+                    transition.setIsActive(true);
+                    transition.setRequiresComment(requiresComment);
+                    transition.setDescription(transitionName);
+                    transition.setCreatedAt(LocalDateTime.now());
+                    WorkflowTransition saved = transitionRepository.save(transition);
+                    log.debug("Created transition: {} - {}", transitionCode, transitionName);
+                    
+                    // Create permissions for this transition
+                    createPermissionsForTransition(saved, fromStateCode, toStateCode);
+                    
+                    return saved;
+                });
+        }
+    }
+
+    /**
+     * Helper method to create permissions for a transition based on workflow logic
+     */
+    private void createPermissionsForTransition(WorkflowTransition transition, String fromStateCode, String toStateCode) {
+        String transitionCode = transition.getTransitionCode();
+        Long transitionId = transition.getId();
+
+        // Default permissions based on transition code patterns
+        if (transitionCode.contains("SUBMIT") || transitionCode.contains("APPLICATION")) {
+            // Citizen can submit applications
+            createPermissionIfNotExists(transitionId, "CITIZEN", null, true, false, "ANY_UNIT");
+        }
+        
+        if (transitionCode.contains("ENTER") || transitionCode.contains("REGISTER")) {
+            // DA can enter in register
+            createPermissionIfNotExists(transitionId, "DEALING_ASSISTANT", AdminUnit.UnitLevel.CIRCLE, true, false, "SAME_UNIT");
+        }
+        
+        if (transitionCode.contains("MANDOL") || transitionCode.contains("RECEIVE") || transitionCode.contains("PREPARE")) {
+            // Circle Mandol can receive and prepare
+            createPermissionIfNotExists(transitionId, "CIRCLE_MANDOL", AdminUnit.UnitLevel.CIRCLE, true, false, "SAME_UNIT");
+        }
+        
+        if (transitionCode.contains("NOTICE") || transitionCode.contains("GENERATE") || transitionCode.contains("PUBLISH")) {
+            // Circle Mandol or SDC can generate notices
+            createPermissionIfNotExists(transitionId, "CIRCLE_MANDOL", AdminUnit.UnitLevel.CIRCLE, true, false, "SAME_UNIT");
+            createPermissionIfNotExists(transitionId, "CIRCLE_OFFICER", AdminUnit.UnitLevel.CIRCLE, true, false, "SAME_UNIT");
+        }
+        
+        if (transitionCode.contains("HEARING") || transitionCode.contains("SCHEDULE")) {
+            // SDC can schedule hearings
+            createPermissionIfNotExists(transitionId, "CIRCLE_OFFICER", AdminUnit.UnitLevel.CIRCLE, true, false, "SAME_UNIT");
+        }
+        
+        if (transitionCode.contains("APPROVE") || transitionCode.contains("DECISION")) {
+            // SDC, SDO, or DC can approve based on level
+            if (transitionCode.contains("SDC")) {
+                createPermissionIfNotExists(transitionId, "CIRCLE_OFFICER", AdminUnit.UnitLevel.CIRCLE, true, true, "SAME_UNIT");
+            } else if (transitionCode.contains("SDO")) {
+                createPermissionIfNotExists(transitionId, "SUB_DIVISION_OFFICER", AdminUnit.UnitLevel.SUB_DIVISION, true, true, "PARENT_UNIT");
+            } else if (transitionCode.contains("DC")) {
+                createPermissionIfNotExists(transitionId, "DISTRICT_OFFICER", AdminUnit.UnitLevel.DISTRICT, true, true, "PARENT_UNIT");
+            } else {
+                // Default approval - SDC level
+                createPermissionIfNotExists(transitionId, "CIRCLE_OFFICER", AdminUnit.UnitLevel.CIRCLE, true, true, "SAME_UNIT");
+            }
+        }
+        
+        if (transitionCode.contains("REJECT")) {
+            // Same as approve for rejection
+            if (transitionCode.contains("SDC")) {
+                createPermissionIfNotExists(transitionId, "CIRCLE_OFFICER", AdminUnit.UnitLevel.CIRCLE, true, true, "SAME_UNIT");
+            } else if (transitionCode.contains("SDO")) {
+                createPermissionIfNotExists(transitionId, "SUB_DIVISION_OFFICER", AdminUnit.UnitLevel.SUB_DIVISION, true, true, "PARENT_UNIT");
+            } else {
+                createPermissionIfNotExists(transitionId, "CIRCLE_OFFICER", AdminUnit.UnitLevel.CIRCLE, true, true, "SAME_UNIT");
+            }
+        }
+        
+        if (transitionCode.contains("UPDATE") || transitionCode.contains("LAND_RECORD")) {
+            // Circle Mandol or DA can update land records
+            createPermissionIfNotExists(transitionId, "CIRCLE_MANDOL", AdminUnit.UnitLevel.CIRCLE, true, false, "SAME_UNIT");
+            createPermissionIfNotExists(transitionId, "DEALING_ASSISTANT", AdminUnit.UnitLevel.CIRCLE, true, false, "SAME_UNIT");
+        }
+        
+        if (transitionCode.contains("FORWARD") || transitionCode.contains("PASS")) {
+            // SDC can forward to SDO, SDO can forward to DC
+            if (transitionCode.contains("SDO")) {
+                createPermissionIfNotExists(transitionId, "CIRCLE_OFFICER", AdminUnit.UnitLevel.CIRCLE, true, false, "PARENT_UNIT");
+            } else if (transitionCode.contains("DC")) {
+                createPermissionIfNotExists(transitionId, "SUB_DIVISION_OFFICER", AdminUnit.UnitLevel.SUB_DIVISION, true, false, "PARENT_UNIT");
+            } else {
+                createPermissionIfNotExists(transitionId, "CIRCLE_OFFICER", AdminUnit.UnitLevel.CIRCLE, true, false, "SAME_UNIT");
+            }
+        }
+        
+        if (transitionCode.contains("COMPLETE") || transitionCode.contains("PATTA")) {
+            // DA can complete and prepare patta
+            createPermissionIfNotExists(transitionId, "DEALING_ASSISTANT", AdminUnit.UnitLevel.CIRCLE, true, false, "SAME_UNIT");
+        }
+    }
+
+    /**
+     * Helper method to create permission if it doesn't exist
+     */
+    private void createPermissionIfNotExists(Long transitionId, String roleCode, AdminUnit.UnitLevel unitLevel,
+                                           boolean canInitiate, boolean canApprove, String hierarchyRule) {
+        boolean exists = permissionRepository.existsPermissionForTransitionAndRole(
+            transitionId, roleCode, unitLevel);
+        
+        if (!exists) {
+            WorkflowPermission permission = new WorkflowPermission();
+            permission.setTransitionId(transitionId);
+            permission.setRoleCode(roleCode);
+            permission.setUnitLevel(unitLevel);
+            permission.setCanInitiate(canInitiate);
+            permission.setCanApprove(canApprove);
+            permission.setHierarchyRule(hierarchyRule);
+            permission.setIsActive(true);
+            permission.setCreatedAt(LocalDateTime.now());
+            permissionRepository.save(permission);
+            log.debug("Created permission: transitionId={}, roleCode={}, unitLevel={}", 
+                transitionId, roleCode, unitLevel);
+        }
+    }
+
+    /**
+     * Helper method to update CaseType with workflow code
+     */
+    private void updateCaseTypeWorkflowCode(String caseTypeCode, String workflowCode) {
+        caseTypeRepository.findByCode(caseTypeCode).ifPresent(caseType -> {
+            if (caseType.getWorkflowCode() == null || !caseType.getWorkflowCode().equals(workflowCode)) {
+                caseType.setWorkflowCode(workflowCode);
+                caseTypeRepository.save(caseType);
+                log.info("Updated CaseType {} with workflow code: {}", caseTypeCode, workflowCode);
+            }
+        });
+    }
+}
+

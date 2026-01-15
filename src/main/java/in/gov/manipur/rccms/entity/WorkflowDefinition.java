@@ -8,37 +8,37 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * Case Type Entity
- * Master table for case types that users can choose from
+ * Workflow Definition Entity
+ * Defines different workflows for different case types
+ * Each case type can have its own workflow definition
  */
 @Entity
-@Table(name = "case_types", uniqueConstraints = {
-    @UniqueConstraint(columnNames = "code", name = "uk_case_type_code"),
-    @UniqueConstraint(columnNames = "name", name = "uk_case_type_name")
+@Table(name = "workflow_definition", uniqueConstraints = {
+    @UniqueConstraint(columnNames = "workflow_code", name = "uk_workflow_code")
 })
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class CaseType {
+public class WorkflowDefinition {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "name", nullable = false, length = 200)
-    private String name;
+    @Column(name = "workflow_code", nullable = false, length = 50, unique = true)
+    private String workflowCode; // e.g., "MUTATION_GIFT_SALE", "PARTITION"
 
-    @Column(name = "code", nullable = false, length = 50, unique = true)
-    private String code;
+    @Column(name = "workflow_name", nullable = false, length = 200)
+    private String workflowName;
 
-    @Column(name = "description", length = 500)
+    @Column(name = "description", length = 1000)
     private String description;
-
-    @Column(name = "workflow_code", length = 50)
-    private String workflowCode; // Links to workflow_definition.workflow_code
 
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
+
+    @Column(name = "version", nullable = false)
+    private Integer version = 1; // For workflow versioning
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -52,6 +52,9 @@ public class CaseType {
         updatedAt = LocalDateTime.now();
         if (isActive == null) {
             isActive = true;
+        }
+        if (version == null) {
+            version = 1;
         }
     }
 
