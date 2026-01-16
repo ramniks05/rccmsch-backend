@@ -9,9 +9,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -31,6 +35,8 @@ public class CaseService {
     private final WorkflowDefinitionRepository workflowDefinitionRepository;
     private final WorkflowStateRepository workflowStateRepository;
     private final CaseWorkflowInstanceRepository workflowInstanceRepository;
+    private final FormSchemaService formSchemaService;
+    private final ObjectMapper objectMapper;
 
     /**
      * Create a new case
@@ -62,6 +68,24 @@ public class CaseService {
         }
         AdminUnit unit = adminUnitRepository.findById(unitId)
                 .orElseThrow(() -> new RuntimeException("Unit not found: " + unitId));
+
+        // Validate form data against schema if caseData is provided
+        if (dto.getCaseData() != null && !dto.getCaseData().trim().isEmpty()) {
+            try {
+                Map<String, Object> formData = objectMapper.readValue(dto.getCaseData(), 
+                        new TypeReference<Map<String, Object>>() {});
+                Map<String, String> validationErrors = formSchemaService.validateFormData(caseTypeId, formData);
+                
+                if (!validationErrors.isEmpty()) {
+                    StringBuilder errorMsg = new StringBuilder("Form validation failed: ");
+                    validationErrors.forEach((field, error) -> 
+                        errorMsg.append(field).append(" - ").append(error).append("; "));
+                    throw new IllegalArgumentException(errorMsg.toString());
+                }
+            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                throw new IllegalArgumentException("Invalid JSON format in caseData: " + e.getMessage());
+            }
+        }
 
         // Generate case number
         String caseNumber = generateCaseNumber(caseType, unit);

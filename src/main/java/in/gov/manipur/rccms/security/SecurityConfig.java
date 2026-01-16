@@ -3,6 +3,7 @@ package in.gov.manipur.rccms.security;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -46,6 +47,11 @@ public class SecurityConfig {
                                 "/api/health",
                                 "/api/captcha/**"
                         ).permitAll()
+                        // Public read-only endpoints (for frontend) - GET requests only
+                        .requestMatchers(HttpMethod.GET, "/api/case-types/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/admin/case-types/**").permitAll()  // Admin read-only endpoints
+                        .requestMatchers(HttpMethod.GET, "/api/admin/form-schemas/case-types/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/admin/form-schemas/validate").permitAll()
                         // Swagger/OpenAPI endpoints
                         .requestMatchers(
                                 "/swagger-ui/**", 

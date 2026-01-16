@@ -4,10 +4,12 @@ import in.gov.manipur.rccms.dto.ApiResponse;
 import in.gov.manipur.rccms.dto.CaseDTO;
 import in.gov.manipur.rccms.dto.CreateCaseDTO;
 import in.gov.manipur.rccms.dto.ExecuteTransitionDTO;
+import in.gov.manipur.rccms.dto.FormSchemaDTO;
 import in.gov.manipur.rccms.dto.WorkflowTransitionDTO;
 import in.gov.manipur.rccms.entity.WorkflowHistory;
 import in.gov.manipur.rccms.service.CaseService;
 import in.gov.manipur.rccms.service.CurrentUserService;
+import in.gov.manipur.rccms.service.FormSchemaService;
 import in.gov.manipur.rccms.service.WorkflowEngineService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,12 +38,25 @@ public class CaseController {
     private final CaseService caseService;
     private final WorkflowEngineService workflowEngineService;
     private final CurrentUserService currentUserService;
+    private final FormSchemaService formSchemaService;
+
+    /**
+     * Get form schema for a case type
+     * GET /api/cases/form-schema/{caseTypeId}
+     */
+    @Operation(summary = "Get Form Schema", description = "Get form field definitions for a case type")
+    @GetMapping("/form-schema/{caseTypeId}")
+    public ResponseEntity<ApiResponse<FormSchemaDTO>> getFormSchema(@PathVariable Long caseTypeId) {
+        log.info("Get form schema request: caseTypeId={}", caseTypeId);
+        FormSchemaDTO schema = formSchemaService.getFormSchema(caseTypeId);
+        return ResponseEntity.ok(ApiResponse.success("Form schema retrieved successfully", schema));
+    }
 
     /**
      * Create a new case
      * POST /api/cases
      */
-    @Operation(summary = "Create Case", description = "Create a new case. Workflow instance will be automatically initialized.")
+    @Operation(summary = "Create Case", description = "Create a new case. Form data will be validated against schema. Workflow instance will be automatically initialized.")
     @PostMapping
     public ResponseEntity<ApiResponse<CaseDTO>> createCase(
             @Valid @RequestBody CreateCaseDTO dto,
