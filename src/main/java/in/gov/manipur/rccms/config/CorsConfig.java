@@ -20,9 +20,14 @@ public class CorsConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         
         // Allow Angular frontend origins (localhost ports 4200 and 4201)
+        // Add more origins as needed for your frontend
         configuration.setAllowedOrigins(Arrays.asList(
                 "http://localhost:4200",  // Angular default dev port
-                "http://localhost:4201"   // Alternative Angular dev port
+                "http://localhost:4201",  // Alternative Angular dev port
+                "http://localhost:3000",  // React default dev port
+                "http://localhost:5173",  // Vite default dev port
+                "http://127.0.0.1:4200",  // Alternative localhost format
+                "http://127.0.0.1:3000"   // Alternative localhost format
         ));
         
         // Allow all HTTP methods (including OPTIONS for preflight)

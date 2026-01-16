@@ -1,0 +1,546 @@
+package in.gov.manipur.rccms.service;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import in.gov.manipur.rccms.dto.*;
+import in.gov.manipur.rccms.entity.CaseType;
+import in.gov.manipur.rccms.entity.FormFieldDefinition;
+import in.gov.manipur.rccms.repository.CaseTypeRepository;
+import in.gov.manipur.rccms.repository.FormFieldDefinitionRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+import java.util.*;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+/**
+ * Form Schema Service
+ * Manages dynamic form field definitions and validation
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class FormSchemaService {
+
+    private final FormFieldDefinitionRepository fieldRepository;
+    private final CaseTypeRepository caseTypeRepository;
+    private final ObjectMapper objectMapper;
+
+    /**
+     * Get form schema for a case type (only active fields)
+     */
+    @Transactional(readOnly = true)
+    public FormSchemaDTO getFormSchema(Long caseTypeId) {
+        log.info("Getting form schema for case type: {}", caseTypeId);
+
+        if (caseTypeId == null) {
+            throw new IllegalArgumentException("Case type ID cannot be null");
+        }
+
+        CaseType caseType = caseTypeRepository.findById(caseTypeId)
+                .orElseThrow(() -> new RuntimeException("Case type not found: " + caseTypeId));
+
+        List<FormFieldDefinition> fields = fieldRepository.findActiveFieldsByCaseTypeId(caseTypeId);
+
+        List<FormFieldDefinitionDTO> fieldDTOs = fields.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+
+        return FormSchemaDTO.builder()
+                .caseTypeId(caseType.getId())
+                .caseTypeName(caseType.getName())
+                .caseTypeCode(caseType.getCode())
+                .fields(fieldDTOs)
+                .totalFields(fieldDTOs.size())
+                .build();
+    }
+
+    /**
+     * Get all form fields for a case type (including inactive)
+     */
+    @Transactional(readOnly = true)
+    public List<FormFieldDefinitionDTO> getAllFields(Long caseTypeId) {
+        log.info("Getting all fields for case type: {}", caseTypeId);
+
+        if (caseTypeId == null) {
+            throw new IllegalArgumentException("Case type ID cannot be null");
+        }
+
+        caseTypeRepository.findById(caseTypeId)
+                .orElseThrow(() -> new RuntimeException("Case type not found: " + caseTypeId));
+
+        List<FormFieldDefinition> fields = fieldRepository.findAllFieldsByCaseTypeId(caseTypeId);
+
+        return fields.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Get form field by ID
+     */
+    @Transactional(readOnly = true)
+    public FormFieldDefinitionDTO getFieldById(Long fieldId) {
+        if (fieldId == null) {
+            throw new IllegalArgumentException("Field ID cannot be null");
+        }
+
+        FormFieldDefinition field = fieldRepository.findById(fieldId)
+                .orElseThrow(() -> new RuntimeException("Form field not found: " + fieldId));
+        return convertToDTO(field);
+    }
+
+    /**
+     * Create a new form field
+     */
+    public FormFieldDefinitionDTO createField(CreateFormFieldDTO dto) {
+        log.info("Creating form field: caseTypeId={}, fieldName={}", dto.getCaseTypeId(), dto.getFieldName());
+
+        if (dto.getCaseTypeId() == null) {
+            throw new IllegalArgumentException("Case type ID cannot be null");
+        }
+
+        // Validate case type
+        CaseType caseType = caseTypeRepository.findById(dto.getCaseTypeId())
+                .orElseThrow(() -> new RuntimeException("Case type not found: " + dto.getCaseTypeId()));
+
+        // Check if field name already exists for this case type
+        if (fieldRepository.existsByCaseTypeIdAndFieldName(dto.getCaseTypeId(), dto.getFieldName())) {
+            throw new RuntimeException("Field name already exists for this case type: " + dto.getFieldName());
+        }
+
+        // Create field entity
+        FormFieldDefinition field = new FormFieldDefinition();
+        field.setCaseType(caseType);
+        field.setCaseTypeId(caseType.getId());
+        field.setFieldName(dto.getFieldName());
+        field.setFieldLabel(dto.getFieldLabel());
+        field.setFieldType(dto.getFieldType());
+        field.setIsRequired(dto.getIsRequired() != null ? dto.getIsRequired() : false);
+        field.setValidationRules(dto.getValidationRules());
+        field.setDisplayOrder(dto.getDisplayOrder() != null ? dto.getDisplayOrder() : 0);
+        field.setIsActive(dto.getIsActive() != null ? dto.getIsActive() : true);
+        field.setDefaultValue(dto.getDefaultValue());
+        field.setFieldOptions(dto.getFieldOptions());
+        field.setPlaceholder(dto.getPlaceholder());
+        field.setHelpText(dto.getHelpText());
+        field.setFieldGroup(dto.getFieldGroup());
+        field.setConditionalLogic(dto.getConditionalLogic());
+
+        FormFieldDefinition saved = fieldRepository.save(field);
+        log.info("Form field created successfully: fieldId={}", saved.getId());
+
+        return convertToDTO(saved);
+    }
+
+    /**
+     * Update a form field
+     */
+    public FormFieldDefinitionDTO updateField(Long fieldId, UpdateFormFieldDTO dto) {
+        log.info("Updating form field: fieldId={}", fieldId);
+
+        if (fieldId == null) {
+            throw new IllegalArgumentException("Field ID cannot be null");
+        }
+
+        FormFieldDefinition field = fieldRepository.findById(fieldId)
+                .orElseThrow(() -> new RuntimeException("Form field not found: " + fieldId));
+
+        // Update fields
+        if (dto.getFieldLabel() != null) {
+            field.setFieldLabel(dto.getFieldLabel());
+        }
+        if (dto.getFieldType() != null) {
+            field.setFieldType(dto.getFieldType());
+        }
+        if (dto.getIsRequired() != null) {
+            field.setIsRequired(dto.getIsRequired());
+        }
+        if (dto.getValidationRules() != null) {
+            field.setValidationRules(dto.getValidationRules());
+        }
+        if (dto.getDisplayOrder() != null) {
+            field.setDisplayOrder(dto.getDisplayOrder());
+        }
+        if (dto.getIsActive() != null) {
+            field.setIsActive(dto.getIsActive());
+        }
+        if (dto.getDefaultValue() != null) {
+            field.setDefaultValue(dto.getDefaultValue());
+        }
+        if (dto.getFieldOptions() != null) {
+            field.setFieldOptions(dto.getFieldOptions());
+        }
+        if (dto.getPlaceholder() != null) {
+            field.setPlaceholder(dto.getPlaceholder());
+        }
+        if (dto.getHelpText() != null) {
+            field.setHelpText(dto.getHelpText());
+        }
+        if (dto.getFieldGroup() != null) {
+            field.setFieldGroup(dto.getFieldGroup());
+        }
+        if (dto.getConditionalLogic() != null) {
+            field.setConditionalLogic(dto.getConditionalLogic());
+        }
+
+        FormFieldDefinition saved = fieldRepository.save(field);
+        log.info("Form field updated successfully: fieldId={}", saved.getId());
+
+        return convertToDTO(saved);
+    }
+
+    /**
+     * Delete a form field
+     */
+    public void deleteField(Long fieldId) {
+        log.info("Deleting form field: fieldId={}", fieldId);
+
+        if (fieldId == null) {
+            throw new IllegalArgumentException("Field ID cannot be null");
+        }
+
+        FormFieldDefinition field = fieldRepository.findById(fieldId)
+                .orElseThrow(() -> new RuntimeException("Form field not found: " + fieldId));
+
+        fieldRepository.delete(field);
+        log.info("Form field deleted successfully: fieldId={}", fieldId);
+    }
+
+    /**
+     * Reorder form fields
+     */
+    public void reorderFields(Long caseTypeId, ReorderFieldsDTO dto) {
+        log.info("Reordering fields for case type: {}", caseTypeId);
+
+        if (caseTypeId == null) {
+            throw new IllegalArgumentException("Case type ID cannot be null");
+        }
+
+        List<Long> fieldIds = dto.getFieldIds();
+        for (int i = 0; i < fieldIds.size(); i++) {
+            Long fieldId = fieldIds.get(i);
+            if (fieldId == null) {
+                continue;
+            }
+            FormFieldDefinition field = fieldRepository.findById(fieldId)
+                    .orElseThrow(() -> new RuntimeException("Form field not found: " + fieldId));
+
+            Long fieldCaseTypeId = field.getCaseTypeId();
+            if (fieldCaseTypeId == null || !fieldCaseTypeId.equals(caseTypeId)) {
+                throw new RuntimeException("Field does not belong to case type: " + caseTypeId);
+            }
+
+            field.setDisplayOrder(i + 1);
+            fieldRepository.save(field);
+        }
+
+        log.info("Fields reordered successfully for case type: {}", caseTypeId);
+    }
+
+    /**
+     * Validate form data against schema
+     */
+    @Transactional(readOnly = true)
+    public Map<String, String> validateFormData(Long caseTypeId, Map<String, Object> formData) {
+        log.info("Validating form data for case type: {}", caseTypeId);
+
+        if (caseTypeId == null) {
+            throw new IllegalArgumentException("Case type ID cannot be null");
+        }
+
+        List<FormFieldDefinition> fields = fieldRepository.findActiveFieldsByCaseTypeId(caseTypeId);
+        Map<String, String> errors = new HashMap<>();
+
+        for (FormFieldDefinition field : fields) {
+            String fieldName = field.getFieldName();
+            Object value = formData.get(fieldName);
+
+            // Check required fields
+            if (field.getIsRequired() && (value == null || value.toString().trim().isEmpty())) {
+                errors.put(fieldName, field.getFieldLabel() + " is required");
+                continue;
+            }
+
+            // Skip validation if field is empty and not required
+            if (value == null || value.toString().trim().isEmpty()) {
+                continue;
+            }
+
+            // Validate based on field type and validation rules
+            String validationError = validateFieldValue(field, value);
+            if (validationError != null) {
+                errors.put(fieldName, validationError);
+            }
+        }
+
+        return errors;
+    }
+
+    /**
+     * Validate a single field value
+     */
+    private String validateFieldValue(FormFieldDefinition field, Object value) {
+        String fieldType = field.getFieldType();
+        String valueStr = value.toString().trim();
+
+        try {
+            // Parse validation rules
+            Map<String, Object> rules = parseValidationRules(field.getValidationRules());
+
+            switch (fieldType.toUpperCase()) {
+                case "TEXT":
+                case "TEXTAREA":
+                    return validateText(valueStr, rules);
+                case "NUMBER":
+                    return validateNumber(valueStr, rules);
+                case "DATE":
+                    return validateDate(valueStr, rules);
+                case "EMAIL":
+                    return validateEmail(valueStr, rules);
+                case "PHONE":
+                    return validatePhone(valueStr, rules);
+                case "SELECT":
+                case "RADIO":
+                    return validateSelect(valueStr, field.getFieldOptions());
+                default:
+                    return null; // No validation for unknown types
+            }
+        } catch (Exception e) {
+            log.error("Error validating field {}: {}", field.getFieldName(), e.getMessage());
+            return "Invalid value format";
+        }
+    }
+
+    /**
+     * Validate text field
+     */
+    private String validateText(String value, Map<String, Object> rules) {
+        if (rules == null) {
+            return null;
+        }
+
+        Integer minLength = getInteger(rules, "minLength");
+        Integer maxLength = getInteger(rules, "maxLength");
+        String pattern = getString(rules, "pattern");
+
+        if (minLength != null && value.length() < minLength) {
+            return "Minimum length is " + minLength + " characters";
+        }
+        if (maxLength != null && value.length() > maxLength) {
+            return "Maximum length is " + maxLength + " characters";
+        }
+        if (pattern != null && !Pattern.matches(pattern, value)) {
+            return "Invalid format";
+        }
+
+        return null;
+    }
+
+    /**
+     * Validate number field
+     */
+    private String validateNumber(String value, Map<String, Object> rules) {
+        try {
+            Double numValue = Double.parseDouble(value);
+            if (rules == null) {
+                return null;
+            }
+
+            Double min = getDouble(rules, "min");
+            Double max = getDouble(rules, "max");
+
+            if (min != null && numValue < min) {
+                return "Minimum value is " + min;
+            }
+            if (max != null && numValue > max) {
+                return "Maximum value is " + max;
+            }
+
+            return null;
+        } catch (NumberFormatException e) {
+            return "Must be a valid number";
+        }
+    }
+
+    /**
+     * Validate date field
+     */
+    private String validateDate(String value, Map<String, Object> rules) {
+        try {
+            LocalDate date = LocalDate.parse(value, DateTimeFormatter.ISO_DATE);
+            if (rules == null) {
+                return null;
+            }
+
+            String minDate = getString(rules, "minDate");
+            String maxDate = getString(rules, "maxDate");
+
+            if (minDate != null) {
+                LocalDate min = "today".equals(minDate) ? LocalDate.now() : LocalDate.parse(minDate);
+                if (date.isBefore(min)) {
+                    return "Date must be on or after " + minDate;
+                }
+            }
+            if (maxDate != null) {
+                LocalDate max = "today".equals(maxDate) ? LocalDate.now() : LocalDate.parse(maxDate);
+                if (date.isAfter(max)) {
+                    return "Date must be on or before " + maxDate;
+                }
+            }
+
+            return null;
+        } catch (DateTimeParseException e) {
+            return "Must be a valid date (YYYY-MM-DD)";
+        }
+    }
+
+    /**
+     * Validate email field
+     */
+    private String validateEmail(String value, Map<String, Object> rules) {
+        String emailPattern = "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$";
+        if (!Pattern.matches(emailPattern, value)) {
+            return "Must be a valid email address";
+        }
+        return null;
+    }
+
+    /**
+     * Validate phone field
+     */
+    private String validatePhone(String value, Map<String, Object> rules) {
+        // Indian phone number pattern: 10 digits starting with 6-9
+        String phonePattern = "^[6-9]\\d{9}$";
+        if (!Pattern.matches(phonePattern, value)) {
+            return "Must be a valid 10-digit phone number starting with 6-9";
+        }
+        return null;
+    }
+
+    /**
+     * Validate select/radio field
+     */
+    private String validateSelect(String value, String fieldOptions) {
+        if (fieldOptions == null || fieldOptions.trim().isEmpty()) {
+            return null; // No options defined, skip validation
+        }
+
+        try {
+            List<Map<String, String>> options = objectMapper.readValue(fieldOptions, 
+                    new TypeReference<List<Map<String, String>>>() {});
+            
+            boolean isValid = options.stream()
+                    .anyMatch(opt -> value.equals(opt.get("value")));
+            
+            if (!isValid) {
+                return "Invalid option selected";
+            }
+        } catch (Exception e) {
+            log.error("Error parsing field options: {}", e.getMessage());
+            return null; // Skip validation if options are invalid
+        }
+
+        return null;
+    }
+
+    /**
+     * Parse validation rules JSON
+     */
+    private Map<String, Object> parseValidationRules(String rulesJson) {
+        if (rulesJson == null || rulesJson.trim().isEmpty()) {
+            return new HashMap<>();
+        }
+
+        try {
+            return objectMapper.readValue(rulesJson, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            log.error("Error parsing validation rules: {}", e.getMessage());
+            return new HashMap<>();
+        }
+    }
+
+    /**
+     * Helper methods to extract values from rules map
+     */
+    private Integer getInteger(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Integer) {
+            return (Integer) value;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        try {
+            return Integer.parseInt(value.toString());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private Double getDouble(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Double) {
+            return (Double) value;
+        }
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+        try {
+            return Double.parseDouble(value.toString());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String getString(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        return value != null ? value.toString() : null;
+    }
+
+    /**
+     * Convert entity to DTO
+     */
+    private FormFieldDefinitionDTO convertToDTO(FormFieldDefinition field) {
+        FormFieldDefinitionDTO dto = FormFieldDefinitionDTO.builder()
+                .id(field.getId())
+                .caseTypeId(field.getCaseTypeId())
+                .fieldName(field.getFieldName())
+                .fieldLabel(field.getFieldLabel())
+                .fieldType(field.getFieldType())
+                .isRequired(field.getIsRequired())
+                .validationRules(field.getValidationRules())
+                .displayOrder(field.getDisplayOrder())
+                .isActive(field.getIsActive())
+                .defaultValue(field.getDefaultValue())
+                .fieldOptions(field.getFieldOptions())
+                .placeholder(field.getPlaceholder())
+                .helpText(field.getHelpText())
+                .fieldGroup(field.getFieldGroup())
+                .conditionalLogic(field.getConditionalLogic())
+                .createdAt(field.getCreatedAt())
+                .updatedAt(field.getUpdatedAt())
+                .build();
+
+        if (field.getCaseType() != null) {
+            dto.setCaseTypeName(field.getCaseType().getName());
+            dto.setCaseTypeCode(field.getCaseType().getCode());
+        }
+
+        return dto;
+    }
+}
+
