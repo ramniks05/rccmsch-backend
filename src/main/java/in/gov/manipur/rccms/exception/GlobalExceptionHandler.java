@@ -173,6 +173,23 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handle OptimisticLockingException
+     */
+    @ExceptionHandler(OptimisticLockingException.class)
+    public ResponseEntity<ErrorResponseDTO> handleOptimisticLockingException(
+            OptimisticLockingException ex, HttpServletRequest request) {
+        log.warn("Optimistic locking conflict: {}", ex.getMessage());
+        ErrorResponseDTO errorResponse = ErrorResponseDTO.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.CONFLICT.value())
+                .error("Conflict")
+                .message(ex.getMessage())
+                .path(request.getRequestURI())
+                .build();
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(errorResponse);
+    }
+
+    /**
      * Handle IllegalArgumentException
      */
     @ExceptionHandler(IllegalArgumentException.class)

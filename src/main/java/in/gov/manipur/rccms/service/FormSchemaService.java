@@ -214,6 +214,102 @@ public class FormSchemaService {
         log.info("Form field deleted successfully: fieldId={}", fieldId);
     }
 
+
+    /**
+     * Bulk create multiple form fields
+     */
+    public List<FormFieldDefinitionDTO> bulkCreateFields(Long caseTypeId, List<CreateFormFieldDTO> fields) {
+        log.info("Bulk creating {} fields for case type: {}", fields != null ? fields.size() : 0, caseTypeId);
+
+        if (caseTypeId == null) {
+            throw new IllegalArgumentException("Case type ID cannot be null");
+        }
+
+        // Validate case type exists
+        caseTypeRepository.findById(caseTypeId)
+                .orElseThrow(() -> new RuntimeException("Case type not found: " + caseTypeId));
+
+        if (fields == null || fields.isEmpty()) {
+            throw new IllegalArgumentException("Fields list cannot be empty");
+        }
+
+        List<FormFieldDefinitionDTO> createdFields = new ArrayList<>();
+        
+        for (CreateFormFieldDTO dto : fields) {
+            // Ensure all fields belong to the same case type
+            dto.setCaseTypeId(caseTypeId);
+            FormFieldDefinitionDTO created = createField(dto);
+            createdFields.add(created);
+        }
+
+        log.info("Bulk created {} fields successfully for case type: {}", createdFields.size(), caseTypeId);
+        return createdFields;
+    }
+
+    /**
+     * Bulk update multiple form fields
+     */
+    public List<FormFieldDefinitionDTO> bulkUpdateFields(List<BulkUpdateFieldItemDTO> fields) {
+        log.info("Bulk updating {} fields", fields != null ? fields.size() : 0);
+
+        if (fields == null || fields.isEmpty()) {
+            throw new IllegalArgumentException("Fields list cannot be empty");
+        }
+
+        List<FormFieldDefinitionDTO> updatedFields = new ArrayList<>();
+        
+        for (BulkUpdateFieldItemDTO item : fields) {
+            if (item.getFieldId() == null) {
+                throw new IllegalArgumentException("Field ID cannot be null");
+            }
+            if (item.getUpdateData() == null) {
+                throw new IllegalArgumentException("Update data cannot be null for field ID: " + item.getFieldId());
+            }
+            
+            FormFieldDefinitionDTO updated = updateField(item.getFieldId(), item.getUpdateData());
+            updatedFields.add(updated);
+        }
+
+        log.info("Bulk updated {} fields successfully", updatedFields.size());
+        return updatedFields;
+    }
+
+    /**
+     * Bulk delete multiple form fields
+     */
+    public void bulkDeleteFields(List<Long> fieldIds) {
+        log.info("Bulk deleting {} fields", fieldIds != null ? fieldIds.size() : 0);
+
+        if (fieldIds == null || fieldIds.isEmpty()) {
+            throw new IllegalArgumentException("Field IDs list cannot be empty");
+        }
+
+        int deletedCount = 0;
+        List<String> errors = new ArrayList<>();
+        
+        for (Long fieldId : fieldIds) {
+            try {
+                if (fieldId != null) {
+                    deleteField(fieldId);
+                    deletedCount++;
+                }
+            } catch (Exception e) {
+                log.error("Error deleting field {}: {}", fieldId, e.getMessage());
+                errors.add("Field " + fieldId + ": " + e.getMessage());
+            }
+        }
+
+        log.info("Bulk deleted {}/{} fields successfully", deletedCount, fieldIds.size());
+        
+        if (!errors.isEmpty() && deletedCount == 0) {
+            // If all deletions failed, throw exception
+            throw new RuntimeException("All fields could not be deleted: " + String.join(", ", errors));
+        } else if (!errors.isEmpty()) {
+            // If some deletions failed, log warning but don't throw
+            log.warn("Some fields could not be deleted: {}", String.join(", ", errors));
+        }
+    }
+
     /**
      * Reorder form fields
      */

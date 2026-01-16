@@ -37,6 +37,8 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .authorizeHttpRequests(auth -> auth
+                        // Allow all OPTIONS requests (CORS preflight)
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         // Public endpoints (authentication)
                         .requestMatchers(
                                 "/api/auth/**",
@@ -47,10 +49,11 @@ public class SecurityConfig {
                                 "/api/health",
                                 "/api/captcha/**"
                         ).permitAll()
-                        // Public read-only endpoints (for frontend) - GET requests only
+                        // Public read-only endpoints (for frontend) - GET requests
                         .requestMatchers(HttpMethod.GET, "/api/case-types/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/admin/case-types/**").permitAll()  // Admin read-only endpoints
                         .requestMatchers(HttpMethod.GET, "/api/admin/form-schemas/case-types/**").permitAll()
+                        .requestMatchers("/api/admin/form-schemas/case-types/**").permitAll()  // Allow all methods for this path
                         .requestMatchers(HttpMethod.POST, "/api/admin/form-schemas/validate").permitAll()
                         // Swagger/OpenAPI endpoints
                         .requestMatchers(

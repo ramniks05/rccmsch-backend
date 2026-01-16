@@ -39,6 +39,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull FilterChain filterChain)
             throws ServletException, IOException {
         
+        String requestPath = request.getRequestURI();
+        
+        // Skip JWT filter for public endpoints
+        if (shouldSkipFilter(requestPath, request.getMethod())) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+        
         try {
             String token = extractTokenFromRequest(request);
             
@@ -75,6 +83,56 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
         
         filterChain.doFilter(request, response);
+    }
+
+    /**
+     * Check if filter should be skipped for public endpoints
+     */
+    private boolean shouldSkipFilter(String path, String method) {
+        // Public authentication endpoints
+        if (path.startsWith("/api/auth/")) {
+            return true;
+        }
+        if (path.startsWith("/api/admin/auth/")) {
+            return true;
+        }
+        if (path.equals("/api/health")) {
+            return true;
+        }
+        if (path.startsWith("/api/captcha/")) {
+            return true;
+        }
+        
+        // Public GET endpoints
+        if ("GET".equalsIgnoreCase(method)) {
+            if (path.startsWith("/api/case-types")) {
+                return true;
+            }
+            if (path.startsWith("/api/admin/case-types")) {
+                return true;
+            }
+            if (path.startsWith("/api/admin/form-schemas/case-types/")) {
+                return true;
+            }
+        }
+        
+        // Public POST endpoints
+        if ("POST".equalsIgnoreCase(method) && path.equals("/api/admin/form-schemas/validate")) {
+            return true;
+        }
+        
+        // Swagger endpoints
+        if (path.startsWith("/swagger-ui") || path.startsWith("/v3/api-docs") || 
+            path.startsWith("/swagger-resources") || path.startsWith("/webjars")) {
+            return true;
+        }
+        
+        // OPTIONS requests (CORS preflight)
+        if ("OPTIONS".equalsIgnoreCase(method)) {
+            return true;
+        }
+        
+        return false;
     }
 
     /**
@@ -138,6 +196,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     authorities.add(new SimpleGrantedAuthority("ROLE_" + roleCode));
                 }
             } else if ("ADMIN".equals(authType)) {
+                // For admin, add both ADMIN authority and role-based authority
+                authorities.add(new SimpleGrantedAuthority("ADMIN"));
                 String role = claims.get("role", String.class);
                 if (role != null) {
                     authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
