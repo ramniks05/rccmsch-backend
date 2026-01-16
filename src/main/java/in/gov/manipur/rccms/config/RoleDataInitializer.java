@@ -78,6 +78,14 @@ public class RoleDataInitializer implements CommandLineRunner {
             "Office of the SDC (Sub-Divisional Circle)"
         ));
 
+        // CIRCLE_MANDOL - Circle Mandol (Circle level)
+        rolesToInsert.add(createRole(
+            "CIRCLE_MANDOL",
+            "Circle Mandol",
+            AdminUnit.UnitLevel.CIRCLE,
+            "Circle Mandol - Receives applications from DA, processes and forwards to SDC"
+        ));
+
         // DEALING_ASSISTANT - Dealing Assistant (All levels)
         rolesToInsert.add(createRole(
             "DEALING_ASSISTANT",

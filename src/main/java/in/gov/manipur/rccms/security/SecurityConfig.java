@@ -1,5 +1,6 @@
 package in.gov.manipur.rccms.security;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -8,26 +9,26 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfigurationSource;
 
 /**
  * Spring Security Configuration
  * 
  * Configuration:
- * - Permits all requests (public endpoints)
+ * - JWT authentication filter for protected endpoints
+ * - Public endpoints for authentication APIs
  * - Disables CSRF (stateless JWT authentication)
  * - Enables CORS for Angular frontend
  * - Stateless session management for JWT
  */
 @Configuration
 @EnableWebSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
 
     private final CorsConfigurationSource corsConfigurationSource;
-
-    public SecurityConfig(CorsConfigurationSource corsConfigurationSource) {
-        this.corsConfigurationSource = corsConfigurationSource;
-    }
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -35,14 +36,33 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/**").permitAll()
-                        .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/swagger-ui/index.html").permitAll()
-                        .requestMatchers("/v3/api-docs/**", "/swagger-resources/**", "/webjars/**").permitAll()
-                        .anyRequest().permitAll()
+                        // Public endpoints (authentication)
+                        .requestMatchers(
+                                "/api/auth/**",
+                                "/api/admin/auth/officer-login",
+                                "/api/admin/auth/reset-password",
+                                "/api/admin/auth/verify-mobile",
+                                "/api/admin/auth/login",
+                                "/api/health",
+                                "/api/captcha/**"
+                        ).permitAll()
+                        // Swagger/OpenAPI endpoints
+                        .requestMatchers(
+                                "/swagger-ui/**", 
+                                "/swagger-ui.html", 
+                                "/swagger-ui/index.html",
+                                "/v3/api-docs/**", 
+                                "/swagger-resources/**", 
+                                "/webjars/**"
+                        ).permitAll()
+                        // All other endpoints require authentication
+                        .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                );
+                )
+                // Add JWT filter before UsernamePasswordAuthenticationFilter
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

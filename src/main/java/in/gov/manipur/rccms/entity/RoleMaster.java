@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 /**
  * Role Master Entity
  * System-controlled roles for RCCMS
- * Roles: SUPER_ADMIN, STATE_ADMIN, DISTRICT_OFFICER, SUB_DIVISION_OFFICER, CIRCLE_OFFICER, DEALING_ASSISTANT
+ * Roles: SUPER_ADMIN, STATE_ADMIN, DISTRICT_OFFICER, SUB_DIVISION_OFFICER, CIRCLE_OFFICER, CIRCLE_MANDOL, DEALING_ASSISTANT
  */
 @Entity
 @Table(name = "role_master", uniqueConstraints = {
@@ -55,6 +55,7 @@ public class RoleMaster {
         DISTRICT_OFFICER,
         SUB_DIVISION_OFFICER,
         CIRCLE_OFFICER,
+        CIRCLE_MANDOL,
         DEALING_ASSISTANT
     }
 }
