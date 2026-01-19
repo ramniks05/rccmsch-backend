@@ -96,6 +96,50 @@ public class FormSchemaController {
     }
 
     /**
+     * Bulk create multiple form fields - Admin only
+     */
+    @PostMapping("/fields/bulk")
+    @PreAuthorize("hasAuthority('ADMIN')")
+    public ResponseEntity<ApiResponse<List<FormFieldDefinitionDTO>>> bulkCreateFields(
+            @Valid @RequestBody BulkCreateFieldsDTO dto) {
+        log.info("Bulk creating {} fields for case type: {}", dto.getFields().size(), dto.getCaseTypeId());
+        List<FormFieldDefinitionDTO> createdFields = formSchemaService.bulkCreateFields(
+                dto.getCaseTypeId(), dto.getFields());
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Fields created successfully", createdFields));
+    }
+
+    /**
+     * Bulk update multiple form fields - Admin only
+     */
+    @PutMapping("/fields/bulk")
+    @PreAuthorize("hasAuthority('ADMIN')")
+    public ResponseEntity<ApiResponse<List<FormFieldDefinitionDTO>>> bulkUpdateFields(
+            @Valid @RequestBody BulkUpdateFieldsDTO dto) {
+        log.info("Bulk updating {} fields", dto.getFields().size());
+        List<FormFieldDefinitionDTO> updatedFields = formSchemaService.bulkUpdateFields(dto.getFields());
+        return ResponseEntity.ok(ApiResponse.success("Fields updated successfully", updatedFields));
+    }
+
+    /**
+     * Bulk delete multiple form fields - Admin only
+     */
+    @DeleteMapping("/fields/bulk")
+    @PreAuthorize("hasAuthority('ADMIN')")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> bulkDeleteFields(
+            @Valid @RequestBody BulkDeleteFieldsDTO dto) {
+        log.info("Bulk deleting {} fields", dto.getFieldIds().size());
+        formSchemaService.bulkDeleteFields(dto.getFieldIds());
+        
+        Map<String, Object> response = Map.of(
+                "message", "Fields deleted successfully",
+                "deletedCount", dto.getFieldIds().size()
+        );
+        return ResponseEntity.ok(ApiResponse.success("Fields deleted successfully", response));
+    }
+
+
+    /**
      * Reorder form fields - Admin only
      */
     @PutMapping("/case-types/{caseTypeId}/fields/reorder")
