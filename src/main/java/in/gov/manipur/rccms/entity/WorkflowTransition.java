@@ -1,5 +1,7 @@
 package in.gov.manipur.rccms.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -13,6 +15,7 @@ import java.time.LocalDateTime;
  * Each transition represents an action that moves a case from one state to another
  */
 @Entity
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Table(name = "workflow_transition", uniqueConstraints = {
     @UniqueConstraint(columnNames = {"workflow_id", "from_state_id", "to_state_id", "transition_code"}, 
                      name = "uk_workflow_transition")
@@ -28,6 +31,7 @@ public class WorkflowTransition {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "workflow_id", nullable = false, foreignKey = @ForeignKey(name = "fk_transition_workflow"))
+    @JsonIgnore
     private WorkflowDefinition workflow;
 
     @Column(name = "workflow_id", insertable = false, updatable = false)
@@ -35,6 +39,7 @@ public class WorkflowTransition {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "from_state_id", nullable = false, foreignKey = @ForeignKey(name = "fk_transition_from_state"))
+    @JsonIgnore
     private WorkflowState fromState;
 
     @Column(name = "from_state_id", insertable = false, updatable = false)
@@ -42,6 +47,7 @@ public class WorkflowTransition {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "to_state_id", nullable = false, foreignKey = @ForeignKey(name = "fk_transition_to_state"))
+    @JsonIgnore
     private WorkflowState toState;
 
     @Column(name = "to_state_id", insertable = false, updatable = false)

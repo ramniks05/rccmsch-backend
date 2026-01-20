@@ -5,6 +5,7 @@ import in.gov.manipur.rccms.dto.CaseDTO;
 import in.gov.manipur.rccms.dto.CreateCaseDTO;
 import in.gov.manipur.rccms.dto.ExecuteTransitionDTO;
 import in.gov.manipur.rccms.dto.FormSchemaDTO;
+import in.gov.manipur.rccms.dto.ResubmitCaseDTO;
 import in.gov.manipur.rccms.dto.WorkflowTransitionDTO;
 import in.gov.manipur.rccms.entity.WorkflowHistory;
 import in.gov.manipur.rccms.service.CaseService;
@@ -85,6 +86,39 @@ public class CaseController {
         
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Case created successfully", createdCase));
+    }
+
+    /**
+     * Resubmit a case after correction (citizen updates case data)
+     * PUT /api/cases/{caseId}/resubmit
+     */
+    @Operation(summary = "Resubmit Case", description = "Resubmit a case after correction by updating case data")
+    @PutMapping("/{caseId}/resubmit")
+    public ResponseEntity<ApiResponse<CaseDTO>> resubmitCase(
+            @PathVariable Long caseId,
+            @Valid @RequestBody ResubmitCaseDTO dto,
+            HttpServletRequest request) {
+        log.info("Resubmit case request: caseId={}", caseId);
+
+        // Get applicant ID from token (for citizen) or from request header
+        Long applicantId = currentUserService.getCurrentOfficerId(request);
+        if (applicantId == null) {
+            String userIdHeader = request.getHeader("X-User-Id");
+            if (userIdHeader != null) {
+                try {
+                    applicantId = Long.parseLong(userIdHeader);
+                } catch (NumberFormatException e) {
+                    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                            .body(ApiResponse.error("Invalid user ID"));
+                }
+            } else {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(ApiResponse.error("User ID not found"));
+            }
+        }
+
+        CaseDTO updatedCase = caseService.resubmitCase(caseId, applicantId, dto);
+        return ResponseEntity.ok(ApiResponse.success("Case resubmitted successfully", updatedCase));
     }
 
     /**

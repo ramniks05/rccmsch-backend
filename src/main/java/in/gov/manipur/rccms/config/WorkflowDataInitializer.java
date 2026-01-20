@@ -90,7 +90,8 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"LAND_RECORD_UPDATED", "Land Record Updated", "10", "false", "false"},
             {"PATTA_PREPARATION", "Patta Preparation", "11", "false", "false"},
             {"COMPLETED", "Completed", "12", "false", "true"},
-            {"REJECTED", "Rejected", "13", "false", "true"}
+            {"REJECTED", "Rejected", "13", "false", "true"},
+            {"RETURNED_FOR_CORRECTION", "Returned for Correction", "14", "false", "false"}
         });
 
         createTransitions(workflow, states, new String[][]{
@@ -102,6 +103,10 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"COMPLETE_HEARING", "Complete Hearing", "HEARING_COMPLETED", "DECISION_PENDING", "false"},
             {"APPROVE", "Approve", "DECISION_PENDING", "APPROVED", "true"},
             {"REJECT", "Reject", "DECISION_PENDING", "REJECTED", "true"},
+            {"RETURN_FROM_DA", "Return for Correction (DA)", "DA_ENTRY", "RETURNED_FOR_CORRECTION", "true"},
+            {"RETURN_FROM_MANDOL", "Return for Correction (Mandol)", "MANDOL_RECEIVED", "RETURNED_FOR_CORRECTION", "true"},
+            {"RETURN_FROM_SDC", "Return for Correction (SDC)", "DECISION_PENDING", "RETURNED_FOR_CORRECTION", "true"},
+            {"REVIEW_CORRECTION", "Review Correction", "RETURNED_FOR_CORRECTION", "DA_ENTRY", "false"},
             {"PASS_TO_MANDOL", "Pass to Mandol", "APPROVED", "MANDOL_UPDATE", "false"},
             {"UPDATE_LAND_RECORD", "Update Land Record", "MANDOL_UPDATE", "LAND_RECORD_UPDATED", "false"},
             {"PREPARE_PATTA", "Prepare Patta", "LAND_RECORD_UPDATED", "PATTA_PREPARATION", "false"},
@@ -134,7 +139,8 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"APPROVED", "Approved", "6", "false", "false"},
             {"LAND_RECORD_UPDATED", "Land Record Updated", "7", "false", "false"},
             {"COMPLETED", "Completed", "8", "false", "true"},
-            {"REJECTED", "Rejected", "9", "false", "true"}
+            {"REJECTED", "Rejected", "9", "false", "true"},
+            {"RETURNED_FOR_CORRECTION", "Returned for Correction", "10", "false", "false"}
         });
 
         createTransitions(workflow, states, new String[][]{
@@ -144,6 +150,9 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"WAIT_FOR_OBJECTIONS", "Wait for Objections", "OBJECTION_PERIOD", "DECISION_PENDING", "false"},
             {"APPROVE", "Approve", "DECISION_PENDING", "APPROVED", "true"},
             {"REJECT", "Reject", "DECISION_PENDING", "REJECTED", "true"},
+            {"RETURN_FROM_MANDOL", "Return for Correction (Mandol)", "MANDOL_REPORT", "RETURNED_FOR_CORRECTION", "true"},
+            {"RETURN_FROM_SDC", "Return for Correction (SDC)", "DECISION_PENDING", "RETURNED_FOR_CORRECTION", "true"},
+            {"REVIEW_CORRECTION_MANDOL", "Review Correction (Mandol)", "RETURNED_FOR_CORRECTION", "MANDOL_REPORT", "false"},
             {"UPDATE_LAND_RECORD", "Update Land Record", "APPROVED", "LAND_RECORD_UPDATED", "false"},
             {"COMPLETE", "Complete", "LAND_RECORD_UPDATED", "COMPLETED", "false"}
         });
@@ -178,7 +187,8 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"MANDOL_UPDATE", "Mandol Update", "11", "false", "false"},
             {"LAND_RECORD_UPDATED", "Land Record Updated", "12", "false", "false"},
             {"COMPLETED", "Completed", "13", "false", "true"},
-            {"REJECTED", "Rejected", "14", "false", "true"}
+            {"REJECTED", "Rejected", "14", "false", "true"},
+            {"RETURNED_FOR_CORRECTION", "Returned for Correction", "15", "false", "false"}
         });
 
         createTransitions(workflow, states, new String[][]{
@@ -190,6 +200,11 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"COMPLETE_HEARING", "Complete Hearing", "HEARING_COMPLETED", "SDC_DECISION_PENDING", "false"},
             {"SDC_APPROVE", "SDC Approve", "SDC_DECISION_PENDING", "SDC_APPROVED", "true"},
             {"SDC_REJECT", "SDC Reject", "SDC_DECISION_PENDING", "REJECTED", "true"},
+            {"RETURN_FROM_DA", "Return for Correction (DA)", "DA_ENTRY", "RETURNED_FOR_CORRECTION", "true"},
+            {"RETURN_FROM_MANDOL", "Return for Correction (Mandol)", "MANDOL_RECEIVED", "RETURNED_FOR_CORRECTION", "true"},
+            {"RETURN_FROM_SDC", "Return for Correction (SDC)", "SDC_DECISION_PENDING", "RETURNED_FOR_CORRECTION", "true"},
+            {"RETURN_FROM_SDO", "Return for Correction (SDO)", "SDO_DECISION_PENDING", "RETURNED_FOR_CORRECTION", "true"},
+            {"REVIEW_CORRECTION", "Review Correction", "RETURNED_FOR_CORRECTION", "DA_ENTRY", "false"},
             {"FORWARD_TO_SDO", "Forward to SDO", "SDC_APPROVED", "SDO_DECISION_PENDING", "false"},
             {"SDO_APPROVE", "SDO Approve", "SDO_DECISION_PENDING", "SDO_APPROVED", "true"},
             {"SDO_REJECT", "SDO Reject", "SDO_DECISION_PENDING", "REJECTED", "true"},
@@ -221,7 +236,8 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"SDC_FORWARD", "SDC Forward", "4", "false", "false"},
             {"MANDOL_UPDATE", "Mandol Update", "5", "false", "false"},
             {"LAND_RECORD_UPDATED", "Land Record Updated", "6", "false", "false"},
-            {"COMPLETED", "Completed", "7", "false", "true"}
+            {"COMPLETED", "Completed", "7", "false", "true"},
+            {"RETURNED_FOR_CORRECTION", "Returned for Correction", "8", "false", "false"}
         });
 
         createTransitions(workflow, states, new String[][]{
@@ -229,6 +245,10 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"PAY_FEES", "Pay Fees", "FEES_PAID", "DC_ORDER", "false"},
             {"DC_ISSUE_ORDER", "DC Issue Order", "DC_ORDER", "SDC_FORWARD", "false"},
             {"SDC_FORWARD_ORDER", "SDC Forward Order", "SDC_FORWARD", "MANDOL_UPDATE", "false"},
+            {"RETURN_FROM_STATE", "Return for Correction (State)", "REVENUE_APPROVAL", "RETURNED_FOR_CORRECTION", "true"},
+            {"RETURN_FROM_DC", "Return for Correction (DC)", "DC_ORDER", "RETURNED_FOR_CORRECTION", "true"},
+            {"RETURN_FROM_MANDOL", "Return for Correction (Mandol)", "MANDOL_UPDATE", "RETURNED_FOR_CORRECTION", "true"},
+            {"REVIEW_CORRECTION_STATE", "Review Correction (State)", "RETURNED_FOR_CORRECTION", "REVENUE_APPROVAL", "false"},
             {"UPDATE_LAND_RECORD", "Update Land Record", "MANDOL_UPDATE", "LAND_RECORD_UPDATED", "false"},
             {"COMPLETE", "Complete", "LAND_RECORD_UPDATED", "COMPLETED", "false"}
         });
@@ -252,12 +272,16 @@ public class WorkflowDataInitializer implements CommandLineRunner {
         Map<String, WorkflowState> states = createStates(workflow, new String[][]{
             {"REVENUE_APPROVAL", "Revenue Department Approval", "1", "true", "false"},
             {"FEES_PAID", "Fees Paid", "2", "false", "false"},
-            {"DC_ORDER", "DC Order", "3", "false", "true"}
+            {"DC_ORDER", "DC Order", "3", "false", "true"},
+            {"RETURNED_FOR_CORRECTION", "Returned for Correction", "4", "false", "false"}
         });
 
         createTransitions(workflow, states, new String[][]{
             {"REVENUE_APPROVE", "Revenue Approve", "REVENUE_APPROVAL", "FEES_PAID", "false"},
-            {"PAY_FEES", "Pay Fees", "FEES_PAID", "DC_ORDER", "false"}
+            {"PAY_FEES", "Pay Fees", "FEES_PAID", "DC_ORDER", "false"},
+            {"RETURN_FROM_STATE", "Return for Correction (State)", "REVENUE_APPROVAL", "RETURNED_FOR_CORRECTION", "true"},
+            {"RETURN_FROM_DC", "Return for Correction (DC)", "DC_ORDER", "RETURNED_FOR_CORRECTION", "true"},
+            {"REVIEW_CORRECTION_STATE", "Review Correction (State)", "RETURNED_FOR_CORRECTION", "REVENUE_APPROVAL", "false"}
         });
 
         updateCaseTypeWorkflowCode("CLASSIFICATION_CHANGE_AFTER_2014", workflowCode);
@@ -279,12 +303,15 @@ public class WorkflowDataInitializer implements CommandLineRunner {
         Map<String, WorkflowState> states = createStates(workflow, new String[][]{
             {"COURT_ORDER_RECEIVED", "Court Order Received", "1", "true", "false"},
             {"SDC_MUTATION_CASE", "SDC Mutation Case", "2", "false", "false"},
-            {"FOLLOW_MUTATION_WORKFLOW", "Follow Mutation Workflow", "3", "false", "true"}
+            {"FOLLOW_MUTATION_WORKFLOW", "Follow Mutation Workflow", "3", "false", "true"},
+            {"RETURNED_FOR_CORRECTION", "Returned for Correction", "4", "false", "false"}
         });
 
         createTransitions(workflow, states, new String[][]{
             {"RECEIVE_COURT_ORDER", "Receive Court Order", "COURT_ORDER_RECEIVED", "SDC_MUTATION_CASE", "false"},
-            {"CREATE_MUTATION_CASE", "Create Mutation Case", "SDC_MUTATION_CASE", "FOLLOW_MUTATION_WORKFLOW", "false"}
+            {"CREATE_MUTATION_CASE", "Create Mutation Case", "SDC_MUTATION_CASE", "FOLLOW_MUTATION_WORKFLOW", "false"},
+            {"RETURN_FROM_SDC", "Return for Correction (SDC)", "SDC_MUTATION_CASE", "RETURNED_FOR_CORRECTION", "true"},
+            {"REVIEW_CORRECTION_SDC", "Review Correction (SDC)", "RETURNED_FOR_CORRECTION", "SDC_MUTATION_CASE", "false"}
         });
 
         updateCaseTypeWorkflowCode("HIGHER_COURT_ORDER", workflowCode);
@@ -313,7 +340,8 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"SDC_APPROVAL", "SDC Approval", "7", "false", "false"},
             {"DC_APPROVAL", "DC Approval", "8", "false", "false"},
             {"LAND_RECORD_UPDATED", "Land Record Updated", "9", "false", "false"},
-            {"COMPLETED", "Completed", "10", "false", "true"}
+            {"COMPLETED", "Completed", "10", "false", "true"},
+            {"RETURNED_FOR_CORRECTION", "Returned for Correction", "11", "false", "false"}
         });
 
         createTransitions(workflow, states, new String[][]{
@@ -325,6 +353,11 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"MANDOL_MAKE_ENTRY", "Mandol Make Entry", "MANDOL_ENTRY", "SDC_APPROVAL", "false"},
             {"SDC_APPROVE", "SDC Approve", "SDC_APPROVAL", "DC_APPROVAL", "false"},
             {"DC_APPROVE", "DC Approve", "DC_APPROVAL", "LAND_RECORD_UPDATED", "true"},
+            {"RETURN_FROM_STATE", "Return for Correction (State)", "GOVERNMENT_APPROVAL", "RETURNED_FOR_CORRECTION", "true"},
+            {"RETURN_FROM_MANDOL", "Return for Correction (Mandol)", "MANDOL_ENTRY", "RETURNED_FOR_CORRECTION", "true"},
+            {"RETURN_FROM_SDC", "Return for Correction (SDC)", "SDC_APPROVAL", "RETURNED_FOR_CORRECTION", "true"},
+            {"RETURN_FROM_DC", "Return for Correction (DC)", "DC_APPROVAL", "RETURNED_FOR_CORRECTION", "true"},
+            {"REVIEW_CORRECTION_STATE", "Review Correction (State)", "RETURNED_FOR_CORRECTION", "GOVERNMENT_APPROVAL", "false"},
             {"UPDATE_LAND_RECORD", "Update Land Record", "LAND_RECORD_UPDATED", "COMPLETED", "false"}
         });
 
@@ -351,7 +384,8 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"MUTATION_UPDATED", "Mutation Updated", "4", "false", "false"},
             {"SDO_PARTITION_ORDER", "SDO Partition Order", "5", "false", "false"},
             {"PARTITION_UPDATED", "Partition Updated", "6", "false", "false"},
-            {"COMPLETED", "Completed", "7", "false", "true"}
+            {"COMPLETED", "Completed", "7", "false", "true"},
+            {"RETURNED_FOR_CORRECTION", "Returned for Correction", "8", "false", "false"}
         });
 
         createTransitions(workflow, states, new String[][]{
@@ -360,7 +394,11 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"SDC_MUTATION", "SDC Mutation", "SDC_MUTATION_ORDER", "MUTATION_UPDATED", "false"},
             {"UPDATE_MUTATION", "Update Mutation", "MUTATION_UPDATED", "SDO_PARTITION_ORDER", "false"},
             {"SDO_PARTITION", "SDO Partition", "SDO_PARTITION_ORDER", "PARTITION_UPDATED", "false"},
-            {"UPDATE_PARTITION", "Update Partition", "PARTITION_UPDATED", "COMPLETED", "false"}
+            {"UPDATE_PARTITION", "Update Partition", "PARTITION_UPDATED", "COMPLETED", "false"},
+            {"RETURN_FROM_DC", "Return for Correction (DC)", "DC_COMPENSATION_ORDER", "RETURNED_FOR_CORRECTION", "true"},
+            {"RETURN_FROM_SDC", "Return for Correction (SDC)", "SDC_MUTATION_ORDER", "RETURNED_FOR_CORRECTION", "true"},
+            {"RETURN_FROM_SDO", "Return for Correction (SDO)", "SDO_PARTITION_ORDER", "RETURNED_FOR_CORRECTION", "true"},
+            {"REVIEW_CORRECTION_DC", "Review Correction (DC)", "RETURNED_FOR_CORRECTION", "DC_COMPENSATION_ORDER", "false"}
         });
 
         updateCaseTypeWorkflowCode("LAND_ACQUISITION_RFCTLARR_NHA", workflowCode);
@@ -388,7 +426,8 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"MANDOL_REPORT", "Mandol Report", "6", "false", "false"},
             {"DC_APPROVAL", "DC Approval", "7", "false", "false"},
             {"LAND_RECORD_UPDATED", "Land Record Updated", "8", "false", "false"},
-            {"COMPLETED", "Completed", "9", "false", "true"}
+            {"COMPLETED", "Completed", "9", "false", "true"},
+            {"RETURNED_FOR_CORRECTION", "Returned for Correction", "10", "false", "false"}
         });
 
         createTransitions(workflow, states, new String[][]{
@@ -399,6 +438,12 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"APPLY_COMPUTERIZATION", "Apply Computerization", "NEW_PATTA_COMPUTERIZATION", "MANDOL_REPORT", "false"},
             {"MANDOL_PREPARE_REPORT", "Mandol Prepare Report", "MANDOL_REPORT", "DC_APPROVAL", "false"},
             {"DC_APPROVE", "DC Approve", "DC_APPROVAL", "LAND_RECORD_UPDATED", "true"},
+            {"RETURN_FROM_STATE", "Return for Correction (State)", "GOVERNMENT_APPROVAL", "RETURNED_FOR_CORRECTION", "true"},
+            {"RETURN_FROM_SDC", "Return for Correction (SDC)", "SDC_MUTATION_ORDER", "RETURNED_FOR_CORRECTION", "true"},
+            {"RETURN_FROM_SDO", "Return for Correction (SDO)", "SDO_PARTITION_ORDER", "RETURNED_FOR_CORRECTION", "true"},
+            {"RETURN_FROM_MANDOL", "Return for Correction (Mandol)", "MANDOL_REPORT", "RETURNED_FOR_CORRECTION", "true"},
+            {"RETURN_FROM_DC", "Return for Correction (DC)", "DC_APPROVAL", "RETURNED_FOR_CORRECTION", "true"},
+            {"REVIEW_CORRECTION_STATE", "Review Correction (State)", "RETURNED_FOR_CORRECTION", "GOVERNMENT_APPROVAL", "false"},
             {"UPDATE_LAND_RECORD", "Update Land Record", "LAND_RECORD_UPDATED", "COMPLETED", "false"}
         });
 
@@ -566,6 +611,54 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             } else {
                 createPermissionIfNotExists(transitionId, "CIRCLE_OFFICER", AdminUnit.UnitLevel.CIRCLE, true, true, "SAME_UNIT");
             }
+        }
+
+        if (transitionCode.contains("RETURN_FROM_DA")) {
+            createPermissionIfNotExists(transitionId, "DEALING_ASSISTANT", AdminUnit.UnitLevel.CIRCLE, true, false, "SAME_UNIT");
+        }
+
+        if (transitionCode.contains("RETURN_FROM_MANDOL")) {
+            createPermissionIfNotExists(transitionId, "CIRCLE_MANDOL", AdminUnit.UnitLevel.CIRCLE, true, false, "SAME_UNIT");
+        }
+
+        if (transitionCode.contains("RETURN_FROM_SDC")) {
+            createPermissionIfNotExists(transitionId, "CIRCLE_OFFICER", AdminUnit.UnitLevel.CIRCLE, true, false, "SAME_UNIT");
+        }
+
+        if (transitionCode.contains("RETURN_FROM_SDO")) {
+            createPermissionIfNotExists(transitionId, "SUB_DIVISION_OFFICER", AdminUnit.UnitLevel.SUB_DIVISION, true, false, "SAME_UNIT");
+        }
+
+        if (transitionCode.contains("RETURN_FROM_DC")) {
+            createPermissionIfNotExists(transitionId, "DISTRICT_OFFICER", AdminUnit.UnitLevel.DISTRICT, true, false, "SAME_UNIT");
+        }
+
+        if (transitionCode.contains("RETURN_FROM_STATE")) {
+            createPermissionIfNotExists(transitionId, "STATE_ADMIN", AdminUnit.UnitLevel.STATE, true, false, "SAME_UNIT");
+        }
+
+        if ("REVIEW_CORRECTION".equals(transitionCode)) {
+            createPermissionIfNotExists(transitionId, "DEALING_ASSISTANT", AdminUnit.UnitLevel.CIRCLE, true, false, "SAME_UNIT");
+        }
+
+        if (transitionCode.contains("REVIEW_CORRECTION_MANDOL")) {
+            createPermissionIfNotExists(transitionId, "CIRCLE_MANDOL", AdminUnit.UnitLevel.CIRCLE, true, false, "SAME_UNIT");
+        }
+
+        if (transitionCode.contains("REVIEW_CORRECTION_SDC")) {
+            createPermissionIfNotExists(transitionId, "CIRCLE_OFFICER", AdminUnit.UnitLevel.CIRCLE, true, false, "SAME_UNIT");
+        }
+
+        if (transitionCode.contains("REVIEW_CORRECTION_SDO")) {
+            createPermissionIfNotExists(transitionId, "SUB_DIVISION_OFFICER", AdminUnit.UnitLevel.SUB_DIVISION, true, false, "SAME_UNIT");
+        }
+
+        if (transitionCode.contains("REVIEW_CORRECTION_DC")) {
+            createPermissionIfNotExists(transitionId, "DISTRICT_OFFICER", AdminUnit.UnitLevel.DISTRICT, true, false, "SAME_UNIT");
+        }
+
+        if (transitionCode.contains("REVIEW_CORRECTION_STATE")) {
+            createPermissionIfNotExists(transitionId, "STATE_ADMIN", AdminUnit.UnitLevel.STATE, true, false, "SAME_UNIT");
         }
         
         if (transitionCode.contains("UPDATE") || transitionCode.contains("LAND_RECORD")) {
