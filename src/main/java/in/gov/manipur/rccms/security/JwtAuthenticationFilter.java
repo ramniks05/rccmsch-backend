@@ -51,11 +51,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String token = extractTokenFromRequest(request);
             
             if (token != null) {
+                log.debug("JWT token found for path: {}", requestPath);
                 String username = extractUsernameFromToken(token);
                 
                 if (jwtService.validateToken(token, username)) {
                     // Extract auth type from token
                     String authType = jwtService.extractAllClaims(token).get("authType", String.class);
+                    log.debug("Token validated. AuthType: {}, Username: {}", authType, username);
                     
                     // For post-based authentication, validate posting is still active
                     if ("POST_BASED".equals(authType)) {
@@ -64,7 +66,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     
                     // Set authentication context
                     setAuthenticationContext(token, request);
+                    log.debug("Authentication context set successfully");
+                } else {
+                    log.warn("JWT token validation failed for path: {}", requestPath);
                 }
+            } else {
+                log.debug("No JWT token found in request for path: {}", requestPath);
             }
         } catch (InvalidCredentialsException e) {
             log.warn("JWT authentication failed - posting validation: {}", e.getMessage());
@@ -112,6 +119,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 return true;
             }
             if (path.startsWith("/api/admin/form-schemas/case-types/")) {
+                return true;
+            }
+            if (path.equals("/api/admin/system-settings")) {
                 return true;
             }
         }

@@ -55,8 +55,9 @@ public class SystemSettingsController {
     @PreAuthorize("hasAuthority('ADMIN')")
     public ResponseEntity<ApiResponse<SystemSettingsDTO>> updateSystemSettings(
             @Valid @RequestBody UpdateSystemSettingsDTO dto) {
-        log.info("Updating system settings");
+        log.info("Updating system settings. Request data: {}", dto);
         SystemSettingsDTO updated = systemSettingsService.updateSystemSettings(dto);
+        log.info("System settings updated successfully");
         return ResponseEntity.ok(ApiResponse.success("System settings updated successfully", updated));
     }
 }

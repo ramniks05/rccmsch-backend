@@ -26,5 +26,7 @@ public interface WorkflowTransitionRepository extends JpaRepository<WorkflowTran
     
     @Query("SELECT wt FROM WorkflowTransition wt WHERE wt.workflowId = :workflowId AND wt.fromStateId = :fromStateId AND wt.isActive = true")
     List<WorkflowTransition> findTransitionsFromState(@Param("workflowId") Long workflowId, @Param("fromStateId") Long fromStateId);
+    
+    List<WorkflowTransition> findByWorkflowId(Long workflowId);
 }
 

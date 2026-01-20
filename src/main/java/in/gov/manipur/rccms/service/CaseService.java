@@ -2,6 +2,7 @@ package in.gov.manipur.rccms.service;
 
 import in.gov.manipur.rccms.dto.CaseDTO;
 import in.gov.manipur.rccms.dto.CreateCaseDTO;
+import in.gov.manipur.rccms.dto.ResubmitCaseDTO;
 import in.gov.manipur.rccms.entity.*;
 import in.gov.manipur.rccms.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -118,6 +119,64 @@ public class CaseService {
         log.info("Case created successfully: caseNumber={}, caseId={}", caseNumber, savedCase.getId());
 
         return convertToDTO(savedCase);
+    }
+
+    /**
+     * Resubmit a case after correction (citizen updates case data)
+     */
+    public CaseDTO resubmitCase(Long caseId, Long applicantId, ResubmitCaseDTO dto) {
+        log.info("Resubmitting case: caseId={}, applicantId={}", caseId, applicantId);
+
+        if (caseId == null) {
+            throw new IllegalArgumentException("Case ID cannot be null");
+        }
+        if (applicantId == null) {
+            throw new IllegalArgumentException("Applicant ID cannot be null");
+        }
+
+        Case caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
+
+        if (!applicantId.equals(caseEntity.getApplicantId())) {
+            throw new RuntimeException("You are not authorized to resubmit this case");
+        }
+
+        CaseWorkflowInstance instance = workflowInstanceRepository.findByCaseId(caseId)
+                .orElseThrow(() -> new RuntimeException("Workflow instance not found for case: " + caseId));
+
+        WorkflowState currentState = instance.getCurrentState();
+        if (currentState == null || currentState.getStateCode() == null) {
+            throw new RuntimeException("Current workflow state not found for case: " + caseId);
+        }
+
+        if (!"RETURNED_FOR_CORRECTION".equals(currentState.getStateCode())) {
+            throw new RuntimeException("Case is not in RETURNED_FOR_CORRECTION state");
+        }
+
+        // Validate form data against schema
+        if (dto.getCaseData() != null && !dto.getCaseData().trim().isEmpty()) {
+            try {
+                Map<String, Object> formData = objectMapper.readValue(dto.getCaseData(),
+                        new TypeReference<Map<String, Object>>() {});
+                Map<String, String> validationErrors = formSchemaService.validateFormData(caseEntity.getCaseTypeId(), formData);
+
+                if (!validationErrors.isEmpty()) {
+                    StringBuilder errorMsg = new StringBuilder("Form validation failed: ");
+                    validationErrors.forEach((field, error) ->
+                            errorMsg.append(field).append(" - ").append(error).append("; "));
+                    throw new IllegalArgumentException(errorMsg.toString());
+                }
+            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                throw new IllegalArgumentException("Invalid JSON format in caseData: " + e.getMessage());
+            }
+        }
+
+        caseEntity.setCaseData(dto.getCaseData());
+        caseEntity.setRemarks(dto.getRemarks());
+        Case saved = caseRepository.save(caseEntity);
+
+        log.info("Case resubmitted successfully: caseId={}", caseId);
+        return convertToDTO(saved);
     }
 
     /**

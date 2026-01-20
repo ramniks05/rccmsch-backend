@@ -53,35 +53,46 @@ public class SystemSettingsService {
                 });
         
         // Update only provided fields (partial update)
+        // Convert empty strings to null to allow clearing fields
         if (dto.getLogoUrl() != null) {
-            settings.setLogoUrl(dto.getLogoUrl());
+            String value = dto.getLogoUrl().trim();
+            settings.setLogoUrl(value.isEmpty() ? null : value);
         }
         if (dto.getLogoHeader() != null) {
-            settings.setLogoHeader(dto.getLogoHeader());
+            String value = dto.getLogoHeader().trim();
+            settings.setLogoHeader(value.isEmpty() ? null : value);
         }
         if (dto.getLogoSubheader() != null) {
-            settings.setLogoSubheader(dto.getLogoSubheader());
+            String value = dto.getLogoSubheader().trim();
+            settings.setLogoSubheader(value.isEmpty() ? null : value);
         }
         if (dto.getStateName() != null) {
-            settings.setStateName(dto.getStateName());
+            String value = dto.getStateName().trim();
+            settings.setStateName(value.isEmpty() ? null : value);
         }
         if (dto.getFooterText() != null) {
-            settings.setFooterText(dto.getFooterText());
+            String value = dto.getFooterText().trim();
+            settings.setFooterText(value.isEmpty() ? null : value);
         }
         if (dto.getFooterCopyright() != null) {
-            settings.setFooterCopyright(dto.getFooterCopyright());
+            String value = dto.getFooterCopyright().trim();
+            settings.setFooterCopyright(value.isEmpty() ? null : value);
         }
         if (dto.getFooterAddress() != null) {
-            settings.setFooterAddress(dto.getFooterAddress());
+            String value = dto.getFooterAddress().trim();
+            settings.setFooterAddress(value.isEmpty() ? null : value);
         }
         if (dto.getFooterEmail() != null) {
-            settings.setFooterEmail(dto.getFooterEmail());
+            String value = dto.getFooterEmail().trim();
+            settings.setFooterEmail(value.isEmpty() ? null : value);
         }
         if (dto.getFooterPhone() != null) {
-            settings.setFooterPhone(dto.getFooterPhone());
+            String value = dto.getFooterPhone().trim();
+            settings.setFooterPhone(value.isEmpty() ? null : value);
         }
         if (dto.getFooterWebsite() != null) {
-            settings.setFooterWebsite(dto.getFooterWebsite());
+            String value = dto.getFooterWebsite().trim();
+            settings.setFooterWebsite(value.isEmpty() ? null : value);
         }
         
         SystemSettings updated = systemSettingsRepository.save(settings);
