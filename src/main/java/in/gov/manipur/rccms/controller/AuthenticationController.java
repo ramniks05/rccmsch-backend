@@ -4,6 +4,8 @@ import in.gov.manipur.rccms.dto.*;
 import in.gov.manipur.rccms.entity.Citizen;
 import in.gov.manipur.rccms.service.AuthService;
 import in.gov.manipur.rccms.service.CitizenService;
+import in.gov.manipur.rccms.service.LawyerAuthService;
+import in.gov.manipur.rccms.service.LawyerService;
 import in.gov.manipur.rccms.service.OtpService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -32,6 +34,8 @@ public class AuthenticationController {
 
     private final AuthService authService;
     private final CitizenService citizenService;
+    private final LawyerService lawyerService;
+    private final LawyerAuthService lawyerAuthService;
     private final OtpService otpService;
 
     /**
@@ -75,6 +79,34 @@ public class AuthenticationController {
         response.put("expiryMinutes", 5);
         response.put("note", "OTP is also logged to console. This is temporary until SMS API is integrated.");
         
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Registration successful. OTP sent to mobile number.", response));
+    }
+
+    /**
+     * Lawyer Registration
+     * POST /api/auth/lawyer/register
+     */
+    @Operation(
+            summary = "Lawyer Registration",
+            description = "Register a new lawyer. OTP will be sent to mobile number for verification."
+    )
+    @PostMapping("/lawyer/register")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> registerLawyer(
+            @Valid @RequestBody CitizenRegistrationDTO request) {
+        log.info("Lawyer registration request received for email: {}", maskEmail(request.getEmail()));
+
+        Map<String, Object> registrationResult = lawyerService.registerLawyer(request);
+        Long citizenId = (Long) registrationResult.get("citizenId");
+        String otpCode = (String) registrationResult.get("otpCode");
+
+        Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "Registration successful. OTP sent to mobile number.");
+        response.put("citizenId", citizenId);
+        response.put("otpCode", otpCode);
+        response.put("expiryMinutes", 5);
+        response.put("note", "OTP is also logged to console. This is temporary until SMS API is integrated.");
+
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Registration successful. OTP sent to mobile number.", response));
     }
@@ -146,6 +178,39 @@ public class AuthenticationController {
     }
 
     /**
+     * Send OTP for Lawyer Registration Verification
+     * POST /api/auth/lawyer/registration/send-otp
+     */
+    @Operation(
+            summary = "Send OTP for Lawyer Registration Verification",
+            description = "Send OTP to mobile number for lawyer registration verification. Use this AFTER registration when account is inactive."
+    )
+    @PostMapping("/lawyer/registration/send-otp")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> sendLawyerRegistrationOtp(
+            @RequestBody OtpRequestDTO request) {
+        log.info("Lawyer registration OTP request received for mobile: {}", maskMobile(request.getMobileNumber()));
+
+        if (request.getMobileNumber() == null || request.getMobileNumber().trim().isEmpty()) {
+            throw new IllegalArgumentException("Mobile number is required");
+        }
+
+        String trimmedMobile = request.getMobileNumber().trim();
+        if (!trimmedMobile.matches("^[6-9]\\d{9}$")) {
+            throw new IllegalArgumentException("Mobile number must be 10 digits starting with 6-9");
+        }
+
+        String otpCode = otpService.generateOtp(trimmedMobile, Citizen.CitizenType.LAWYER, true);
+
+        Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "OTP sent successfully for lawyer registration verification");
+        response.put("otpCode", otpCode);
+        response.put("expiryMinutes", 5);
+        response.put("note", "OTP is also logged to console. This is temporary until SMS API is integrated.");
+
+        return ResponseEntity.ok(ApiResponse.success("OTP sent successfully for lawyer registration verification", response));
+    }
+
+    /**
      * Send OTP for Citizen Login
      * POST /api/auth/citizen/send-otp
      * Use this endpoint for LOGIN when citizen account is already active
@@ -173,6 +238,10 @@ public class AuthenticationController {
         
         String trimmedMobile = request.getMobileNumber().trim();
         
+        if (request.getCitizenType() == null) {
+            request.setCitizenType(Citizen.CitizenType.CITIZEN);
+        }
+
         // For login, require active citizen (allowInactive=false)
         String otpCode = otpService.generateOtp(trimmedMobile, request.getCitizenType(), false);
         
@@ -183,6 +252,30 @@ public class AuthenticationController {
         response.put("note", "OTP is also logged to console. This is temporary until SMS API is integrated.");
         
         return ResponseEntity.ok(ApiResponse.success("OTP sent successfully for citizen login", response));
+    }
+
+    /**
+     * Send OTP for Lawyer Login
+     * POST /api/auth/lawyer/send-otp
+     */
+    @Operation(
+            summary = "Send OTP for Lawyer Login",
+            description = "Send OTP to mobile number for lawyer login. Use this for LOGIN when lawyer account is already active and verified."
+    )
+    @PostMapping("/lawyer/send-otp")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> sendLawyerLoginOtp(
+            @Valid @RequestBody OtpRequestDTO request) {
+        log.info("Lawyer login OTP request received for mobile: {}", maskMobile(request.getMobileNumber()));
+
+        String otpCode = otpService.generateOtp(request.getMobileNumber().trim(), Citizen.CitizenType.LAWYER, false);
+
+        Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "OTP sent successfully for lawyer login");
+        response.put("otpCode", otpCode);
+        response.put("expiryMinutes", 5);
+        response.put("note", "OTP is also logged to console. This is temporary until SMS API is integrated.");
+
+        return ResponseEntity.ok(ApiResponse.success("OTP sent successfully for lawyer login", response));
     }
 
     /**
@@ -215,9 +308,31 @@ public class AuthenticationController {
             @Valid @RequestBody OtpVerificationDTO request) {
         log.info("Citizen OTP login request received for mobile: {}", maskMobile(request.getMobileNumber()));
         
+        if (request.getCitizenType() == null) {
+            request.setCitizenType(Citizen.CitizenType.CITIZEN);
+        }
+
         AuthResponseDTO response = authService.loginWithOtp(request);
         
         return ResponseEntity.ok(ApiResponse.success("Citizen login successful", response));
+    }
+
+    /**
+     * Lawyer Login (OTP-based)
+     * POST /api/auth/lawyer/otp-login
+     */
+    @Operation(
+            summary = "Lawyer OTP Login",
+            description = "Login for lawyers by verifying OTP code sent to mobile number. Returns JWT access token and refresh token."
+    )
+    @PostMapping("/lawyer/otp-login")
+    public ResponseEntity<ApiResponse<AuthResponseDTO>> lawyerOtpLogin(
+            @Valid @RequestBody OtpVerificationDTO request) {
+        log.info("Lawyer OTP login request received for mobile: {}", maskMobile(request.getMobileNumber()));
+
+        AuthResponseDTO response = lawyerAuthService.loginWithOtp(request);
+
+        return ResponseEntity.ok(ApiResponse.success("Lawyer login successful", response));
     }
 
     /**
@@ -250,9 +365,31 @@ public class AuthenticationController {
             @Valid @RequestBody LoginRequestDTO request) {
         log.info("Citizen login request received for username: {}", maskUsername(request.getUsername()));
         
+        if (request.getCitizenType() == null) {
+            request.setCitizenType(Citizen.CitizenType.CITIZEN);
+        }
+
         AuthResponseDTO response = authService.loginWithPassword(request);
         
         return ResponseEntity.ok(ApiResponse.success("Citizen login successful", response));
+    }
+
+    /**
+     * Lawyer Login (Password-based)
+     * POST /api/auth/lawyer/login
+     */
+    @Operation(
+            summary = "Lawyer Login",
+            description = "Login for lawyers with mobile number/email and password. Returns JWT access token and refresh token."
+    )
+    @PostMapping("/lawyer/login")
+    public ResponseEntity<ApiResponse<AuthResponseDTO>> lawyerLogin(
+            @Valid @RequestBody LoginRequestDTO request) {
+        log.info("Lawyer login request received for username: {}", maskUsername(request.getUsername()));
+
+        AuthResponseDTO response = lawyerAuthService.loginWithPassword(request);
+
+        return ResponseEntity.ok(ApiResponse.success("Lawyer login successful", response));
     }
 
     /**
@@ -341,6 +478,28 @@ public class AuthenticationController {
         log.info("Registration OTP verified successfully for mobile: {}", maskMobile(request.getMobileNumber()));
         
         return ResponseEntity.ok(ApiResponse.success("Mobile number verified successfully. Citizen account activated.", response));
+    }
+
+    /**
+     * Verify Lawyer Registration OTP
+     * POST /api/auth/lawyer/registration/verify-otp
+     */
+    @Operation(
+            summary = "Verify Lawyer Registration OTP",
+            description = "Verify mobile OTP sent during lawyer registration. This endpoint activates the lawyer account after successful OTP verification."
+    )
+    @PostMapping("/lawyer/registration/verify-otp")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> verifyLawyerRegistrationOtp(
+            @Valid @RequestBody RegistrationOtpVerificationDTO request) {
+        log.info("Lawyer registration OTP verification request received for mobile: {}", maskMobile(request.getMobileNumber()));
+
+        lawyerService.verifyMobileOtp(request.getMobileNumber(), request.getOtp());
+
+        Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "Mobile number verified successfully. Lawyer account activated.");
+        response.put("mobileNumber", request.getMobileNumber());
+
+        return ResponseEntity.ok(ApiResponse.success("Lawyer mobile number verified successfully", response));
     }
 
     /**

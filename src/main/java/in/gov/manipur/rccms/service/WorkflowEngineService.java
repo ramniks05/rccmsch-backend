@@ -1,5 +1,7 @@
 package in.gov.manipur.rccms.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import in.gov.manipur.rccms.dto.WorkflowTransitionDTO;
 import in.gov.manipur.rccms.entity.*;
 import in.gov.manipur.rccms.exception.InvalidCredentialsException;
@@ -11,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * Workflow Engine Service
@@ -30,6 +34,7 @@ public class WorkflowEngineService {
     private final CaseRepository caseRepository;
     private final AdminUnitRepository adminUnitRepository;
     private final OfficerRepository officerRepository;
+    private final ObjectMapper objectMapper;
 
     /**
      * Check if user can perform a transition
@@ -74,6 +79,9 @@ public class WorkflowEngineService {
         AdminUnit unit = adminUnitRepository.findById(unitIdValue)
                 .orElseThrow(() -> new RuntimeException("Unit not found: " + unitIdValue));
 
+        Case caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
+
         // Check permissions
         List<WorkflowPermission> permissions = permissionRepository
                 .findPermissionsForTransitionAndRole(transition.getId(), roleCode, unit.getUnitLevel());
@@ -92,7 +100,9 @@ public class WorkflowEngineService {
 
         // Check hierarchy rules
         for (WorkflowPermission permission : permissions) {
-            if (permission.getCanInitiate() && checkHierarchyRule(permission, unitId, instance)) {
+            if (permission.getCanInitiate() &&
+                    checkHierarchyRule(permission, unitId, instance) &&
+                    checkConditions(permission, instance, caseEntity)) {
                 return true;
             }
         }
@@ -230,6 +240,9 @@ public class WorkflowEngineService {
         AdminUnit unit = adminUnitRepository.findById(unitIdValue)
                 .orElseThrow(() -> new RuntimeException("Unit not found: " + unitIdValue));
 
+        Case caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
+
         // Filter transitions based on permissions
         List<WorkflowTransitionDTO> availableTransitions = new ArrayList<>();
 
@@ -248,7 +261,9 @@ public class WorkflowEngineService {
             }
 
             for (WorkflowPermission permission : permissions) {
-                if (permission.getCanInitiate() && checkHierarchyRule(permission, unitId, instance)) {
+                if (permission.getCanInitiate() &&
+                        checkHierarchyRule(permission, unitId, instance) &&
+                        checkConditions(permission, instance, caseEntity)) {
                     WorkflowTransitionDTO dto = new WorkflowTransitionDTO();
                     dto.setId(transition.getId());
                     dto.setTransitionCode(transition.getTransitionCode());
@@ -319,6 +334,134 @@ public class WorkflowEngineService {
                 log.warn("Unknown hierarchy rule: {}", hierarchyRule);
                 return true; // Default to allow
         }
+    }
+
+    /**
+     * Check JSON conditions defined in workflow_permission.conditions
+     *
+     * Supported keys:
+     * - caseTypeCodesAllowed: ["MUTATION_GIFT_SALE", ...]
+     * - casePriorityIn: ["HIGH", "URGENT"]
+     * - caseDataFieldsRequired: ["field1", "field2"]
+     * - caseDataFieldEquals: {"fieldName": "expectedValue"}
+     * - workflowDataFieldsRequired: ["field1", "field2"]
+     */
+    private boolean checkConditions(WorkflowPermission permission, CaseWorkflowInstance instance, Case caseEntity) {
+        String conditionsJson = permission.getConditions();
+        if (conditionsJson == null || conditionsJson.trim().isEmpty()) {
+            return true;
+        }
+
+        try {
+            Map<String, Object> conditions = objectMapper.readValue(conditionsJson, new TypeReference<Map<String, Object>>() {});
+
+            // caseTypeCodesAllowed
+            if (conditions.containsKey("caseTypeCodesAllowed")) {
+                List<String> allowed = castToStringList(conditions.get("caseTypeCodesAllowed"));
+                String caseTypeCode = caseEntity.getCaseType() != null ? caseEntity.getCaseType().getCode() : null;
+                if (caseTypeCode == null || !allowed.contains(caseTypeCode)) {
+                    return false;
+                }
+            }
+
+            // casePriorityIn
+            if (conditions.containsKey("casePriorityIn")) {
+                List<String> allowed = castToStringList(conditions.get("casePriorityIn"));
+                String priority = caseEntity.getPriority();
+                if (priority == null || !allowed.contains(priority)) {
+                    return false;
+                }
+            }
+
+            Map<String, Object> caseData = parseJsonToMap(caseEntity.getCaseData());
+            if (conditions.containsKey("caseDataFieldsRequired")) {
+                List<String> requiredFields = castToStringList(conditions.get("caseDataFieldsRequired"));
+                if (!hasRequiredFields(caseData, requiredFields)) {
+                    return false;
+                }
+            }
+
+            if (conditions.containsKey("caseDataFieldEquals")) {
+                Map<String, Object> fieldEquals = castToMap(conditions.get("caseDataFieldEquals"));
+                if (!matchesFieldEquals(caseData, fieldEquals)) {
+                    return false;
+                }
+            }
+
+            Map<String, Object> workflowData = parseJsonToMap(instance.getWorkflowData());
+            if (conditions.containsKey("workflowDataFieldsRequired")) {
+                List<String> requiredFields = castToStringList(conditions.get("workflowDataFieldsRequired"));
+                if (!hasRequiredFields(workflowData, requiredFields)) {
+                    return false;
+                }
+            }
+
+            return true;
+        } catch (Exception e) {
+            log.error("Invalid workflow permission conditions JSON: {}", e.getMessage());
+            throw new RuntimeException("Invalid workflow permission conditions JSON");
+        }
+    }
+
+    private Map<String, Object> parseJsonToMap(String json) {
+        if (json == null || json.trim().isEmpty()) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            log.error("Invalid JSON data: {}", e.getMessage());
+            return Map.of();
+        }
+    }
+
+    private List<String> castToStringList(Object value) {
+        if (value == null) {
+            return List.of();
+        }
+        if (value instanceof List<?> list) {
+            return list.stream()
+                    .filter(Objects::nonNull)
+                    .map(Object::toString)
+                    .toList();
+        }
+        return List.of(value.toString());
+    }
+
+    private Map<String, Object> castToMap(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            return map.entrySet().stream()
+                    .collect(java.util.stream.Collectors.toMap(
+                            e -> String.valueOf(e.getKey()),
+                            Map.Entry::getValue
+                    ));
+        }
+        return Map.of();
+    }
+
+    private boolean hasRequiredFields(Map<String, Object> data, List<String> requiredFields) {
+        for (String field : requiredFields) {
+            Object value = data.get(field);
+            if (value == null || value.toString().trim().isEmpty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean matchesFieldEquals(Map<String, Object> data, Map<String, Object> fieldEquals) {
+        for (Map.Entry<String, Object> entry : fieldEquals.entrySet()) {
+            String field = entry.getKey();
+            Object expected = entry.getValue();
+            Object actual = data.get(field);
+            if (actual == null || expected == null) {
+                return false;
+            }
+            if (!actual.toString().equals(expected.toString())) {
+                return false;
+            }
+        }
+        return true;
     }
 }
 

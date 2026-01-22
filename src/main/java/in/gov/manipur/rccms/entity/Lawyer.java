@@ -16,27 +16,27 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.LocalDateTime;
 
 /**
- * Citizen Entity (Citizen/Operator)
- * Represents a citizen or operator in the RCCMS system
+ * Lawyer Entity
+ * Represents a lawyer in the RCCMS system (separate table from citizens)
  */
 @Entity
-@Table(name = "citizens", 
+@Table(name = "lawyers",
        uniqueConstraints = {
            @UniqueConstraint(columnNames = "email"),
            @UniqueConstraint(columnNames = "mobile_number"),
            @UniqueConstraint(columnNames = "aadhar_number")
        },
        indexes = {
-           @Index(name = "idx_email", columnList = "email"),
-           @Index(name = "idx_mobile", columnList = "mobile_number"),
-           @Index(name = "idx_aadhar", columnList = "aadhar_number")
+           @Index(name = "idx_lawyer_email", columnList = "email"),
+           @Index(name = "idx_lawyer_mobile", columnList = "mobile_number"),
+           @Index(name = "idx_lawyer_aadhar", columnList = "aadhar_number")
        })
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-public class Citizen {
+public class Lawyer {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -64,15 +64,11 @@ public class Citizen {
     @Column(name = "mobile_number", nullable = false, unique = true, length = 10)
     private String mobileNumber;
 
-    @Column(name = "password", nullable = false, length = 255) // Length 255 for BCrypt hash
-    private String password; // Will be hashed with BCrypt
+    @Column(name = "password", nullable = false, length = 255)
+    private String password; // BCrypt hash
 
     @Column(name = "registration_data", columnDefinition = "TEXT")
     private String registrationData; // JSON string for dynamic registration fields
-
-    @Enumerated(EnumType.STRING)
-    @Column(name = "citizen_type", nullable = false, length = 20)
-    private CitizenType citizenType;
 
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = false; // Set to true after mobile verification
@@ -91,17 +87,10 @@ public class Citizen {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    /**
-     * Citizen Type Enum
-     */
-    public enum CitizenType {
-        CITIZEN, OPERATOR, LAWYER
-    }
-
     @PrePersist
     protected void onCreate() {
         if (isActive == null) {
-            isActive = false; // Will be set to true after mobile verification
+            isActive = false;
         }
         if (isEmailVerified == null) {
             isEmailVerified = false;
@@ -111,4 +100,3 @@ public class Citizen {
         }
     }
 }
-

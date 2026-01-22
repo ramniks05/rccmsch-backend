@@ -1,12 +1,15 @@
 package in.gov.manipur.rccms.dto;
 
-import in.gov.manipur.rccms.entity.Citizen;
+import com.fasterxml.jackson.annotation.JsonAnyGetter;
+import com.fasterxml.jackson.annotation.JsonAnySetter;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDate;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * DTO for Citizen Registration Request
@@ -34,29 +37,6 @@ public class CitizenRegistrationDTO {
     @Pattern(regexp = "^[6-9]\\d{9}$", message = "Mobile number must be 10 digits starting with 6-9")
     private String mobileNumber;
 
-    @NotNull(message = "Date of birth is required")
-    @Past(message = "Date of birth must be in the past")
-    private LocalDate dateOfBirth;
-
-    @NotNull(message = "Gender is required")
-    private Citizen.Gender gender;
-
-    @NotBlank(message = "Address is required")
-    @Size(min = 10, max = 500, message = "Address must be between 10 and 500 characters")
-    private String address;
-
-    @NotBlank(message = "District is required")
-    @Size(max = 100, message = "District must not exceed 100 characters")
-    private String district;
-
-    @NotBlank(message = "Pincode is required")
-    @Pattern(regexp = "^\\d{6}$", message = "Pincode must be exactly 6 digits")
-    private String pincode;
-
-    @NotBlank(message = "Aadhar number is required")
-    @Pattern(regexp = "^\\d{12}$", message = "Aadhar number must be exactly 12 digits")
-    private String aadharNumber;
-
     @NotBlank(message = "Password is required")
     @Size(min = 8, max = 100, message = "Password must be between 8 and 100 characters")
     @Pattern(regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$", 
@@ -65,5 +45,22 @@ public class CitizenRegistrationDTO {
 
     @NotBlank(message = "Confirm password is required")
     private String confirmPassword;
+
+    /**
+     * Dynamic registration fields (admin-configured)
+     * Captures unknown JSON fields sent by frontend
+     */
+    @JsonIgnore
+    private Map<String, Object> extraFields = new HashMap<>();
+
+    @JsonAnySetter
+    public void addExtraField(String key, Object value) {
+        extraFields.put(key, value);
+    }
+
+    @JsonAnyGetter
+    public Map<String, Object> getExtraFields() {
+        return extraFields;
+    }
 }
 
