@@ -38,6 +38,8 @@ public class CaseService {
     private final CaseWorkflowInstanceRepository workflowInstanceRepository;
     private final FormSchemaService formSchemaService;
     private final ObjectMapper objectMapper;
+    private final in.gov.manipur.rccms.repository.CaseNatureRepository caseNatureRepository;
+    private final in.gov.manipur.rccms.repository.CourtRepository courtRepository;
 
     /**
      * Create a new case
@@ -103,6 +105,26 @@ public class CaseService {
         caseEntity.setApplicantId(applicantIdValue);
         caseEntity.setUnit(unit);
         caseEntity.setUnitId(unitId);
+        
+        // Set case nature if provided
+        if (dto.getCaseNatureId() != null) {
+            in.gov.manipur.rccms.entity.CaseNature caseNature = caseNatureRepository.findById(dto.getCaseNatureId())
+                    .orElseThrow(() -> new RuntimeException("Case nature not found: " + dto.getCaseNatureId()));
+            caseEntity.setCaseNature(caseNature);
+            caseEntity.setCaseNatureId(dto.getCaseNatureId());
+        }
+        
+        // Set court if provided
+        if (dto.getCourtId() != null) {
+            in.gov.manipur.rccms.entity.Court court = courtRepository.findById(dto.getCourtId())
+                    .orElseThrow(() -> new RuntimeException("Court not found: " + dto.getCourtId()));
+            caseEntity.setCourt(court);
+            caseEntity.setCourtId(dto.getCourtId());
+        }
+        
+        // Set original order level (for appeals)
+        caseEntity.setOriginalOrderLevel(dto.getOriginalOrderLevel());
+        
         caseEntity.setSubject(dto.getSubject());
         caseEntity.setDescription(dto.getDescription());
         caseEntity.setPriority(dto.getPriority() != null ? dto.getPriority() : "MEDIUM");
@@ -326,6 +348,17 @@ public class CaseService {
             dto.setCaseTypeName(caseEntity.getCaseType().getName());
             dto.setCaseTypeCode(caseEntity.getCaseType().getCode());
         }
+        dto.setCaseNatureId(caseEntity.getCaseNatureId());
+        if (caseEntity.getCaseNature() != null) {
+            dto.setCaseNatureName(caseEntity.getCaseNature().getNatureName());
+            dto.setCaseNatureCode(caseEntity.getCaseNature().getNatureCode());
+        }
+        dto.setCourtId(caseEntity.getCourtId());
+        if (caseEntity.getCourt() != null) {
+            dto.setCourtName(caseEntity.getCourt().getCourtName());
+            dto.setCourtCode(caseEntity.getCourt().getCourtCode());
+        }
+        dto.setOriginalOrderLevel(caseEntity.getOriginalOrderLevel());
         dto.setApplicantId(caseEntity.getApplicantId());
         if (caseEntity.getApplicant() != null) {
             dto.setApplicantName(caseEntity.getApplicant().getFirstName() + " " + 

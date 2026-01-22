@@ -5,6 +5,7 @@ import in.gov.manipur.rccms.dto.PostingDetailsDTO;
 import in.gov.manipur.rccms.dto.PostingHierarchyDTO;
 import in.gov.manipur.rccms.dto.PostBasedLoginDTO;
 import in.gov.manipur.rccms.entity.AdminUnit;
+import in.gov.manipur.rccms.entity.Court;
 import in.gov.manipur.rccms.entity.Officer;
 import in.gov.manipur.rccms.entity.OfficerDaHistory;
 import in.gov.manipur.rccms.entity.RoleMaster;
@@ -38,7 +39,7 @@ public class PostBasedAuthService {
 
     /**
      * Login with UserID and password (post-based login)
-     * UserID format: ROLE_CODE@UNIT_LGD_CODE
+     * UserID format: ROLE_CODE@COURT_CODE
      */
     @Transactional
     public AuthResponseDTO loginWithPostBasedCredentials(PostBasedLoginDTO request) {
@@ -48,17 +49,23 @@ public class PostBasedAuthService {
 
         log.info("Post-based login attempt for UserID: {}", request.getUserid());
 
-        // Find active posting by UserID - eagerly fetches unit and officer
+        // Find active posting by UserID - eagerly fetches court, unit, and officer
         OfficerDaHistory posting = postingRepository.findByPostingUseridAndIsCurrentTrue(request.getUserid())
                 .orElseThrow(() -> {
                     log.warn("Login failed: Active posting not found for UserID: {}", request.getUserid());
                     return new InvalidCredentialsException("Invalid UserID or posting is not active");
                 });
 
-        // Get unit (already eagerly fetched)
-        AdminUnit unit = posting.getUnit();
+        // Get court (already eagerly fetched)
+        Court court = posting.getCourt();
+        if (court == null) {
+            throw new RuntimeException("Court not found for posting UserID: " + request.getUserid());
+        }
+
+        // Get unit from court
+        AdminUnit unit = court.getUnit();
         if (unit == null) {
-            throw new RuntimeException("Unit not found for posting UserID: " + request.getUserid());
+            throw new RuntimeException("Unit not found for court in posting UserID: " + request.getUserid());
         }
         
         // Eagerly fetch role
@@ -95,7 +102,7 @@ public class PostBasedAuthService {
         String accessToken = jwtService.generatePostBasedToken(
                 posting.getPostingUserid(),
                 posting.getRoleCode(),
-                posting.getUnitId(),
+                unit.getUnitId(), // Unit derived from court
                 unit.getUnitLevel().name(),
                 officer.getId()
         );
@@ -114,6 +121,11 @@ public class PostBasedAuthService {
                 .isCurrent(posting.getIsCurrent())
                 .roleCode(role.getRoleCode())
                 .roleName(role.getRoleName())
+                .courtId(court.getId())
+                .courtCode(court.getCourtCode())
+                .courtName(court.getCourtName())
+                .courtLevel(court.getCourtLevel().name())
+                .courtType(court.getCourtType().name())
                 .unitId(unit.getUnitId())
                 .unitCode(unit.getUnitCode())
                 .unitName(unit.getUnitName())

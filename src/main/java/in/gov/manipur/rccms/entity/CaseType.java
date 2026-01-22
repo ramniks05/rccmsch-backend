@@ -34,6 +34,13 @@ public class CaseType {
     @Column(name = "description", length = 500)
     private String description;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "act_id", foreignKey = @ForeignKey(name = "fk_case_type_act"))
+    private Act act;
+
+    @Column(name = "act_id", insertable = false, updatable = false)
+    private Long actId;
+
     @Column(name = "workflow_code", length = 50)
     private String workflowCode; // Links to workflow_definition.workflow_code
 

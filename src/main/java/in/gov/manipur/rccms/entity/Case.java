@@ -19,7 +19,9 @@ import java.time.LocalDateTime;
     @Index(name = "idx_case_type", columnList = "case_type_id"),
     @Index(name = "idx_case_applicant", columnList = "applicant_id"),
     @Index(name = "idx_case_unit", columnList = "unit_id"),
-    @Index(name = "idx_case_status", columnList = "status")
+    @Index(name = "idx_case_status", columnList = "status"),
+    @Index(name = "idx_case_nature", columnList = "case_nature_id"),
+    @Index(name = "idx_case_court", columnList = "court_id")
 })
 @Data
 @NoArgsConstructor
@@ -53,6 +55,23 @@ public class Case {
 
     @Column(name = "unit_id", insertable = false, updatable = false)
     private Long unitId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "case_nature_id", foreignKey = @ForeignKey(name = "fk_case_nature"))
+    private CaseNature caseNature;
+
+    @Column(name = "case_nature_id", insertable = false, updatable = false)
+    private Long caseNatureId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "court_id", foreignKey = @ForeignKey(name = "fk_case_court"))
+    private Court court; // Court where petition is filed
+
+    @Column(name = "court_id", insertable = false, updatable = false)
+    private Long courtId;
+
+    @Column(name = "original_order_level", length = 20)
+    private String originalOrderLevel; // For appeals - level of original order (CIRCLE, SUB_DIVISION, DISTRICT)
 
     @Column(name = "subject", nullable = false, length = 500)
     private String subject;

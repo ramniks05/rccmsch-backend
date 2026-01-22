@@ -150,13 +150,13 @@ public class AdminController {
      */
     @Operation(
             summary = "Assign Person to Post",
-            description = "Assign a person to a post (UNIT + ROLE). Existing active posting for same unit+role will be closed."
+            description = "Assign a person to a post (COURT + ROLE). Existing active posting for same court+role will be closed."
     )
     @PostMapping("/postings")
     public ResponseEntity<ApiResponse<PostingDTO>> assignPersonToPost(
             @Valid @RequestBody PostingAssignmentDTO request) {
-        log.info("Assign officer to post request - Unit: {}, Role: {}, Officer: {}", 
-                request.getUnitId(), request.getRoleCode(), request.getOfficerId());
+        log.info("Assign officer to post request - Court: {}, Role: {}, Officer: {}", 
+                request.getCourtId(), request.getRoleCode(), request.getOfficerId());
         
         PostingDTO posting = postingService.assignPersonToPost(request);
         
@@ -175,8 +175,8 @@ public class AdminController {
     @PutMapping("/postings/transfer")
     public ResponseEntity<ApiResponse<PostingDTO>> transferPerson(
             @Valid @RequestBody PostingAssignmentDTO request) {
-        log.info("Transfer person request - Unit: {}, Role: {}, User: {}", 
-                request.getUnitId(), request.getRoleCode(), request.getOfficerId());
+        log.info("Transfer person request - Court: {}, Role: {}, User: {}", 
+                request.getCourtId(), request.getRoleCode(), request.getOfficerId());
         
         PostingDTO posting = postingService.transferPerson(request);
         
@@ -187,7 +187,7 @@ public class AdminController {
      * Get active posting by UserID
      * GET /api/admin/postings/userid/{userid}
      */
-    @Operation(summary = "Get Posting by UserID", description = "Retrieve active posting by UserID (ROLE@LGD format)")
+    @Operation(summary = "Get Posting by UserID", description = "Retrieve active posting by UserID (ROLE_CODE@COURT_CODE format)")
     @GetMapping("/postings/userid/{userid}")
     public ResponseEntity<ApiResponse<PostingDTO>> getPostingByUserid(@PathVariable String userid) {
         PostingDTO posting = postingService.getActivePostingByUserid(userid);
@@ -206,14 +206,25 @@ public class AdminController {
     }
 
     /**
-     * Get all postings by unit
-     * GET /api/admin/postings/unit/{unitId}
+     * Get all postings by court
+     * GET /api/admin/postings/court/{courtId}
      */
-    @Operation(summary = "Get Postings by Unit", description = "Retrieve all postings (history) for a unit")
-    @GetMapping("/postings/unit/{unitId}")
-    public ResponseEntity<ApiResponse<List<PostingDTO>>> getPostingsByUnit(@PathVariable Long unitId) {
-        List<PostingDTO> postings = postingService.getPostingsByUnit(unitId);
+    @Operation(summary = "Get Postings by Court", description = "Retrieve all postings (history) for a court")
+    @GetMapping("/postings/court/{courtId}")
+    public ResponseEntity<ApiResponse<List<PostingDTO>>> getPostingsByCourt(@PathVariable Long courtId) {
+        List<PostingDTO> postings = postingService.getPostingsByCourt(courtId);
         return ResponseEntity.ok(ApiResponse.success("Postings retrieved successfully", postings));
+    }
+
+    /**
+     * Get all active postings by unit (through court)
+     * GET /api/admin/postings/unit/{unitId}/active
+     */
+    @Operation(summary = "Get Active Postings by Unit", description = "Retrieve all active postings for a unit (through courts)")
+    @GetMapping("/postings/unit/{unitId}/active")
+    public ResponseEntity<ApiResponse<List<PostingDTO>>> getActivePostingsByUnit(@PathVariable Long unitId) {
+        List<PostingDTO> postings = postingService.getActivePostingsByUnit(unitId);
+        return ResponseEntity.ok(ApiResponse.success("Active postings retrieved successfully", postings));
     }
 
     /**

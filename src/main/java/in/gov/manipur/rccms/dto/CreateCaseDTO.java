@@ -25,6 +25,12 @@ public class CreateCaseDTO {
     @NotNull(message = "Unit ID is required")
     private Long unitId;
     
+    private Long caseNatureId; // Case nature (New File, Appeal, etc.)
+    
+    private Long courtId; // Court where petition is filed
+    
+    private String originalOrderLevel; // For appeals - level of original order (CIRCLE, SUB_DIVISION, DISTRICT)
+    
     @NotBlank(message = "Subject is required")
     private String subject;
     

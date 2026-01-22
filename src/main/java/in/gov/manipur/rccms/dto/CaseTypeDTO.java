@@ -29,6 +29,13 @@ public class CaseTypeDTO {
     @Size(max = 500, message = "Description must not exceed 500 characters")
     private String description;
 
+    private Long actId;
+    private String actName;
+    private String actCode;
+    private Integer actYear;
+    private String workflowCode;
     private Boolean isActive = true;
+    private java.time.LocalDateTime createdAt;
+    private java.time.LocalDateTime updatedAt;
 }
 

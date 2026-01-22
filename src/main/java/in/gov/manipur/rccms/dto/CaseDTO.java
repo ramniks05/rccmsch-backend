@@ -19,6 +19,13 @@ public class CaseDTO {
     private Long caseTypeId;
     private String caseTypeName;
     private String caseTypeCode;
+    private Long caseNatureId;
+    private String caseNatureName;
+    private String caseNatureCode;
+    private Long courtId;
+    private String courtName;
+    private String courtCode;
+    private String originalOrderLevel;
     private Long applicantId;
     private String applicantName;
     private String applicantMobile;

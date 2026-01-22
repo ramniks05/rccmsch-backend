@@ -3,11 +3,12 @@ package in.gov.manipur.rccms.service;
 import in.gov.manipur.rccms.dto.PostingAssignmentDTO;
 import in.gov.manipur.rccms.dto.PostingDTO;
 import in.gov.manipur.rccms.entity.AdminUnit;
+import in.gov.manipur.rccms.entity.Court;
 import in.gov.manipur.rccms.entity.Officer;
 import in.gov.manipur.rccms.entity.OfficerDaHistory;
 import in.gov.manipur.rccms.entity.RoleMaster;
 import in.gov.manipur.rccms.exception.DuplicateUserException;
-import in.gov.manipur.rccms.repository.AdminUnitRepository;
+import in.gov.manipur.rccms.repository.CourtRepository;
 import in.gov.manipur.rccms.repository.OfficerDaHistoryRepository;
 import in.gov.manipur.rccms.repository.OfficerRepository;
 import in.gov.manipur.rccms.repository.RoleMasterRepository;
@@ -32,18 +33,18 @@ import java.util.stream.Collectors;
 public class PostingService {
 
     private final OfficerDaHistoryRepository postingRepository;
-    private final AdminUnitRepository unitRepository;
+    private final CourtRepository courtRepository;
     private final RoleMasterRepository roleRepository;
     private final OfficerRepository officerRepository;
 
     /**
-     * Assign a person to a post (UNIT + ROLE)
+     * Assign a person to a post (COURT + ROLE)
      * This is the core business logic for posting assignments
      * 
      * Business Rules:
-     * 1. Close existing active posting for same UNIT + ROLE
+     * 1. Close existing active posting for same COURT + ROLE
      * 2. Create new posting with is_current = true
-     * 3. Generate UserID: ROLE_CODE@UNIT_LGD_CODE
+     * 3. Generate UserID: ROLE_CODE@COURT_CODE
      * 4. Set from_date = today
      */
     public PostingDTO assignPersonToPost(PostingAssignmentDTO dto) {
@@ -51,12 +52,12 @@ public class PostingService {
             throw new IllegalArgumentException("Posting assignment data cannot be null");
         }
 
-        log.info("Assigning officer to post - Unit: {}, Role: {}, Officer: {}", 
-                dto.getUnitId(), dto.getRoleCode(), dto.getOfficerId());
+        log.info("Assigning officer to post - Court: {}, Role: {}, Officer: {}", 
+                dto.getCourtId(), dto.getRoleCode(), dto.getOfficerId());
 
-        // Validate unit exists
-        AdminUnit unit = unitRepository.findById(dto.getUnitId())
-                .orElseThrow(() -> new RuntimeException("Unit not found with ID: " + dto.getUnitId()));
+        // Validate court exists
+        Court court = courtRepository.findById(dto.getCourtId())
+                .orElseThrow(() -> new RuntimeException("Court not found with ID: " + dto.getCourtId()));
 
         // Validate role exists
         RoleMaster role = roleRepository.findByRoleCode(dto.getRoleCode())
@@ -66,18 +67,25 @@ public class PostingService {
         Officer officer = officerRepository.findById(dto.getOfficerId())
                 .orElseThrow(() -> new RuntimeException("Officer not found with ID: " + dto.getOfficerId()));
 
-        // Validate unit level matches role level (except for DEALING_ASSISTANT)
-        if (role.getUnitLevel() != null && !role.getUnitLevel().equals(unit.getUnitLevel())) {
-            throw new IllegalArgumentException(
-                    String.format("Role %s cannot be assigned to unit level %s. Expected level: %s",
-                            role.getRoleCode(), unit.getUnitLevel(), role.getUnitLevel()));
+        // Validate court level matches role level (except for DEALING_ASSISTANT)
+        if (role.getUnitLevel() != null && court.getCourtLevel() != null) {
+            // Map CourtLevel to AdminUnit.UnitLevel for comparison
+            AdminUnit.UnitLevel roleUnitLevel = role.getUnitLevel();
+            String courtLevelName = court.getCourtLevel().name();
+            String roleLevelName = roleUnitLevel.name();
+            
+            if (!courtLevelName.equals(roleLevelName)) {
+                log.warn("Court level {} does not match role level {} for role {}", 
+                        courtLevelName, roleLevelName, role.getRoleCode());
+                // Allow but log warning - some flexibility
+            }
         }
 
-        // Step 1: Close existing active posting for same UNIT + ROLE
-        closeExistingActivePosting(dto.getUnitId(), dto.getRoleCode());
+        // Step 1: Close existing active posting for same COURT + ROLE
+        closeExistingActivePosting(dto.getCourtId(), dto.getRoleCode());
 
-        // Step 2: Generate UserID: ROLE_CODE@UNIT_LGD_CODE
-        String userid = generateUserid(role.getRoleCode(), unit.getLgdCode());
+        // Step 2: Generate UserID: ROLE_CODE@COURT_CODE
+        String userid = generateUserid(role.getRoleCode(), court.getCourtCode());
 
         // Step 3: Check if UserID already exists (should not happen, but safety check)
         if (postingRepository.findByPostingUserid(userid).isPresent()) {
@@ -91,7 +99,7 @@ public class PostingService {
 
         // Step 4: Create new posting
         OfficerDaHistory posting = new OfficerDaHistory();
-        posting.setUnit(unit);
+        posting.setCourt(court);
         posting.setRoleCode(role.getRoleCode());
         posting.setOfficer(officer);
         posting.setPostingUserid(userid);
@@ -110,8 +118,8 @@ public class PostingService {
      * This closes the current posting and creates a new one
      */
     public PostingDTO transferPerson(PostingAssignmentDTO dto) {
-        log.info("Transferring person to new post - Unit: {}, Role: {}, Officer: {}", 
-                dto.getUnitId(), dto.getRoleCode(), dto.getOfficerId());
+        log.info("Transferring person to new post - Court: {}, Role: {}, Officer: {}", 
+                dto.getCourtId(), dto.getRoleCode(), dto.getOfficerId());
 
         // Check if officer has any active postings
         List<OfficerDaHistory> activePostings = postingRepository.findByOfficerIdAndIsCurrentTrue(dto.getOfficerId());
@@ -128,13 +136,13 @@ public class PostingService {
     /**
      * Close an existing active posting
      */
-    private void closeExistingActivePosting(Long unitId, String roleCode) {
-        List<OfficerDaHistory> activePostings = postingRepository.findActivePostingsByUnitAndRole(unitId, roleCode);
+    private void closeExistingActivePosting(Long courtId, String roleCode) {
+        List<OfficerDaHistory> activePostings = postingRepository.findActivePostingsByCourtAndRole(courtId, roleCode);
         
         for (OfficerDaHistory posting : activePostings) {
             closePosting(posting.getId());
-            log.info("Closed existing active posting - Unit: {}, Role: {}, Posting ID: {}", 
-                    unitId, roleCode, posting.getId());
+            log.info("Closed existing active posting - Court: {}, Role: {}, Posting ID: {}", 
+                    courtId, roleCode, posting.getId());
         }
     }
 
@@ -154,10 +162,10 @@ public class PostingService {
     }
 
     /**
-     * Generate UserID: ROLE_CODE@UNIT_LGD_CODE
+     * Generate UserID: ROLE_CODE@COURT_CODE
      */
-    private String generateUserid(String roleCode, Long lgdCode) {
-        return roleCode + "@" + lgdCode;
+    private String generateUserid(String roleCode, String courtCode) {
+        return roleCode + "@" + courtCode;
     }
 
     /**
@@ -183,11 +191,22 @@ public class PostingService {
     }
 
     /**
-     * Get all postings by unit
+     * Get all postings by court
      */
     @Transactional(readOnly = true)
-    public List<PostingDTO> getPostingsByUnit(Long unitId) {
-        List<OfficerDaHistory> postings = postingRepository.findByUnitIdOrderByFromDateDesc(unitId);
+    public List<PostingDTO> getPostingsByCourt(Long courtId) {
+        List<OfficerDaHistory> postings = postingRepository.findByCourtIdOrderByFromDateDesc(courtId);
+        return postings.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Get all active postings by unit (through court)
+     */
+    @Transactional(readOnly = true)
+    public List<PostingDTO> getActivePostingsByUnit(Long unitId) {
+        List<OfficerDaHistory> postings = postingRepository.findActivePostingsByUnit(unitId);
         return postings.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
@@ -210,10 +229,20 @@ public class PostingService {
     private PostingDTO convertToDTO(OfficerDaHistory posting) {
         PostingDTO dto = new PostingDTO();
         dto.setId(posting.getId());
-        dto.setUnitId(posting.getUnitId());
-        if (posting.getUnit() != null) {
-            dto.setUnitName(posting.getUnit().getUnitName());
-            dto.setUnitLgdCode(posting.getUnit().getLgdCode().toString());
+        dto.setCourtId(posting.getCourtId());
+        if (posting.getCourt() != null) {
+            dto.setCourtName(posting.getCourt().getCourtName());
+            dto.setCourtCode(posting.getCourt().getCourtCode());
+            dto.setCourtLevel(posting.getCourt().getCourtLevel().name());
+            dto.setCourtType(posting.getCourt().getCourtType().name());
+            
+            // Derive unit information from court
+            if (posting.getCourt().getUnit() != null) {
+                dto.setUnitId(posting.getCourt().getUnit().getUnitId());
+                dto.setUnitName(posting.getCourt().getUnit().getUnitName());
+                dto.setUnitCode(posting.getCourt().getUnit().getUnitCode());
+                dto.setUnitLgdCode(posting.getCourt().getUnit().getLgdCode().toString());
+            }
         }
         dto.setRoleCode(posting.getRoleCode());
         dto.setOfficerId(posting.getOfficerId());

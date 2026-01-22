@@ -27,7 +27,14 @@ public class PostingDetailsDTO {
     private String roleCode;
     private String roleName;
     
-    // Unit Information
+    // Court Information
+    private Long courtId;
+    private String courtCode;
+    private String courtName;
+    private String courtLevel;
+    private String courtType;
+    
+    // Unit Information (derived from court)
     private Long unitId;
     private String unitCode;
     private String unitName;

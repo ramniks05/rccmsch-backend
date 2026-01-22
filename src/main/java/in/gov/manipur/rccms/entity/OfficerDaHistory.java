@@ -10,19 +10,19 @@ import java.time.LocalDateTime;
 
 /**
  * Officer DA History Entity (Posting History)
- * Core table that tracks assignments of persons to posts (UNIT + ROLE)
+ * Core table that tracks assignments of persons to posts (COURT + ROLE)
  * This table maintains complete posting history for audit/RTI/court purposes
  */
 @Entity
 @Table(name = "officer_da_history", 
        uniqueConstraints = {
            @UniqueConstraint(
-               columnNames = {"unit_id", "role_code", "is_current"},
-               name = "uk_posting_unit_role_current"
+               columnNames = {"court_id", "role_code", "is_current"},
+               name = "uk_posting_court_role_current"
            )
        },
        indexes = {
-           @Index(name = "idx_unit_role", columnList = "unit_id,role_code"),
+           @Index(name = "idx_court_role", columnList = "court_id,role_code"),
            @Index(name = "idx_officer_id", columnList = "officer_id"),
            @Index(name = "idx_userid", columnList = "userid"),
            @Index(name = "idx_is_current", columnList = "is_current")
@@ -37,11 +37,11 @@ public class OfficerDaHistory {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "unit_id", nullable = false, foreignKey = @ForeignKey(name = "fk_posting_unit"))
-    private AdminUnit unit;
+    @JoinColumn(name = "court_id", nullable = false, foreignKey = @ForeignKey(name = "fk_posting_court"))
+    private Court court;
 
-    @Column(name = "unit_id", insertable = false, updatable = false)
-    private Long unitId;
+    @Column(name = "court_id", insertable = false, updatable = false)
+    private Long courtId;
 
     @Column(name = "role_code", nullable = false, length = 50)
     private String roleCode; // References role_master.role_code
@@ -54,7 +54,7 @@ public class OfficerDaHistory {
     private Long officerId;
 
     @Column(name = "userid", nullable = false, length = 100, unique = true)
-    private String postingUserid; // Generated format: ROLE_CODE@UNIT_LGD_CODE
+    private String postingUserid; // Generated format: ROLE_CODE@COURT_CODE
 
     @Column(name = "from_date", nullable = false)
     private LocalDate fromDate;

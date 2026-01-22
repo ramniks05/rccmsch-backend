@@ -17,30 +17,31 @@ import java.util.Optional;
 public interface OfficerDaHistoryRepository extends JpaRepository<OfficerDaHistory, Long> {
 
     /**
-     * Find posting by UserID (generated format: ROLE@LGD)
+     * Find posting by UserID (generated format: ROLE_CODE@COURT_CODE)
      */
     @Query("SELECT p FROM OfficerDaHistory p WHERE p.postingUserid = :userid")
     Optional<OfficerDaHistory> findByPostingUserid(@Param("userid") String userid);
 
     /**
-     * Find active posting by UserID (with eager fetching of unit and officer)
+     * Find active posting by UserID (with eager fetching of court, unit, and officer)
      */
     @Query("SELECT p FROM OfficerDaHistory p " +
-           "LEFT JOIN FETCH p.unit u " +
+           "LEFT JOIN FETCH p.court c " +
+           "LEFT JOIN FETCH c.unit u " +
            "LEFT JOIN FETCH u.parentUnit " +
            "LEFT JOIN FETCH p.officer " +
            "WHERE p.postingUserid = :userid AND p.isCurrent = true")
     Optional<OfficerDaHistory> findByPostingUseridAndIsCurrentTrue(@Param("userid") String userid);
 
     /**
-     * Find active posting by unit and role
+     * Find active posting by court and role
      */
-    Optional<OfficerDaHistory> findByUnitIdAndRoleCodeAndIsCurrentTrue(Long unitId, String roleCode);
+    Optional<OfficerDaHistory> findByCourtIdAndRoleCodeAndIsCurrentTrue(Long courtId, String roleCode);
 
     /**
-     * Find all active postings by unit
+     * Find all active postings by court
      */
-    List<OfficerDaHistory> findByUnitIdAndIsCurrentTrue(Long unitId);
+    List<OfficerDaHistory> findByCourtIdAndIsCurrentTrue(Long courtId);
 
     /**
      * Find all postings by officer (person)
@@ -53,9 +54,9 @@ public interface OfficerDaHistoryRepository extends JpaRepository<OfficerDaHisto
     List<OfficerDaHistory> findByOfficerIdAndIsCurrentTrue(Long officerId);
 
     /**
-     * Find all postings by unit
+     * Find all postings by court
      */
-    List<OfficerDaHistory> findByUnitIdOrderByFromDateDesc(Long unitId);
+    List<OfficerDaHistory> findByCourtIdOrderByFromDateDesc(Long courtId);
 
     /**
      * Find all postings by role code
@@ -63,19 +64,25 @@ public interface OfficerDaHistoryRepository extends JpaRepository<OfficerDaHisto
     List<OfficerDaHistory> findByRoleCodeAndIsCurrentTrueOrderByFromDateDesc(String roleCode);
 
     /**
-     * Check if active posting exists for unit and role
+     * Check if active posting exists for court and role
      */
-    boolean existsByUnitIdAndRoleCodeAndIsCurrentTrue(Long unitId, String roleCode);
+    boolean existsByCourtIdAndRoleCodeAndIsCurrentTrue(Long courtId, String roleCode);
 
     /**
      * Find postings that need to be closed (for transfer logic)
      */
-    @Query("SELECT p FROM OfficerDaHistory p WHERE p.unitId = :unitId AND p.roleCode = :roleCode AND p.isCurrent = true")
-    List<OfficerDaHistory> findActivePostingsByUnitAndRole(@Param("unitId") Long unitId, @Param("roleCode") String roleCode);
+    @Query("SELECT p FROM OfficerDaHistory p WHERE p.courtId = :courtId AND p.roleCode = :roleCode AND p.isCurrent = true")
+    List<OfficerDaHistory> findActivePostingsByCourtAndRole(@Param("courtId") Long courtId, @Param("roleCode") String roleCode);
 
     /**
      * Find all active postings
      */
     List<OfficerDaHistory> findByIsCurrentTrueOrderByFromDateDesc();
+
+    /**
+     * Find all active postings by unit (through court)
+     */
+    @Query("SELECT p FROM OfficerDaHistory p WHERE p.court.unitId = :unitId AND p.isCurrent = true")
+    List<OfficerDaHistory> findActivePostingsByUnit(@Param("unitId") Long unitId);
 }
 

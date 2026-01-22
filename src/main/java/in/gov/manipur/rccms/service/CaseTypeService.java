@@ -1,8 +1,10 @@
 package in.gov.manipur.rccms.service;
 
 import in.gov.manipur.rccms.dto.CaseTypeDTO;
+import in.gov.manipur.rccms.entity.Act;
 import in.gov.manipur.rccms.entity.CaseType;
 import in.gov.manipur.rccms.exception.DuplicateUserException;
+import in.gov.manipur.rccms.repository.ActRepository;
 import in.gov.manipur.rccms.repository.CaseTypeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,6 +25,7 @@ import java.util.stream.Collectors;
 public class CaseTypeService {
 
     private final CaseTypeRepository caseTypeRepository;
+    private final ActRepository actRepository;
 
     /**
      * Create a new case type
@@ -51,7 +54,15 @@ public class CaseTypeService {
         caseType.setName(dto.getName().trim());
         caseType.setCode(dto.getCode().toUpperCase().trim());
         caseType.setDescription(dto.getDescription() != null ? dto.getDescription().trim() : null);
+        caseType.setWorkflowCode(dto.getWorkflowCode());
         caseType.setIsActive(dto.getIsActive() != null ? dto.getIsActive() : true);
+        
+        // Set Act if provided
+        if (dto.getActId() != null) {
+            Act act = actRepository.findById(dto.getActId())
+                    .orElseThrow(() -> new RuntimeException("Act not found with ID: " + dto.getActId()));
+            caseType.setAct(act);
+        }
 
         CaseType saved = caseTypeRepository.save(caseType);
         log.info("Case type created successfully with ID: {}", saved.getId());
@@ -147,6 +158,17 @@ public class CaseTypeService {
 
         // Update other fields
         caseType.setDescription(dto.getDescription() != null ? dto.getDescription().trim() : null);
+        caseType.setWorkflowCode(dto.getWorkflowCode());
+        
+        // Update Act if provided
+        if (dto.getActId() != null) {
+            Act act = actRepository.findById(dto.getActId())
+                    .orElseThrow(() -> new RuntimeException("Act not found with ID: " + dto.getActId()));
+            caseType.setAct(act);
+        } else {
+            caseType.setAct(null);
+        }
+        
         if (dto.getIsActive() != null) {
             caseType.setIsActive(dto.getIsActive());
         }
@@ -204,7 +226,20 @@ public class CaseTypeService {
         dto.setName(caseType.getName());
         dto.setCode(caseType.getCode());
         dto.setDescription(caseType.getDescription());
+        dto.setWorkflowCode(caseType.getWorkflowCode());
         dto.setIsActive(caseType.getIsActive());
+        dto.setCreatedAt(caseType.getCreatedAt());
+        dto.setUpdatedAt(caseType.getUpdatedAt());
+        
+        // Include Act information
+        if (caseType.getAct() != null) {
+            dto.setActId(caseType.getAct().getId());
+            dto.setActName(caseType.getAct().getActName());
+        dto.setActCode(caseType.getAct().getActCode());
+        dto.setActYear(caseType.getAct().getActYear());
+        }
+        dto.setWorkflowCode(caseType.getWorkflowCode());
+        
         return dto;
     }
 }
