@@ -1,7 +1,10 @@
 package in.gov.manipur.rccms.service;
 
 import in.gov.manipur.rccms.dto.CitizenRegistrationDTO;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import in.gov.manipur.rccms.entity.Citizen;
+import in.gov.manipur.rccms.entity.RegistrationFormField;
 import in.gov.manipur.rccms.exception.DuplicateUserException;
 import in.gov.manipur.rccms.repository.CitizenRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,8 +25,9 @@ public class CitizenService {
 
     private final CitizenRepository citizenRepository;
     private final PasswordEncoder passwordEncoder;
-    private final EncryptionService encryptionService;
     private final OtpService otpService;
+    private final RegistrationFormService registrationFormService;
+    private final ObjectMapper objectMapper;
 
     /**
      * Register a new citizen
@@ -32,8 +36,31 @@ public class CitizenService {
      * @throws DuplicateUserException if email/mobile/aadhar already exists
      */
     public java.util.Map<String, Object> registerCitizen(CitizenRegistrationDTO dto) {
+        return registerCitizenWithType(dto, Citizen.CitizenType.CITIZEN);
+    }
+
+    /**
+     * Register citizen with specific type
+     */
+    public java.util.Map<String, Object> registerCitizenWithType(CitizenRegistrationDTO dto, Citizen.CitizenType citizenType) {
         if (dto == null) {
             throw new IllegalArgumentException("Registration data cannot be null");
+        }
+
+        // Validate against dynamic registration schema (if configured)
+        try {
+            java.util.Map<String, Object> dataMap = objectMapper.convertValue(dto, new TypeReference<java.util.Map<String, Object>>() {});
+            if (dto.getExtraFields() != null && !dto.getExtraFields().isEmpty()) {
+                dataMap.putAll(dto.getExtraFields());
+            }
+            dataMap.remove("extraFields");
+            registrationFormService.validateRegistrationData(RegistrationFormField.RegistrationType.CITIZEN, dataMap);
+        } catch (Exception e) {
+            // Keep original error message from validation
+            if (e instanceof IllegalArgumentException) {
+                throw e;
+            }
+            throw new IllegalArgumentException("Registration schema validation failed");
         }
 
         // Validate password match
@@ -56,33 +83,25 @@ public class CitizenService {
             throw new DuplicateUserException("Mobile number already registered");
         }
 
-        // Encrypt Aadhar number first (for uniqueness check)
-        String encryptedAadhar = encryptionService.encrypt(dto.getAadharNumber().trim());
-        
-        // Check if Aadhar number already exists (check encrypted value)
-        if (citizenRepository.existsByAadharNumber(encryptedAadhar)) {
-            log.warn("Registration failed: Aadhar number already exists");
-            throw new DuplicateUserException("Aadhar number already registered");
-        }
-
         // Create new Citizen entity
         Citizen citizen = new Citizen();
         citizen.setFirstName(dto.getFirstName().trim());
         citizen.setLastName(dto.getLastName().trim());
         citizen.setEmail(dto.getEmail().trim().toLowerCase());
         citizen.setMobileNumber(dto.getMobileNumber().trim());
-        citizen.setDateOfBirth(dto.getDateOfBirth());
-        citizen.setGender(dto.getGender());
-        citizen.setAddress(dto.getAddress().trim());
-        citizen.setDistrict(dto.getDistrict().trim());
-        citizen.setPincode(dto.getPincode().trim());
-        citizen.setCitizenType(Citizen.CitizenType.CITIZEN);
+        citizen.setCitizenType(citizenType);
         citizen.setIsActive(false); // Will be set to true after mobile verification
         citizen.setIsEmailVerified(false);
         citizen.setIsMobileVerified(false);
 
-        // Set encrypted Aadhar number
-        citizen.setAadharNumber(encryptedAadhar);
+        // Store dynamic registration data (JSON)
+        if (dto.getExtraFields() != null && !dto.getExtraFields().isEmpty()) {
+            try {
+                citizen.setRegistrationData(objectMapper.writeValueAsString(dto.getExtraFields()));
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Invalid registration data format");
+            }
+        }
 
         // Hash password with BCrypt
         String hashedPassword = passwordEncoder.encode(dto.getPassword());
@@ -103,7 +122,7 @@ public class CitizenService {
             log.info("════════════════════════════════════════════════════════════");
             log.info("GENERATING DUMMY OTP FOR REGISTRATION VERIFICATION");
             log.info("════════════════════════════════════════════════════════════");
-            otpCode = otpService.generateOtp(savedCitizen.getMobileNumber(), Citizen.CitizenType.CITIZEN, true);
+            otpCode = otpService.generateOtp(savedCitizen.getMobileNumber(), citizenType, true);
             log.info("════════════════════════════════════════════════════════════");
             log.info("DUMMY OTP GENERATED AND LOGGED TO CONSOLE");
             log.info("════════════════════════════════════════════════════════════");

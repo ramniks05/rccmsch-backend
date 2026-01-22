@@ -3,7 +3,9 @@ package in.gov.manipur.rccms.service;
 import in.gov.manipur.rccms.entity.Citizen;
 import in.gov.manipur.rccms.entity.Otp;
 import in.gov.manipur.rccms.exception.InvalidCredentialsException;
+import in.gov.manipur.rccms.entity.Lawyer;
 import in.gov.manipur.rccms.repository.CitizenRepository;
+import in.gov.manipur.rccms.repository.LawyerRepository;
 import in.gov.manipur.rccms.repository.OtpRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +29,7 @@ public class OtpService {
 
     private final OtpRepository otpRepository;
     private final CitizenRepository citizenRepository;
+    private final LawyerRepository lawyerRepository;
     private final SmsService smsService;
     private static final Random random = new Random();
     // Rate limiting disabled - OTP can be sent freely
@@ -72,36 +75,48 @@ public class OtpService {
         //     throw new TooManyRequestsException("Too many OTP requests. Please try again after 15 minutes.");
         // }
 
-        // Verify citizen exists with this mobile number
-        Optional<Citizen> citizenOpt = citizenRepository.findByMobileNumber(trimmedMobile);
-        if (citizenOpt.isEmpty()) {
-            // If allowInactive is true, this is for registration verification
-            // Citizen should exist after registration, but allow OTP generation anyway
-            // (citizen might be in process of registration or transaction not committed yet)
-            if (allowInactive) {
-                log.warn("Citizen not found for registration verification - mobile: {} (may be in registration process)", maskMobile(trimmedMobile));
-                // Still allow OTP generation for registration verification
-                // The OTP will be stored and can be verified later when citizen exists
-            } else {
-                log.warn("OTP request failed: Citizen not found with mobile: {}", maskMobile(trimmedMobile));
-                throw new InvalidCredentialsException("Mobile number not registered");
-            }
-        }
-
-        // Only verify citizen details if citizen exists
-        if (citizenOpt.isPresent()) {
-            Citizen citizen = citizenOpt.get();
-            
-            // Verify citizen type matches
-            if (!citizen.getCitizenType().equals(citizenType)) {
-                log.warn("OTP request failed: Citizen type mismatch for mobile: {}", maskMobile(trimmedMobile));
-                throw new InvalidCredentialsException("Invalid citizen type");
+        if (Citizen.CitizenType.LAWYER.equals(citizenType)) {
+            Optional<Lawyer> lawyerOpt = lawyerRepository.findByMobileNumber(trimmedMobile);
+            if (lawyerOpt.isEmpty()) {
+                if (allowInactive) {
+                    log.warn("Lawyer not found for registration verification - mobile: {} (may be in registration process)", maskMobile(trimmedMobile));
+                } else {
+                    log.warn("OTP request failed: Lawyer not found with mobile: {}", maskMobile(trimmedMobile));
+                    throw new InvalidCredentialsException("Mobile number not registered");
+                }
             }
 
-            // Check if citizen is active (skip check if allowInactive is true for registration flow)
-            if (!allowInactive && !citizen.getIsActive()) {
-                log.warn("OTP request failed: Citizen account is inactive for mobile: {}", maskMobile(trimmedMobile));
-                throw new InvalidCredentialsException("Account is inactive. Please contact support.");
+            if (lawyerOpt.isPresent()) {
+                Lawyer lawyer = lawyerOpt.get();
+                if (!allowInactive && !lawyer.getIsActive()) {
+                    log.warn("OTP request failed: Lawyer account is inactive for mobile: {}", maskMobile(trimmedMobile));
+                    throw new InvalidCredentialsException("Account is inactive. Please contact support.");
+                }
+            }
+        } else {
+            // Verify citizen exists with this mobile number
+            Optional<Citizen> citizenOpt = citizenRepository.findByMobileNumber(trimmedMobile);
+            if (citizenOpt.isEmpty()) {
+                // If allowInactive is true, this is for registration verification
+                // Citizen should exist after registration, but allow OTP generation anyway
+                if (allowInactive) {
+                    log.warn("Citizen not found for registration verification - mobile: {} (may be in registration process)", maskMobile(trimmedMobile));
+                } else {
+                    log.warn("OTP request failed: Citizen not found with mobile: {}", maskMobile(trimmedMobile));
+                    throw new InvalidCredentialsException("Mobile number not registered");
+                }
+            }
+
+            if (citizenOpt.isPresent()) {
+                Citizen citizen = citizenOpt.get();
+                if (!citizen.getCitizenType().equals(citizenType)) {
+                    log.warn("OTP request failed: Citizen type mismatch for mobile: {}", maskMobile(trimmedMobile));
+                    throw new InvalidCredentialsException("Invalid citizen type");
+                }
+                if (!allowInactive && !citizen.getIsActive()) {
+                    log.warn("OTP request failed: Citizen account is inactive for mobile: {}", maskMobile(trimmedMobile));
+                    throw new InvalidCredentialsException("Account is inactive. Please contact support.");
+                }
             }
         }
 

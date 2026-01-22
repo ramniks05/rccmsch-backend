@@ -66,7 +66,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/admin/form-schemas/case-types/**").permitAll()
                         .requestMatchers("/api/admin/form-schemas/case-types/**").permitAll()  // Allow all methods for this path
                         .requestMatchers(HttpMethod.POST, "/api/admin/form-schemas/validate").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/admin-units/root").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/admin-units/parent/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/admin/system-settings").permitAll()  // Public system settings
+                        .requestMatchers(HttpMethod.GET, "/api/public/registration-forms/**").permitAll()
                         // Swagger/OpenAPI endpoints
                         .requestMatchers(
                                 "/swagger-ui/**", 

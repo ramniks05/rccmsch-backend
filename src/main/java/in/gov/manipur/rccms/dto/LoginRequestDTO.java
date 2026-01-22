@@ -2,7 +2,6 @@ package in.gov.manipur.rccms.dto;
 
 import in.gov.manipur.rccms.entity.Citizen;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -31,7 +30,6 @@ public class LoginRequestDTO {
     @NotBlank(message = "CAPTCHA ID is required")
     private String captchaId;
 
-    @NotNull(message = "Citizen type is required")
     private Citizen.CitizenType citizenType;
 }
 

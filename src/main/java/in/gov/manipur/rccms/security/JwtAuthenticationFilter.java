@@ -213,8 +213,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     authorities.add(new SimpleGrantedAuthority("ROLE_" + role));
                 }
             } else {
-                // Citizen authentication
-                authorities.add(new SimpleGrantedAuthority("ROLE_CITIZEN"));
+                // Citizen/Lawyer authentication
+                String userType = claims.get("userType", String.class);
+                if ("LAWYER".equalsIgnoreCase(userType)) {
+                    authorities.add(new SimpleGrantedAuthority("ROLE_LAWYER"));
+                } else if ("OPERATOR".equalsIgnoreCase(userType)) {
+                    authorities.add(new SimpleGrantedAuthority("ROLE_OPERATOR"));
+                } else {
+                    authorities.add(new SimpleGrantedAuthority("ROLE_CITIZEN"));
+                }
             }
             
             UsernamePasswordAuthenticationToken authentication = 

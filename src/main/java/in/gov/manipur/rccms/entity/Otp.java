@@ -54,7 +54,7 @@ public class Otp {
      * Citizen Type Enum (same as Citizen entity)
      */
     public enum CitizenType {
-        CITIZEN, OPERATOR
+        CITIZEN, OPERATOR, LAWYER
     }
 
     @PrePersist
