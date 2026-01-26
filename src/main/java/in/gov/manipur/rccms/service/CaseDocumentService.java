@@ -1,0 +1,156 @@
+package in.gov.manipur.rccms.service;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import in.gov.manipur.rccms.dto.CaseDocumentDTO;
+import in.gov.manipur.rccms.dto.CreateCaseDocumentDTO;
+import in.gov.manipur.rccms.entity.*;
+import in.gov.manipur.rccms.repository.CaseDocumentRepository;
+import in.gov.manipur.rccms.repository.CaseDocumentTemplateRepository;
+import in.gov.manipur.rccms.repository.CaseRepository;
+import in.gov.manipur.rccms.repository.CaseWorkflowInstanceRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class CaseDocumentService {
+
+    private final CaseDocumentRepository documentRepository;
+    private final CaseDocumentTemplateRepository templateRepository;
+    private final CaseRepository caseRepository;
+    private final CaseWorkflowInstanceRepository workflowInstanceRepository;
+    private final ObjectMapper objectMapper;
+
+    public CaseDocumentDTO createOrUpdateDocument(Long caseId, ModuleType moduleType, Long officerId, CreateCaseDocumentDTO dto) {
+        if (caseId == null) {
+            throw new IllegalArgumentException("Case ID cannot be null");
+        }
+        if (moduleType == null) {
+            throw new IllegalArgumentException("Module type cannot be null");
+        }
+        if (officerId == null) {
+            throw new IllegalArgumentException("Officer ID cannot be null");
+        }
+        if (dto == null) {
+            throw new IllegalArgumentException("CreateCaseDocumentDTO cannot be null");
+        }
+        Case caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
+
+        CaseDocumentTemplate template = null;
+        if (dto.getTemplateId() != null) {
+            Long templateId = dto.getTemplateId();
+            if (templateId == null) {
+                throw new IllegalArgumentException("Template ID cannot be null");
+            }
+            template = templateRepository.findById(templateId)
+                    .orElseThrow(() -> new RuntimeException("Template not found: " + templateId));
+        }
+
+        Optional<CaseDocument> existing = documentRepository.findTopByCaseIdAndModuleTypeOrderByUpdatedAtDesc(caseId, moduleType);
+        CaseDocument doc = existing.orElseGet(CaseDocument::new);
+
+        if (doc.getId() != null && doc.getStatus() == DocumentStatus.SIGNED) {
+            boolean allowEdit = template != null && Boolean.TRUE.equals(template.getAllowEditAfterSign());
+            if (!allowEdit) {
+                throw new RuntimeException("Signed document cannot be edited");
+            }
+        }
+
+        doc.setCaseEntity(caseEntity);
+        doc.setCaseId(caseEntity.getId());
+        doc.setCaseNature(caseEntity.getCaseNature());
+        doc.setCaseNatureId(caseEntity.getCaseNatureId());
+        doc.setModuleType(moduleType);
+        if (template != null) {
+            doc.setTemplate(template);
+            doc.setTemplateId(template.getId());
+        }
+        doc.setContentHtml(dto.getContentHtml());
+        doc.setContentData(dto.getContentData());
+        doc.setStatus(dto.getStatus() != null ? dto.getStatus() : DocumentStatus.DRAFT);
+
+        if (doc.getStatus() == DocumentStatus.SIGNED) {
+            doc.setSignedByOfficerId(officerId);
+            doc.setSignedAt(LocalDateTime.now());
+        }
+
+        CaseDocument saved = documentRepository.save(doc);
+
+        // Update workflow data flag for checklist when FINAL or SIGNED
+        if (saved.getStatus() == DocumentStatus.FINAL || saved.getStatus() == DocumentStatus.SIGNED) {
+            updateWorkflowFlag(caseId, moduleType.name() + "_READY", true);
+        }
+
+        return toDto(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public CaseDocumentDTO getLatestDocument(Long caseId, ModuleType moduleType) {
+        if (caseId == null) {
+            throw new IllegalArgumentException("Case ID cannot be null");
+        }
+        if (moduleType == null) {
+            throw new IllegalArgumentException("Module type cannot be null");
+        }
+        return documentRepository.findTopByCaseIdAndModuleTypeOrderByUpdatedAtDesc(caseId, moduleType)
+                .map(this::toDto)
+                .orElse(null);
+    }
+
+    private void updateWorkflowFlag(Long caseId, String key, boolean value) {
+        workflowInstanceRepository.findByCaseId(caseId).ifPresent(instance -> {
+            Map<String, Object> data = parseJsonMap(instance.getWorkflowData());
+            data.put(key, value);
+            try {
+                instance.setWorkflowData(objectMapper.writeValueAsString(data));
+                workflowInstanceRepository.save(instance);
+            } catch (Exception e) {
+                log.error("Failed to update workflow data for case {}: {}", caseId, e.getMessage());
+            }
+        });
+    }
+
+    private Map<String, Object> parseJsonMap(String json) {
+        if (json == null || json.trim().isEmpty()) {
+            return new HashMap<>();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            log.warn("Invalid workflow data JSON: {}", e.getMessage());
+            return new HashMap<>();
+        }
+    }
+
+    private CaseDocumentDTO toDto(CaseDocument doc) {
+        CaseDocumentDTO dto = new CaseDocumentDTO();
+        dto.setId(doc.getId());
+        dto.setCaseId(doc.getCaseId());
+        dto.setCaseNatureId(doc.getCaseNatureId());
+        dto.setModuleType(doc.getModuleType());
+        dto.setTemplateId(doc.getTemplateId());
+        if (doc.getTemplate() != null) {
+            dto.setTemplateName(doc.getTemplate().getTemplateName());
+        }
+        dto.setContentHtml(doc.getContentHtml());
+        dto.setContentData(doc.getContentData());
+        dto.setStatus(doc.getStatus());
+        dto.setSignedByOfficerId(doc.getSignedByOfficerId());
+        dto.setSignedAt(doc.getSignedAt());
+        dto.setCreatedAt(doc.getCreatedAt());
+        dto.setUpdatedAt(doc.getUpdatedAt());
+        return dto;
+    }
+}
+
