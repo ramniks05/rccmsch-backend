@@ -9,14 +9,14 @@ import java.util.List;
 
 /**
  * DTO for available courts response
- * Used when user selects case nature and system returns available courts
+ * Used when user selects case type and system returns available courts
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class AvailableCourtsDTO {
-    private CaseNatureDTO caseNature;
+    private CaseTypeDTO caseType;
     private List<CourtDTO> courts;
     private String message;
 }

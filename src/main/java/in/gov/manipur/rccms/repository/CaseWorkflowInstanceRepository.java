@@ -19,7 +19,11 @@ public interface CaseWorkflowInstanceRepository extends JpaRepository<CaseWorkfl
     
     List<CaseWorkflowInstance> findByCurrentStateId(Long currentStateId);
     
-    List<CaseWorkflowInstance> findByAssignedToOfficerId(Long officerId);
+    @Query("SELECT cwi FROM CaseWorkflowInstance cwi " +
+           "LEFT JOIN FETCH cwi.caseEntity " +
+           "WHERE cwi.assignedToOfficerId = :officerId " +
+           "ORDER BY cwi.updatedAt DESC")
+    List<CaseWorkflowInstance> findByAssignedToOfficerId(@Param("officerId") Long officerId);
     
     List<CaseWorkflowInstance> findByAssignedToUnitId(Long unitId);
     
@@ -34,5 +38,27 @@ public interface CaseWorkflowInstanceRepository extends JpaRepository<CaseWorkfl
     @Query("SELECT cwi FROM CaseWorkflowInstance cwi WHERE cwi.assignedToUnitId = :unitId " +
            "AND cwi.currentStateId = :stateId")
     List<CaseWorkflowInstance> findByUnitAndState(@Param("unitId") Long unitId, @Param("stateId") Long stateId);
+    
+    /**
+     * Find all workflow instances where case is not assigned to any officer
+     */
+    @Query("SELECT cwi FROM CaseWorkflowInstance cwi WHERE cwi.assignedToOfficerId IS NULL")
+    List<CaseWorkflowInstance> findUnassignedCases();
+    
+    /**
+     * Find unassigned cases by court
+     */
+    @Query("SELECT cwi FROM CaseWorkflowInstance cwi " +
+           "WHERE cwi.assignedToOfficerId IS NULL " +
+           "AND cwi.caseEntity.courtId = :courtId")
+    List<CaseWorkflowInstance> findUnassignedCasesByCourt(@Param("courtId") Long courtId);
+    
+    /**
+     * Find unassigned cases by unit
+     */
+    @Query("SELECT cwi FROM CaseWorkflowInstance cwi " +
+           "WHERE cwi.assignedToOfficerId IS NULL " +
+           "AND cwi.assignedToUnitId = :unitId")
+    List<CaseWorkflowInstance> findUnassignedCasesByUnit(@Param("unitId") Long unitId);
 }
 

@@ -1,41 +1,36 @@
 package in.gov.manipur.rccms.dto;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
+import in.gov.manipur.rccms.entity.CourtLevel;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 /**
- * DTO for Case Type Request/Response
+ * DTO for CaseType entity (Previously CaseNatureDTO)
+ * Represents case types like NEW_FILE, APPEAL, REVISION, etc.
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 public class CaseTypeDTO {
-
     private Long id;
-
-    @NotBlank(message = "Case type name is required")
-    @Size(max = 200, message = "Case type name must not exceed 200 characters")
-    private String name;
-
-    @NotBlank(message = "Case type code is required")
-    @Size(max = 50, message = "Case type code must not exceed 50 characters")
-    @Pattern(regexp = "^[A-Z0-9_]+$", message = "Case type code must contain only uppercase letters, numbers, and underscores")
-    private String code;
-
-    @Size(max = 500, message = "Description must not exceed 500 characters")
+    private Long caseNatureId;
+    private String caseNatureName;
+    private String caseNatureCode;
+    private String typeCode;
+    private String typeName;
+    private CourtLevel courtLevel;
+    private List<String> courtTypes; // Parsed from JSON string
+    private CourtLevel fromLevel;
+    private Boolean isAppeal;
+    private Integer appealOrder;
     private String description;
-
-    private Long actId;
-    private String actName;
-    private String actCode;
-    private Integer actYear;
-    private String workflowCode;
-    private Boolean isActive = true;
-    private java.time.LocalDateTime createdAt;
-    private java.time.LocalDateTime updatedAt;
+    private String workflowCode; // Links to workflow_definition.workflow_code
+    private Boolean isActive;
+    private Integer displayOrder;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 }
-

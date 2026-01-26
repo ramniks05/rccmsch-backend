@@ -17,10 +17,10 @@ import java.time.LocalDateTime;
 @Table(name = "cases", indexes = {
     @Index(name = "idx_case_case_number", columnList = "case_number"),
     @Index(name = "idx_case_type", columnList = "case_type_id"),
+    @Index(name = "idx_case_nature", columnList = "case_nature_id"),
     @Index(name = "idx_case_applicant", columnList = "applicant_id"),
     @Index(name = "idx_case_unit", columnList = "unit_id"),
     @Index(name = "idx_case_status", columnList = "status"),
-    @Index(name = "idx_case_nature", columnList = "case_nature_id"),
     @Index(name = "idx_case_court", columnList = "court_id")
 })
 @Data
@@ -37,10 +37,17 @@ public class Case {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "case_type_id", nullable = false, foreignKey = @ForeignKey(name = "fk_case_case_type"))
-    private CaseType caseType;
+    private CaseType caseType; // Case Type (NEW_FILE, APPEAL, etc.) - previously CaseNature
 
     @Column(name = "case_type_id", insertable = false, updatable = false)
     private Long caseTypeId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "case_nature_id", nullable = false, foreignKey = @ForeignKey(name = "fk_case_case_nature"))
+    private CaseNature caseNature; // Case Nature (MUTATION_GIFT_SALE, PARTITION, etc.) - previously CaseType
+
+    @Column(name = "case_nature_id", insertable = false, updatable = false)
+    private Long caseNatureId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "applicant_id", nullable = false, foreignKey = @ForeignKey(name = "fk_case_applicant"))
@@ -55,13 +62,6 @@ public class Case {
 
     @Column(name = "unit_id", insertable = false, updatable = false)
     private Long unitId;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "case_nature_id", foreignKey = @ForeignKey(name = "fk_case_nature"))
-    private CaseNature caseNature;
-
-    @Column(name = "case_nature_id", insertable = false, updatable = false)
-    private Long caseNatureId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "court_id", foreignKey = @ForeignKey(name = "fk_case_court"))
@@ -115,6 +115,10 @@ public class Case {
         }
         if (applicationDate == null) {
             applicationDate = LocalDate.now();
+        }
+        // Set default status if not already set (fallback)
+        if (status == null || status.trim().isEmpty()) {
+            status = "PENDING";
         }
     }
 

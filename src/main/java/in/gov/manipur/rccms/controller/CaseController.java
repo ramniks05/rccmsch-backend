@@ -6,8 +6,8 @@ import in.gov.manipur.rccms.dto.CreateCaseDTO;
 import in.gov.manipur.rccms.dto.ExecuteTransitionDTO;
 import in.gov.manipur.rccms.dto.FormSchemaDTO;
 import in.gov.manipur.rccms.dto.ResubmitCaseDTO;
+import in.gov.manipur.rccms.dto.WorkflowHistoryDTO;
 import in.gov.manipur.rccms.dto.WorkflowTransitionDTO;
-import in.gov.manipur.rccms.entity.WorkflowHistory;
 import in.gov.manipur.rccms.service.CaseService;
 import in.gov.manipur.rccms.service.CurrentUserService;
 import in.gov.manipur.rccms.service.FormSchemaService;
@@ -177,10 +177,26 @@ public class CaseController {
     }
 
     /**
-     * Get cases assigned to officer
+     * Get cases assigned to current logged-in officer
+     * GET /api/cases/my-cases
+     */
+    @Operation(summary = "Get My Assigned Cases", description = "Retrieve all cases assigned to the current logged-in officer")
+    @GetMapping("/my-cases")
+    public ResponseEntity<ApiResponse<List<CaseDTO>>> getMyAssignedCases(HttpServletRequest request) {
+        Long officerId = currentUserService.getCurrentOfficerId(request);
+        if (officerId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Officer information not found. Please login as an officer."));
+        }
+        List<CaseDTO> cases = caseService.getCasesAssignedToOfficer(officerId);
+        return ResponseEntity.ok(ApiResponse.success("Cases retrieved successfully", cases));
+    }
+
+    /**
+     * Get cases assigned to officer (by ID - for admin use)
      * GET /api/cases/assigned/{officerId}
      */
-    @Operation(summary = "Get Cases Assigned to Officer", description = "Retrieve all cases assigned to an officer")
+    @Operation(summary = "Get Cases Assigned to Officer", description = "Retrieve all cases assigned to an officer (by ID)")
     @GetMapping("/assigned/{officerId}")
     public ResponseEntity<ApiResponse<List<CaseDTO>>> getCasesAssignedToOfficer(@PathVariable Long officerId) {
         List<CaseDTO> cases = caseService.getCasesAssignedToOfficer(officerId);
@@ -249,8 +265,8 @@ public class CaseController {
      */
     @Operation(summary = "Get Workflow History", description = "Get complete workflow history/audit trail for a case")
     @GetMapping("/{caseId}/history")
-    public ResponseEntity<ApiResponse<List<WorkflowHistory>>> getWorkflowHistory(@PathVariable Long caseId) {
-        List<WorkflowHistory> history = workflowEngineService.getWorkflowHistory(caseId);
+    public ResponseEntity<ApiResponse<List<WorkflowHistoryDTO>>> getWorkflowHistory(@PathVariable Long caseId) {
+        List<WorkflowHistoryDTO> history = workflowEngineService.getWorkflowHistoryDTOs(caseId);
         return ResponseEntity.ok(ApiResponse.success("Workflow history retrieved successfully", history));
     }
 }

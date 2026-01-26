@@ -2,6 +2,7 @@ package in.gov.manipur.rccms.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import in.gov.manipur.rccms.dto.WorkflowHistoryDTO;
 import in.gov.manipur.rccms.dto.WorkflowTransitionDTO;
 import in.gov.manipur.rccms.entity.*;
 import in.gov.manipur.rccms.exception.InvalidCredentialsException;
@@ -15,6 +16,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Workflow Engine Service
@@ -34,6 +37,7 @@ public class WorkflowEngineService {
     private final CaseRepository caseRepository;
     private final AdminUnitRepository adminUnitRepository;
     private final OfficerRepository officerRepository;
+    private final OfficerDaHistoryRepository postingRepository;
     private final ObjectMapper objectMapper;
 
     /**
@@ -164,18 +168,21 @@ public class WorkflowEngineService {
         }
         instance.setCurrentStateId(toStateId);
         
-        // Update assignment based on to state (can be configured later)
-        // For now, keep current assignment or update based on workflow logic
-        
-        instanceRepository.save(instance);
-
-        // Update case status
+        // Get case entity to ensure it's loaded for assignment logic
         Long caseIdValue = caseId;
         if (caseIdValue == null) {
             throw new RuntimeException("Case ID cannot be null");
         }
         Case caseEntity = caseRepository.findById(caseIdValue)
                 .orElseThrow(() -> new RuntimeException("Case not found: " + caseIdValue));
+        
+        // Automatically assign case based on new workflow state and permissions
+        assignCaseBasedOnWorkflowState(instance, toState, caseEntity);
+        
+        // Save instance with assignment
+        instanceRepository.save(instance);
+
+        // Update case status
         caseEntity.setStatus(toState.getStateCode());
         caseRepository.save(caseEntity);
 
@@ -290,6 +297,66 @@ public class WorkflowEngineService {
     }
 
     /**
+     * Get workflow history for a case as DTOs
+     */
+    @Transactional(readOnly = true)
+    public List<WorkflowHistoryDTO> getWorkflowHistoryDTOs(Long caseId) {
+        List<WorkflowHistory> historyList = historyRepository.findCaseHistory(caseId);
+        return historyList.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Convert WorkflowHistory entity to DTO
+     */
+    private WorkflowHistoryDTO convertToDTO(WorkflowHistory history) {
+        WorkflowHistoryDTO.WorkflowHistoryDTOBuilder builder = WorkflowHistoryDTO.builder()
+                .id(history.getId())
+                .caseId(history.getCaseId())
+                .instanceId(history.getInstanceId())
+                .transitionId(history.getTransitionId())
+                .fromStateId(history.getFromStateId())
+                .toStateId(history.getToStateId())
+                .performedByOfficerId(history.getPerformedByOfficerId())
+                .performedByRole(history.getPerformedByRole())
+                .performedAtUnitId(history.getPerformedAtUnitId())
+                .comments(history.getComments())
+                .metadata(history.getMetadata())
+                .performedAt(history.getPerformedAt());
+
+        // Set transition information if available
+        if (history.getTransition() != null) {
+            builder.transitionCode(history.getTransition().getTransitionCode())
+                   .transitionName(history.getTransition().getTransitionName());
+        }
+
+        // Set from state information if available
+        if (history.getFromState() != null) {
+            builder.fromStateCode(history.getFromState().getStateCode())
+                   .fromStateName(history.getFromState().getStateName());
+        }
+
+        // Set to state information if available
+        if (history.getToState() != null) {
+            builder.toStateCode(history.getToState().getStateCode())
+                   .toStateName(history.getToState().getStateName());
+        }
+
+        // Set officer information if available
+        if (history.getPerformedByOfficer() != null) {
+            builder.performedByOfficerName(history.getPerformedByOfficer().getFullName());
+        }
+
+        // Set unit information if available
+        if (history.getPerformedAtUnit() != null) {
+            builder.performedAtUnitName(history.getPerformedAtUnit().getUnitName());
+        }
+
+        return builder.build();
+    }
+
+    /**
      * Check hierarchy rule
      */
     private boolean checkHierarchyRule(WorkflowPermission permission, Long unitId, CaseWorkflowInstance instance) {
@@ -340,7 +407,7 @@ public class WorkflowEngineService {
      * Check JSON conditions defined in workflow_permission.conditions
      *
      * Supported keys:
-     * - caseTypeCodesAllowed: ["MUTATION_GIFT_SALE", ...]
+     * - caseTypeCodesAllowed: ["NEW_FILE", "APPEAL", "REVISION", ...] (Case Type codes)
      * - casePriorityIn: ["HIGH", "URGENT"]
      * - caseDataFieldsRequired: ["field1", "field2"]
      * - caseDataFieldEquals: {"fieldName": "expectedValue"}
@@ -358,7 +425,7 @@ public class WorkflowEngineService {
             // caseTypeCodesAllowed
             if (conditions.containsKey("caseTypeCodesAllowed")) {
                 List<String> allowed = castToStringList(conditions.get("caseTypeCodesAllowed"));
-                String caseTypeCode = caseEntity.getCaseType() != null ? caseEntity.getCaseType().getCode() : null;
+                String caseTypeCode = caseEntity.getCaseType() != null ? caseEntity.getCaseType().getTypeCode() : null;
                 if (caseTypeCode == null || !allowed.contains(caseTypeCode)) {
                     return false;
                 }
@@ -462,6 +529,200 @@ public class WorkflowEngineService {
             }
         }
         return true;
+    }
+
+    /**
+     * Automatically assign case to officer based on workflow state and permissions
+     * Finds roles that can handle transitions from the state, then finds officer posted to court
+     */
+    private void assignCaseBasedOnWorkflowState(CaseWorkflowInstance instance, WorkflowState state, Case caseEntity) {
+        log.debug("=== AUTO-ASSIGNMENT DEBUG START ===");
+        log.debug("Case ID: {}, State: {} (ID: {}), Workflow ID: {}, Court ID: {}", 
+                instance.getCaseId(), state.getStateCode(), state.getId(), 
+                instance.getWorkflowId(), caseEntity != null ? caseEntity.getCourtId() : "NULL");
+        
+        if (caseEntity == null || caseEntity.getCourtId() == null) {
+            log.warn("Case {} has no court assigned. Cannot auto-assign to officer.", instance.getCaseId());
+            log.debug("=== AUTO-ASSIGNMENT DEBUG END (NO COURT) ===");
+            return;
+        }
+
+        // Validate state and workflow IDs
+        if (state == null || state.getId() == null) {
+            log.warn("State is null or has no ID for case {}. Cannot auto-assign.", instance.getCaseId());
+            log.debug("=== AUTO-ASSIGNMENT DEBUG END (NO STATE ID) ===");
+            return;
+        }
+        
+        if (instance.getWorkflowId() == null) {
+            log.warn("Workflow ID is null for case {}. Cannot auto-assign.", instance.getCaseId());
+            log.debug("=== AUTO-ASSIGNMENT DEBUG END (NO WORKFLOW ID) ===");
+            return;
+        }
+        
+        // Find roles that have permissions for transitions FROM this state
+        log.debug("Step 1: Finding roles for state {} (ID: {}) in workflow {}...", 
+                state.getStateCode(), state.getId(), instance.getWorkflowId());
+        
+        // DEBUG: Verify state details
+        log.debug("  [DEBUG] State details - Code: {}, ID: {}, Name: {}", 
+                state.getStateCode(), state.getId(), state.getStateName());
+        log.debug("  [DEBUG] Workflow instance - WorkflowId: {}, CaseId: {}", 
+                instance.getWorkflowId(), instance.getCaseId());
+        
+        List<String> rolesForState = getRolesForState(instance.getWorkflowId(), state.getId());
+        
+        log.debug("Step 2: Found {} role(s) for state {}: {}", 
+                rolesForState.size(), state.getStateCode(), rolesForState);
+        
+        if (rolesForState.isEmpty()) {
+            log.warn("No roles found with permissions for state {} (ID: {}). Case {} will remain unassigned.", 
+                    state.getStateCode(), state.getId(), instance.getCaseId());
+            log.debug("=== AUTO-ASSIGNMENT DEBUG END (NO ROLES) ===");
+            return;
+        }
+
+        // Debug: Check all officers posted to this court
+        List<OfficerDaHistory> allPostings = postingRepository.findByCourtIdAndIsCurrentTrue(caseEntity.getCourtId());
+        log.debug("Step 3: Checking officers posted to court {} (ID: {})...", 
+                caseEntity.getCourtId(), caseEntity.getCourtId());
+        log.debug("Total active postings at court {}: {}", caseEntity.getCourtId(), allPostings.size());
+        for (OfficerDaHistory posting : allPostings) {
+            log.debug("  - Officer ID: {}, Role: {}, UserID: {}", 
+                    posting.getOfficerId(), posting.getRoleCode(), posting.getPostingUserid());
+        }
+
+        // Try to find officer for each role (in order)
+        log.debug("Step 4: Searching for officers with roles: {}...", rolesForState);
+        for (String roleCode : rolesForState) {
+            log.debug("  Checking role: {} at court {}...", roleCode, caseEntity.getCourtId());
+            Optional<OfficerDaHistory> posting = postingRepository
+                    .findByCourtIdAndRoleCodeAndIsCurrentTrue(caseEntity.getCourtId(), roleCode);
+            
+            if (posting.isPresent()) {
+                // Assign case to this officer
+                instance.setAssignedToOfficer(posting.get().getOfficer());
+                instance.setAssignedToOfficerId(posting.get().getOfficerId());
+                instance.setAssignedToRole(roleCode);
+                log.info("Case {} auto-assigned to officer {} (role: {}) based on state {}. " +
+                         "Court: {}, Officer ID: {}", 
+                        instance.getCaseId(), posting.get().getOfficerId(), roleCode, state.getStateCode(),
+                        caseEntity.getCourtId(), posting.get().getOfficerId());
+                log.debug("=== AUTO-ASSIGNMENT DEBUG END (SUCCESS) ===");
+                return; // Successfully assigned
+            } else {
+                log.warn("No officer found for role {} at court {} (case {}). " +
+                        "Available roles at this court: {}", 
+                        roleCode, caseEntity.getCourtId(), instance.getCaseId(),
+                        allPostings.stream().map(OfficerDaHistory::getRoleCode).distinct().toList());
+            }
+        }
+
+        // No officer found - set expected role but leave unassigned
+        if (!rolesForState.isEmpty()) {
+            instance.setAssignedToRole(rolesForState.get(0)); // Set first expected role
+            log.warn("Case {} cannot be auto-assigned. Expected role: {} but no officer posted to court {} with this role. " +
+                    "Available roles at court: {}", 
+                    instance.getCaseId(), rolesForState.get(0), caseEntity.getCourtId(),
+                    allPostings.stream().map(OfficerDaHistory::getRoleCode).distinct().toList());
+        }
+        log.debug("=== AUTO-ASSIGNMENT DEBUG END (NO OFFICER FOUND) ===");
+    }
+
+    /**
+     * Get roles that have permissions to perform transitions from a state
+     */
+    private List<String> getRolesForState(Long workflowId, Long stateId) {
+        List<String> roles = new ArrayList<>();
+        
+        // Validate inputs
+        if (workflowId == null || stateId == null) {
+            log.warn("  [getRolesForState] Invalid parameters - Workflow ID: {}, State ID: {}", workflowId, stateId);
+            return roles;
+        }
+        
+        log.debug("  [getRolesForState] Workflow ID: {}, State ID: {}", workflowId, stateId);
+        
+        // DEBUG: Check all transitions in the workflow to see what exists
+        List<WorkflowTransition> allWorkflowTransitions = transitionRepository.findByWorkflowId(workflowId);
+        log.debug("  [getRolesForState] Total transitions in workflow {}: {}", workflowId, allWorkflowTransitions.size());
+        for (WorkflowTransition t : allWorkflowTransitions) {
+            log.debug("  [getRolesForState] DB Transition - ID: {}, Code: {}, FromStateId: {}, ToStateId: {}, WorkflowId: {}, Active: {}", 
+                    t.getId(), t.getTransitionCode(), t.getFromStateId(), t.getToStateId(), t.getWorkflowId(), t.getIsActive());
+        }
+        
+        // DEBUG: Check transitions by fromStateId only (without workflow filter)
+        List<WorkflowTransition> transitionsByState = transitionRepository
+                .findByFromStateIdAndIsActiveTrue(stateId);
+        log.debug("  [getRolesForState] Transitions FROM state ID {} (any workflow): {}", stateId, transitionsByState.size());
+        for (WorkflowTransition t : transitionsByState) {
+            log.debug("  [getRolesForState] Found transition - ID: {}, Code: {}, WorkflowId: {}, FromStateId: {}, Active: {}", 
+                    t.getId(), t.getTransitionCode(), t.getWorkflowId(), t.getFromStateId(), t.getIsActive());
+        }
+        
+        // Get all transitions FROM this state (with workflow filter)
+        List<WorkflowTransition> transitions = transitionRepository
+                .findTransitionsFromState(workflowId, stateId);
+        
+        log.debug("  [getRolesForState] Found {} transition(s) FROM state ID {} in workflow {} (with workflow filter)", 
+                transitions.size(), stateId, workflowId);
+        
+        if (transitions.isEmpty()) {
+            log.warn("  [getRolesForState] ⚠️ NO TRANSITIONS FOUND FROM state ID {} in workflow {}.", stateId, workflowId);
+            if (!transitionsByState.isEmpty()) {
+                log.warn("  [getRolesForState] ⚠️ BUT found {} transition(s) FROM state ID {} in OTHER workflows! " +
+                        "Check if workflowId is correct. Expected: {}, Found in transitions: {}", 
+                        transitionsByState.size(), stateId, workflowId, 
+                        transitionsByState.stream().map(t -> t.getWorkflowId()).distinct().toList());
+            } else {
+                log.warn("  [getRolesForState] ⚠️ AND no transitions found FROM state ID {} in ANY workflow! " +
+                        "This is why no roles are found! Create transitions FROM this state.", stateId);
+            }
+            return roles;
+        }
+        
+        // For each transition, get roles with permissions
+        for (WorkflowTransition transition : transitions) {
+            log.debug("  [getRolesForState] Checking transition: {} (ID: {}), Active: {}", 
+                    transition.getTransitionCode(), transition.getId(), transition.getIsActive());
+            
+            if (!transition.getIsActive()) {
+                log.debug("  [getRolesForState] Skipping inactive transition: {}", transition.getTransitionCode());
+                continue;
+            }
+            
+            List<WorkflowPermission> permissions = permissionRepository
+                    .findByTransitionIdAndIsActiveTrue(transition.getId());
+            
+            log.debug("  [getRolesForState] Transition {} has {} permission(s)", 
+                    transition.getTransitionCode(), permissions.size());
+            
+            if (permissions.isEmpty()) {
+                log.warn("  [getRolesForState] Transition {} (ID: {}) has NO PERMISSIONS! " +
+                        "Create permissions for this transition.", transition.getTransitionCode(), transition.getId());
+            }
+            
+            for (WorkflowPermission permission : permissions) {
+                log.debug("  [getRolesForState] Permission - Role: {}, CanInitiate: {}, IsActive: {}", 
+                        permission.getRoleCode(), permission.getCanInitiate(), permission.getIsActive());
+                
+                if (permission.getCanInitiate() && !roles.contains(permission.getRoleCode())) {
+                    roles.add(permission.getRoleCode());
+                    log.debug("  [getRolesForState] Added role: {} to roles list", permission.getRoleCode());
+                } else {
+                    if (!permission.getCanInitiate()) {
+                        log.debug("  [getRolesForState] Skipping role {} - canInitiate is FALSE", 
+                                permission.getRoleCode());
+                    } else {
+                        log.debug("  [getRolesForState] Skipping role {} - already in list", 
+                                permission.getRoleCode());
+                    }
+                }
+            }
+        }
+        
+        log.debug("  [getRolesForState] Final roles list: {}", roles);
+        return roles;
     }
 }
 

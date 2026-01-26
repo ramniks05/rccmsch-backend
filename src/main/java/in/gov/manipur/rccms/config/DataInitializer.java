@@ -1,9 +1,9 @@
 package in.gov.manipur.rccms.config;
 
 import in.gov.manipur.rccms.entity.AdminUnit;
-import in.gov.manipur.rccms.entity.CaseType;
+import in.gov.manipur.rccms.entity.CaseNature;
 import in.gov.manipur.rccms.repository.AdminUnitRepository;
-import in.gov.manipur.rccms.repository.CaseTypeRepository;
+import in.gov.manipur.rccms.repository.CaseNatureRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -24,7 +24,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class DataInitializer implements CommandLineRunner {
 
-    private final CaseTypeRepository caseTypeRepository;
+    private final CaseNatureRepository caseNatureRepository;
     private final AdminUnitRepository adminUnitRepository;
 
     @Override
@@ -33,7 +33,7 @@ public class DataInitializer implements CommandLineRunner {
         log.info("Starting data initialization...");
         log.info("========================================");
         
-        initializeCaseTypes();
+        initializeCaseNatures();
         initializeAdminUnits();
         
         log.info("========================================");
@@ -42,99 +42,100 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     /**
-     * Initialize Case Types master data
+     * Initialize Case Natures master data
+     * Note: These are case natures (MUTATION_GIFT_SALE, PARTITION, etc.), not case types
      */
-    private void initializeCaseTypes() {
-        log.info("Initializing Case Types...");
+    private void initializeCaseNatures() {
+        log.info("Initializing Case Natures...");
         
-        List<CaseType> caseTypesToInsert = new ArrayList<>();
+        List<CaseNature> caseNaturesToInsert = new ArrayList<>();
         
-        // Define all case types
-        caseTypesToInsert.add(createCaseType(
+        // Define all case natures
+        caseNaturesToInsert.add(createCaseNature(
             "MUTATION_GIFT_SALE",
             "Mutation (after Gift/Sale Deeds)",
             "Mutation after Gift or Sale Deeds"
         ));
         
-        caseTypesToInsert.add(createCaseType(
+        caseNaturesToInsert.add(createCaseNature(
             "MUTATION_DEATH",
             "Mutation (after death of landowner)",
             "Mutation after death of landowner"
         ));
         
-        caseTypesToInsert.add(createCaseType(
+        caseNaturesToInsert.add(createCaseNature(
             "PARTITION",
             "Partition (division of land parcel)",
             "Partition or division of land parcel"
         ));
         
-        caseTypesToInsert.add(createCaseType(
+        caseNaturesToInsert.add(createCaseNature(
             "CLASSIFICATION_CHANGE_BEFORE_2014",
             "Change in Classification of Land (before 2014)",
             "Change in classification of land before 2014"
         ));
         
-        caseTypesToInsert.add(createCaseType(
+        caseNaturesToInsert.add(createCaseNature(
             "CLASSIFICATION_CHANGE_AFTER_2014",
             "Change in Classification of Land (after 2014)",
             "Change in classification of land after 2014"
         ));
         
-        caseTypesToInsert.add(createCaseType(
+        caseNaturesToInsert.add(createCaseNature(
             "HIGHER_COURT_ORDER",
             "Implementation of order passed by a Higher Court",
             "Implementation of order passed by a Higher Court"
         ));
         
-        caseTypesToInsert.add(createCaseType(
+        caseNaturesToInsert.add(createCaseNature(
             "ALLOTMENT",
             "Allotment of Land",
             "Allotment of Land"
         ));
         
-        caseTypesToInsert.add(createCaseType(
+        caseNaturesToInsert.add(createCaseNature(
             "LAND_ACQUISITION_RFCTLARR_NHA",
             "Land Acquisition (under RFCTLARR Act, 2013 or National Highways Act, 1956)",
             "Land Acquisition under RFCTLARR Act, 2013 or National Highways Act, 1956"
         ));
         
-        caseTypesToInsert.add(createCaseType(
+        caseNaturesToInsert.add(createCaseNature(
             "LAND_ACQUISITION_DIRECT_PURCHASE",
             "Land Acquisition (under Direct Purchase)",
             "Land Acquisition under Direct Purchase"
         ));
         
-        // Insert case types if they don't exist
+        // Insert case natures if they don't exist
         int insertedCount = 0;
         int skippedCount = 0;
         
-        for (CaseType caseType : caseTypesToInsert) {
-            if (!caseTypeRepository.existsByCode(caseType.getCode())) {
-                caseTypeRepository.save(caseType);
+        for (CaseNature caseNature : caseNaturesToInsert) {
+            if (!caseNatureRepository.existsByCode(caseNature.getCode())) {
+                caseNatureRepository.save(caseNature);
                 insertedCount++;
-                log.info("Inserted case type: {} - {}", caseType.getCode(), caseType.getName());
+                log.info("Inserted case nature: {} - {}", caseNature.getCode(), caseNature.getName());
             } else {
                 skippedCount++;
-                log.debug("Case type already exists, skipping: {}", caseType.getCode());
+                log.debug("Case nature already exists, skipping: {}", caseNature.getCode());
             }
         }
         
-        log.info("Case Types initialization completed: {} inserted, {} skipped (already exist)", 
+        log.info("Case Natures initialization completed: {} inserted, {} skipped (already exist)", 
                 insertedCount, skippedCount);
     }
 
     /**
-     * Create a CaseType entity
+     * Create a CaseNature entity
      */
-    private CaseType createCaseType(String code, String name, String description) {
-        CaseType caseType = new CaseType();
-        caseType.setCode(code);
-        caseType.setName(name);
-        caseType.setDescription(description);
-        caseType.setIsActive(true);
-        caseType.setCreatedAt(LocalDateTime.now());
-        caseType.setUpdatedAt(LocalDateTime.now());
-        return caseType;
+    private CaseNature createCaseNature(String code, String name, String description) {
+        CaseNature caseNature = new CaseNature();
+        caseNature.setCode(code);
+        caseNature.setName(name);
+        caseNature.setDescription(description);
+        caseNature.setIsActive(true);
+        caseNature.setCreatedAt(LocalDateTime.now());
+        caseNature.setUpdatedAt(LocalDateTime.now());
+        return caseNature;
     }
 
     /**
@@ -321,8 +322,8 @@ public class DataInitializer implements CommandLineRunner {
             return adminUnitRepository.save(adminUnit);
         } else {
             log.debug("Admin unit already exists, skipping: {}", code);
-            return adminUnitRepository.findByUnitCode(code)
-                    .orElseGet(() -> adminUnit);
+            AdminUnit existing = adminUnitRepository.findByUnitCode(code).orElse(null);
+            return existing != null ? existing : adminUnit;
         }
     }
 

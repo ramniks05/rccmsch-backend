@@ -5,6 +5,7 @@ import in.gov.manipur.rccms.entity.RoleMaster;
 import in.gov.manipur.rccms.repository.RoleMasterRepository;
 import in.gov.manipur.rccms.service.AdminAuthService;
 import in.gov.manipur.rccms.service.AdminUnitService;
+import in.gov.manipur.rccms.service.CaseNatureService;
 import in.gov.manipur.rccms.service.CaseTypeService;
 import in.gov.manipur.rccms.service.OfficerService;
 import in.gov.manipur.rccms.service.PostBasedAuthService;
@@ -38,6 +39,7 @@ public class AdminController {
     private final PostBasedAuthService postBasedAuthService;
     private final AdminAuthService adminAuthService;
     private final AdminUnitService adminUnitService;
+    private final CaseNatureService caseNatureService;
     private final CaseTypeService caseTypeService;
     private final RoleMasterRepository roleMasterRepository;
 
@@ -446,90 +448,8 @@ public class AdminController {
     }
 
     // ==================== Case Types Management ====================
-
-    /**
-     * Create case type
-     * POST /api/admin/case-types
-     */
-    @Operation(summary = "Create Case Type", description = "Create a new case type")
-    @PostMapping("/case-types")
-    public ResponseEntity<ApiResponse<CaseTypeDTO>> createCaseType(
-            @Valid @RequestBody CaseTypeDTO request) {
-        log.info("Create case type request: {}", request.getCode());
-        
-        CaseTypeDTO created = caseTypeService.createCaseType(request);
-        
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Case type created successfully", created));
-    }
-
-    /**
-     * Get all case types
-     * GET /api/admin/case-types
-     */
-    @Operation(summary = "Get All Case Types", description = "Retrieve all case types")
-    @GetMapping("/case-types")
-    public ResponseEntity<ApiResponse<List<CaseTypeDTO>>> getAllCaseTypes() {
-        List<CaseTypeDTO> caseTypes = caseTypeService.getAllCaseTypes();
-        return ResponseEntity.ok(ApiResponse.success("Case types retrieved successfully", caseTypes));
-    }
-
-    /**
-     * Get case type by ID
-     * GET /api/admin/case-types/{id}
-     */
-    @Operation(summary = "Get Case Type by ID", description = "Retrieve a case type by ID")
-    @GetMapping("/case-types/{id}")
-    public ResponseEntity<ApiResponse<CaseTypeDTO>> getCaseTypeById(@PathVariable Long id) {
-        CaseTypeDTO caseType = caseTypeService.getCaseTypeById(id);
-        return ResponseEntity.ok(ApiResponse.success("Case type retrieved successfully", caseType));
-    }
-
-    /**
-     * Update case type
-     * PUT /api/admin/case-types/{id}
-     */
-    @Operation(summary = "Update Case Type", description = "Update an existing case type")
-    @PutMapping("/case-types/{id}")
-    public ResponseEntity<ApiResponse<CaseTypeDTO>> updateCaseType(
-            @PathVariable Long id,
-            @Valid @RequestBody CaseTypeDTO request) {
-        log.info("Update case type request for ID: {}", id);
-        
-        CaseTypeDTO updated = caseTypeService.updateCaseType(id, request);
-        
-        return ResponseEntity.ok(ApiResponse.success("Case type updated successfully", updated));
-    }
-
-    /**
-     * Delete case type (soft delete)
-     * DELETE /api/admin/case-types/{id}
-     */
-    @Operation(summary = "Delete Case Type", description = "Soft delete a case type")
-    @DeleteMapping("/case-types/{id}")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> deleteCaseType(@PathVariable Long id) {
-        log.info("Delete case type request for ID: {}", id);
-        
-        caseTypeService.deleteCaseType(id);
-        
-        Map<String, Object> response = Map.of(
-                "message", "Case type deleted successfully",
-                "id", id
-        );
-        
-        return ResponseEntity.ok(ApiResponse.success("Case type deleted successfully", response));
-    }
-
-    /**
-     * Get active case types
-     * GET /api/admin/case-types/active
-     */
-    @Operation(summary = "Get Active Case Types", description = "Retrieve only active case types")
-    @GetMapping("/case-types/active")
-    public ResponseEntity<ApiResponse<List<CaseTypeDTO>>> getActiveCaseTypes() {
-        List<CaseTypeDTO> caseTypes = caseTypeService.getActiveCaseTypes();
-        return ResponseEntity.ok(ApiResponse.success("Active case types retrieved successfully", caseTypes));
-    }
+    // Note: Case Type CRUD operations are handled by CaseTypeController
+    // This section is kept for reference but methods are removed to avoid conflicts
 
     // ==================== Role Master Management ====================
 
@@ -619,7 +539,8 @@ public class AdminController {
         long totalAdminUnits = adminUnitService.getAllAdminUnits().size();
         long activeAdminUnits = adminUnitService.getActiveAdminUnits().size();
         long totalCaseTypes = caseTypeService.getAllCaseTypes().size();
-        long activeCaseTypes = caseTypeService.getActiveCaseTypes().size();
+        long totalCaseNatures = caseNatureService.getAllCaseNatures().size();
+        long activeCaseNatures = caseNatureService.getActiveCaseNatures().size();
         long totalRoles = roleMasterRepository.count();
         
         Map<String, Object> stats = new java.util.HashMap<>();
@@ -630,7 +551,8 @@ public class AdminController {
         stats.put("totalAdminUnits", totalAdminUnits);
         stats.put("activeAdminUnits", activeAdminUnits);
         stats.put("totalCaseTypes", totalCaseTypes);
-        stats.put("activeCaseTypes", activeCaseTypes);
+        stats.put("totalCaseNatures", totalCaseNatures);
+        stats.put("activeCaseNatures", activeCaseNatures);
         stats.put("totalRoles", totalRoles);
         
         return ResponseEntity.ok(ApiResponse.success("Dashboard statistics retrieved successfully", stats));

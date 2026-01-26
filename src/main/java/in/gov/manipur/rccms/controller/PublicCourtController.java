@@ -26,26 +26,26 @@ public class PublicCourtController {
     private final CourtService courtService;
 
     /**
-     * Get available courts for a case nature
-     * This is the key endpoint for frontend - returns courts based on case nature and user's unit
+     * Get available courts for a case type
+     * This is the key endpoint for frontend - returns courts based on case type and user's unit
      * 
-     * GET /api/public/courts/available?caseNatureId={id}&unitId={id}
+     * GET /api/public/courts/available?caseTypeId={id}&unitId={id}
      */
     @GetMapping("/available")
     @Operation(
             summary = "Get Available Courts",
-            description = "Get available courts based on case nature selection and user's administrative unit. " +
-                         "Returns courts that match the case nature's court level and types, filtered by unit hierarchy."
+            description = "Get available courts based on case type selection and user's administrative unit. " +
+                         "Returns courts that match the case type's court level and types, filtered by unit hierarchy."
     )
     public ResponseEntity<ApiResponse<AvailableCourtsDTO>> getAvailableCourts(
-            @Parameter(description = "Case nature ID", required = true)
-            @RequestParam Long caseNatureId,
+            @Parameter(description = "Case type ID", required = true)
+            @RequestParam Long caseTypeId,
             @Parameter(description = "User's administrative unit ID", required = true)
             @RequestParam Long unitId) {
         
-        log.info("Get available courts request: caseNatureId={}, unitId={}", caseNatureId, unitId);
+        log.info("Get available courts request: caseTypeId={}, unitId={}", caseTypeId, unitId);
         
-        AvailableCourtsDTO result = courtService.getAvailableCourts(caseNatureId, unitId);
+        AvailableCourtsDTO result = courtService.getAvailableCourts(caseTypeId, unitId);
         
         return ResponseEntity.ok(ApiResponse.success("Available courts retrieved successfully", result));
     }

@@ -11,23 +11,24 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 /**
- * DTO for creating/updating CaseNature
+ * DTO for creating/updating CaseType (Previously CreateCaseNatureDTO)
+ * Represents case types like NEW_FILE, APPEAL, REVISION, etc.
  */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class CreateCaseNatureDTO {
+public class CreateCaseTypeDTO {
     
-    @NotNull(message = "Case type ID is required")
-    private Long caseTypeId;
+    @NotNull(message = "Case nature ID is required")
+    private Long caseNatureId;
     
-    @NotBlank(message = "Nature code is required")
-    @Size(max = 50, message = "Nature code must not exceed 50 characters")
-    private String natureCode;
+    @NotBlank(message = "Type code is required")
+    @Size(max = 50, message = "Type code must not exceed 50 characters")
+    private String typeCode;
     
-    @NotBlank(message = "Nature name is required")
-    @Size(max = 200, message = "Nature name must not exceed 200 characters")
-    private String natureName;
+    @NotBlank(message = "Type name is required")
+    @Size(max = 200, message = "Type name must not exceed 200 characters")
+    private String typeName;
     
     @NotNull(message = "Court level is required")
     private CourtLevel courtLevel;
@@ -43,6 +44,9 @@ public class CreateCaseNatureDTO {
     
     @Size(max = 500, message = "Description must not exceed 500 characters")
     private String description;
+    
+    @Size(max = 50, message = "Workflow code must not exceed 50 characters")
+    private String workflowCode; // Optional: Links to workflow_definition.workflow_code
     
     private Boolean isActive = true;
     

@@ -1,7 +1,6 @@
 package in.gov.manipur.rccms.repository;
 
 import in.gov.manipur.rccms.entity.CaseNature;
-import in.gov.manipur.rccms.entity.CourtLevel;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -9,7 +8,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * Case Nature Repository
+ * Case Nature Repository (Previously CaseTypeRepository)
  * JPA repository for CaseNature entity
  */
 @Repository
@@ -18,40 +17,30 @@ public interface CaseNatureRepository extends JpaRepository<CaseNature, Long> {
     /**
      * Find case nature by code
      */
-    Optional<CaseNature> findByNatureCode(String natureCode);
+    Optional<CaseNature> findByCode(String code);
 
     /**
-     * Find case nature by code and case type ID
+     * Find case nature by name
      */
-    Optional<CaseNature> findByNatureCodeAndCaseTypeId(String natureCode, Long caseTypeId);
+    Optional<CaseNature> findByName(String name);
 
     /**
-     * Find all active case natures by case type ID
+     * Check if case nature exists by code
      */
-    List<CaseNature> findByCaseTypeIdAndIsActiveTrueOrderByDisplayOrderAscNatureNameAsc(Long caseTypeId);
+    boolean existsByCode(String code);
+
+    /**
+     * Check if case nature exists by name
+     */
+    boolean existsByName(String name);
 
     /**
      * Find all active case natures
      */
-    List<CaseNature> findByIsActiveTrueOrderByDisplayOrderAscNatureNameAsc();
+    List<CaseNature> findByIsActiveTrueOrderByNameAsc();
 
     /**
-     * Find all active case natures by court level
+     * Find all case natures ordered by name
      */
-    List<CaseNature> findByCourtLevelAndIsActiveTrueOrderByDisplayOrderAscNatureNameAsc(CourtLevel courtLevel);
-
-    /**
-     * Find all active case natures by from level (for appeals)
-     */
-    List<CaseNature> findByFromLevelAndIsActiveTrueOrderByDisplayOrderAscNatureNameAsc(CourtLevel fromLevel);
-
-    /**
-     * Find all active appeals
-     */
-    List<CaseNature> findByIsAppealTrueAndIsActiveTrueOrderByAppealOrderAscNatureNameAsc();
-
-    /**
-     * Check if case nature exists by code and case type
-     */
-    boolean existsByNatureCodeAndCaseTypeId(String natureCode, Long caseTypeId);
+    List<CaseNature> findAllByOrderByNameAsc();
 }

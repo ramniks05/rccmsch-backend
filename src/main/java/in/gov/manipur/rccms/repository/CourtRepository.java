@@ -69,6 +69,11 @@ public interface CourtRepository extends JpaRepository<Court, Long> {
     List<Court> findByUnitIdAndCourtLevelAndCourtTypeAndIsActiveTrueOrderByCourtNameAsc(Long unitId, CourtLevel courtLevel, CourtType courtType);
 
     /**
+     * Find all active courts by level and unit ID
+     */
+    List<Court> findByCourtLevelAndUnitIdAndIsActiveTrueOrderByCourtNameAsc(CourtLevel courtLevel, Long unitId);
+
+    /**
      * Find courts available for a case nature
      * Based on court level and court types (from case nature)
      */

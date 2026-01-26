@@ -6,13 +6,13 @@ import in.gov.manipur.rccms.dto.AvailableCourtsDTO;
 import in.gov.manipur.rccms.dto.CourtDTO;
 import in.gov.manipur.rccms.dto.CreateCourtDTO;
 import in.gov.manipur.rccms.entity.AdminUnit;
-import in.gov.manipur.rccms.entity.CaseNature;
+import in.gov.manipur.rccms.entity.CaseType;
 import in.gov.manipur.rccms.entity.Court;
 import in.gov.manipur.rccms.entity.CourtLevel;
 import in.gov.manipur.rccms.entity.CourtType;
 import in.gov.manipur.rccms.exception.DuplicateUserException;
 import in.gov.manipur.rccms.repository.AdminUnitRepository;
-import in.gov.manipur.rccms.repository.CaseNatureRepository;
+import in.gov.manipur.rccms.repository.CaseTypeRepository;
 import in.gov.manipur.rccms.repository.CourtRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,7 +34,7 @@ public class CourtService {
 
     private final CourtRepository courtRepository;
     private final AdminUnitRepository adminUnitRepository;
-    private final CaseNatureRepository caseNatureRepository;
+    private final CaseTypeRepository caseTypeRepository;
     private final ObjectMapper objectMapper;
 
     /**
@@ -131,29 +131,29 @@ public class CourtService {
     }
 
     /**
-     * Get available courts for a case nature
-     * This is the key method for frontend - returns courts based on case nature selection
+     * Get available courts for a case type
+     * This is the key method for frontend - returns courts based on case type selection
      */
     @Transactional(readOnly = true)
-    public AvailableCourtsDTO getAvailableCourts(Long caseNatureId, Long unitId) {
-        if (caseNatureId == null) {
-            throw new IllegalArgumentException("Case nature ID cannot be null");
+    public AvailableCourtsDTO getAvailableCourts(Long caseTypeId, Long unitId) {
+        if (caseTypeId == null) {
+            throw new IllegalArgumentException("Case type ID cannot be null");
         }
         if (unitId == null) {
             throw new IllegalArgumentException("Unit ID cannot be null");
         }
 
-        // Get case nature
-        CaseNature caseNature = caseNatureRepository.findById(caseNatureId)
-                .orElseThrow(() -> new RuntimeException("Case nature not found with ID: " + caseNatureId));
+        // Get case type
+        CaseType caseType = caseTypeRepository.findById(caseTypeId)
+                .orElseThrow(() -> new RuntimeException("Case type not found with ID: " + caseTypeId));
 
         // Parse court types from JSON string
         List<String> courtTypeStrings;
         try {
-            courtTypeStrings = objectMapper.readValue(caseNature.getCourtTypes(), new TypeReference<List<String>>() {});
+            courtTypeStrings = objectMapper.readValue(caseType.getCourtTypes(), new TypeReference<List<String>>() {});
         } catch (Exception e) {
             // If not JSON array, treat as single value
-            courtTypeStrings = List.of(caseNature.getCourtTypes());
+            courtTypeStrings = List.of(caseType.getCourtTypes());
         }
 
         // Convert to CourtType enum list
@@ -163,7 +163,7 @@ public class CourtService {
 
         // Get available courts
         List<Court> courts = courtRepository.findAvailableCourtsForCaseNature(
-                caseNature.getCourtLevel(),
+                caseType.getCourtLevel(),
                 courtTypes,
                 unitId
         );
@@ -171,16 +171,16 @@ public class CourtService {
         // If no courts found, try broader search (just by level and type, not unit hierarchy)
         if (courts.isEmpty()) {
             // Get courts by level, then filter by type
-            List<Court> courtsByLevel = courtRepository.findByCourtLevelAndIsActiveTrueOrderByCourtNameAsc(caseNature.getCourtLevel());
+            List<Court> courtsByLevel = courtRepository.findByCourtLevelAndIsActiveTrueOrderByCourtNameAsc(caseType.getCourtLevel());
             courts = courtsByLevel.stream()
                     .filter(c -> courtTypes.contains(c.getCourtType()))
                     .collect(Collectors.toList());
         }
 
-        log.info("Found {} available courts for case nature {} and unit {}", courts.size(), caseNatureId, unitId);
+        log.info("Found {} available courts for case type {} and unit {}", courts.size(), caseTypeId, unitId);
 
         return AvailableCourtsDTO.builder()
-                .caseNature(convertCaseNatureToDTO(caseNature))
+                .caseType(convertCaseTypeToDTO(caseType))
                 .courts(courts.stream().map(this::convertToDTO).collect(Collectors.toList()))
                 .message("Available courts retrieved successfully")
                 .build();
@@ -282,32 +282,32 @@ public class CourtService {
     }
 
     /**
-     * Convert CaseNature to DTO (simplified)
+     * Convert CaseType to DTO (simplified)
      */
-    private in.gov.manipur.rccms.dto.CaseNatureDTO convertCaseNatureToDTO(CaseNature caseNature) {
-        in.gov.manipur.rccms.dto.CaseNatureDTO dto = new in.gov.manipur.rccms.dto.CaseNatureDTO();
-        dto.setId(caseNature.getId());
-        dto.setCaseTypeId(caseNature.getCaseTypeId());
-        if (caseNature.getCaseType() != null) {
-            dto.setCaseTypeName(caseNature.getCaseType().getName());
-            dto.setCaseTypeCode(caseNature.getCaseType().getCode());
+    private in.gov.manipur.rccms.dto.CaseTypeDTO convertCaseTypeToDTO(CaseType caseType) {
+        in.gov.manipur.rccms.dto.CaseTypeDTO dto = new in.gov.manipur.rccms.dto.CaseTypeDTO();
+        dto.setId(caseType.getId());
+        dto.setCaseNatureId(caseType.getCaseNatureId());
+        if (caseType.getCaseNature() != null) {
+            dto.setCaseNatureName(caseType.getCaseNature().getName());
+            dto.setCaseNatureCode(caseType.getCaseNature().getCode());
         }
-        dto.setNatureCode(caseNature.getNatureCode());
-        dto.setNatureName(caseNature.getNatureName());
-        dto.setCourtLevel(caseNature.getCourtLevel());
+        dto.setTypeCode(caseType.getTypeCode());
+        dto.setTypeName(caseType.getTypeName());
+        dto.setCourtLevel(caseType.getCourtLevel());
         // Parse court types
         try {
-            List<String> courtTypes = objectMapper.readValue(caseNature.getCourtTypes(), new TypeReference<List<String>>() {});
+            List<String> courtTypes = objectMapper.readValue(caseType.getCourtTypes(), new TypeReference<List<String>>() {});
             dto.setCourtTypes(courtTypes);
         } catch (Exception e) {
-            dto.setCourtTypes(List.of(caseNature.getCourtTypes()));
+            dto.setCourtTypes(List.of(caseType.getCourtTypes()));
         }
-        dto.setFromLevel(caseNature.getFromLevel());
-        dto.setIsAppeal(caseNature.getIsAppeal());
-        dto.setAppealOrder(caseNature.getAppealOrder());
-        dto.setDescription(caseNature.getDescription());
-        dto.setIsActive(caseNature.getIsActive());
-        dto.setDisplayOrder(caseNature.getDisplayOrder());
+        dto.setFromLevel(caseType.getFromLevel());
+        dto.setIsAppeal(caseType.getIsAppeal());
+        dto.setAppealOrder(caseType.getAppealOrder());
+        dto.setDescription(caseType.getDescription());
+        dto.setIsActive(caseType.getIsActive());
+        dto.setDisplayOrder(caseType.getDisplayOrder());
         return dto;
     }
 }

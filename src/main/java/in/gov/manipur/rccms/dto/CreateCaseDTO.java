@@ -17,15 +17,16 @@ import java.time.LocalDate;
 public class CreateCaseDTO {
     
     @NotNull(message = "Case type ID is required")
-    private Long caseTypeId;
+    private Long caseTypeId; // Case Type (NEW_FILE, APPEAL, etc.)
+    
+    @NotNull(message = "Case nature ID is required")
+    private Long caseNatureId; // Case Nature (MUTATION_GIFT_SALE, PARTITION, etc.)
     
     @NotNull(message = "Applicant ID is required")
     private Long applicantId;
     
     @NotNull(message = "Unit ID is required")
     private Long unitId;
-    
-    private Long caseNatureId; // Case nature (New File, Appeal, etc.)
     
     private Long courtId; // Court where petition is filed
     
