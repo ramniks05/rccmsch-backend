@@ -1,0 +1,78 @@
+package in.gov.manipur.rccms.controller;
+
+import in.gov.manipur.rccms.dto.*;
+import in.gov.manipur.rccms.entity.Case;
+import in.gov.manipur.rccms.entity.ModuleType;
+import in.gov.manipur.rccms.repository.CaseRepository;
+import in.gov.manipur.rccms.service.CaseModuleFormService;
+import in.gov.manipur.rccms.service.CurrentUserService;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Optional;
+
+/**
+ * APIs for case module forms (hearing form submission and retrieval)
+ */
+@Slf4j
+@RestController
+@RequestMapping("/api/cases")
+@RequiredArgsConstructor
+public class CaseModuleFormController {
+
+    private final CaseModuleFormService moduleFormService;
+    private final CaseRepository caseRepository;
+    private final CurrentUserService currentUserService;
+
+    @GetMapping("/{caseId}/module-forms/{moduleType}")
+    public ResponseEntity<ApiResponse<ModuleFormSchemaDTO>> getModuleFormSchema(
+            @PathVariable Long caseId,
+            @PathVariable ModuleType moduleType) {
+        if (caseId == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("Case ID cannot be null"));
+        }
+        Case caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
+        ModuleFormSchemaDTO schema = moduleFormService.getFormSchema(
+                caseEntity.getCaseNatureId(), caseEntity.getCaseTypeId(), moduleType);
+        return ResponseEntity.ok(ApiResponse.success("Module form schema retrieved", schema));
+    }
+
+    @GetMapping("/{caseId}/module-forms/{moduleType}/latest")
+    public ResponseEntity<ApiResponse<ModuleFormSubmissionDTO>> getLatestSubmission(
+            @PathVariable Long caseId,
+            @PathVariable ModuleType moduleType) {
+        if (caseId == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("Case ID cannot be null"));
+        }
+        Optional<ModuleFormSubmissionDTO> submission = moduleFormService.getLatestSubmission(caseId, moduleType);
+        return ResponseEntity.ok(ApiResponse.success("Latest submission retrieved", submission.orElse(null)));
+    }
+
+    @PostMapping("/{caseId}/module-forms/{moduleType}/submit")
+    public ResponseEntity<ApiResponse<ModuleFormSubmissionDTO>> submitModuleForm(
+            @PathVariable Long caseId,
+            @PathVariable ModuleType moduleType,
+            @Valid @RequestBody CreateModuleFormSubmissionDTO dto,
+            HttpServletRequest request) {
+        if (caseId == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("Case ID cannot be null"));
+        }
+        Long officerId = currentUserService.getCurrentOfficerId(request);
+        if (officerId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Officer information not found"));
+        }
+        ModuleFormSubmissionDTO saved = moduleFormService.submitForm(caseId, moduleType, officerId, dto);
+        return ResponseEntity.ok(ApiResponse.success("Module form submitted", saved));
+    }
+}
+

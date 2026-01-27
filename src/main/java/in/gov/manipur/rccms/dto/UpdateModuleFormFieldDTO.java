@@ -1,0 +1,40 @@
+package in.gov.manipur.rccms.dto;
+
+import in.gov.manipur.rccms.entity.ModuleType;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import lombok.Data;
+
+@Data
+public class UpdateModuleFormFieldDTO {
+    @NotNull
+    private Long caseNatureId;
+
+    private Long caseTypeId; // optional override per case type
+
+    @NotNull
+    private ModuleType moduleType;
+
+    @NotBlank
+    private String fieldName;
+
+    @NotBlank
+    private String fieldLabel;
+
+    @NotBlank
+    private String fieldType;
+
+    private Boolean isRequired;
+    private String validationRules;
+    private Integer displayOrder;
+    private Boolean isActive;
+    private String defaultValue;
+    private String fieldOptions;
+    private String placeholder;
+    private String helpText;
+    private String dataSource;
+    private String dependsOnField;
+    private String dependencyCondition;
+    private String conditionalLogic;
+}
+
