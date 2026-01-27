@@ -20,7 +20,13 @@ public interface WorkflowHistoryRepository extends JpaRepository<WorkflowHistory
     
     List<WorkflowHistory> findByPerformedByOfficerIdOrderByPerformedAtDesc(Long officerId);
     
-    @Query("SELECT wh FROM WorkflowHistory wh WHERE wh.caseId = :caseId ORDER BY wh.performedAt DESC")
+    @Query("SELECT wh FROM WorkflowHistory wh " +
+           "LEFT JOIN FETCH wh.transition " +
+           "LEFT JOIN FETCH wh.fromState " +
+           "LEFT JOIN FETCH wh.toState " +
+           "LEFT JOIN FETCH wh.performedByOfficer " +
+           "LEFT JOIN FETCH wh.performedAtUnit " +
+           "WHERE wh.caseId = :caseId ORDER BY wh.performedAt DESC")
     List<WorkflowHistory> findCaseHistory(@Param("caseId") Long caseId);
     
     @Query("SELECT wh FROM WorkflowHistory wh WHERE wh.transitionId = :transitionId ORDER BY wh.performedAt DESC")

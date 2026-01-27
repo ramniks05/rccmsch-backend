@@ -27,7 +27,7 @@ public class WorkflowManagementService {
     private final WorkflowTransitionRepository transitionRepository;
     private final WorkflowPermissionRepository permissionRepository;
     private final CaseWorkflowInstanceRepository instanceRepository;
-    private final CaseTypeRepository caseTypeRepository;
+    private final CaseNatureRepository caseNatureRepository;
     private final RoleMasterRepository roleMasterRepository;
 
     // ==================== Workflow Definition CRUD ====================
@@ -92,14 +92,14 @@ public class WorkflowManagementService {
         WorkflowDefinition workflow = workflowDefinitionRepository.findById(workflowId)
                 .orElseThrow(() -> new RuntimeException("Workflow not found: " + workflowId));
 
-        // Check if workflow is linked to any case types
-        List<CaseType> linkedCaseTypes = caseTypeRepository.findAll().stream()
-                .filter(ct -> workflow.getWorkflowCode().equals(ct.getWorkflowCode()))
+        // Check if workflow is linked to any case natures
+        List<CaseNature> linkedCaseNatures = caseNatureRepository.findAll().stream()
+                .filter(cn -> workflow.getWorkflowCode().equals(cn.getWorkflowCode()))
                 .collect(Collectors.toList());
 
-        if (!linkedCaseTypes.isEmpty()) {
-            throw new RuntimeException("Cannot delete workflow. It is linked to case types: " +
-                    linkedCaseTypes.stream().map(CaseType::getName).collect(Collectors.joining(", ")));
+        if (!linkedCaseNatures.isEmpty()) {
+            throw new RuntimeException("Cannot delete workflow. It is linked to case natures: " +
+                    linkedCaseNatures.stream().map(CaseNature::getName).collect(Collectors.joining(", ")));
         }
 
         // Check if workflow has active instances

@@ -17,10 +17,18 @@ public class PostingDTO {
 
     private Long id;
     
-    @NotNull(message = "Unit ID is required")
-    private Long unitId;
+    @NotNull(message = "Court ID is required")
+    private Long courtId;
     
+    private String courtName;
+    private String courtCode;
+    private String courtLevel;
+    private String courtType;
+    
+    // Unit information (derived from court)
+    private Long unitId;
     private String unitName;
+    private String unitCode;
     private String unitLgdCode;
     
     @NotNull(message = "Role code is required")
@@ -34,7 +42,7 @@ public class PostingDTO {
     private String officerName;
     private String mobileNo;
     
-    private String postingUserid; // Generated: ROLE@LGD (UserID format)
+    private String postingUserid; // Generated: ROLE_CODE@COURT_CODE
     
     @NotNull(message = "From date is required")
     private LocalDate fromDate;

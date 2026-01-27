@@ -5,7 +5,7 @@ import in.gov.manipur.rccms.entity.WorkflowDefinition;
 import in.gov.manipur.rccms.entity.WorkflowState;
 import in.gov.manipur.rccms.entity.WorkflowTransition;
 import in.gov.manipur.rccms.entity.WorkflowPermission;
-import in.gov.manipur.rccms.repository.CaseTypeRepository;
+import in.gov.manipur.rccms.repository.CaseNatureRepository;
 import in.gov.manipur.rccms.repository.WorkflowDefinitionRepository;
 import in.gov.manipur.rccms.repository.WorkflowStateRepository;
 import in.gov.manipur.rccms.repository.WorkflowTransitionRepository;
@@ -24,19 +24,19 @@ import java.util.Map;
 /**
  * Workflow Data Initializer
  * Automatically initializes all workflow definitions, states, transitions, and permissions
- * for all 9 case types when application starts
+ * for all 9 case natures when application starts
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@Order(3) // Initialize after roles and case types
+@Order(3) // Initialize after roles and case natures
 public class WorkflowDataInitializer implements CommandLineRunner {
 
     private final WorkflowDefinitionRepository workflowDefinitionRepository;
     private final WorkflowStateRepository workflowStateRepository;
     private final WorkflowTransitionRepository transitionRepository;
     private final WorkflowPermissionRepository permissionRepository;
-    private final CaseTypeRepository caseTypeRepository;
+    private final CaseNatureRepository caseNatureRepository;
 
     @Override
     @Transactional
@@ -65,56 +65,22 @@ public class WorkflowDataInitializer implements CommandLineRunner {
     }
 
     /**
-     * I. Mutation (after Gift/Sale Deeds) Workflow
+     * I. Mutation (after Gift/Sale Deeds) Workflow (workflow_id=1)
+     * Only workflow definition is created. States and transitions are managed by admin.
      */
     private void initializeMutationGiftSaleWorkflow() {
         String workflowCode = "MUTATION_GIFT_SALE";
-        log.info("Initializing workflow: {}", workflowCode);
+        log.info("Initializing workflow: {} (definition only; states/transitions to be created via admin)", workflowCode);
 
-        WorkflowDefinition workflow = createOrGetWorkflow(
+        createOrGetWorkflow(
             workflowCode,
             "Mutation (after Gift/Sale Deeds)",
             "Workflow for mutation after gift/sale deeds registration"
         );
 
-        Map<String, WorkflowState> states = createStates(workflow, new String[][]{
-            {"CITIZEN_APPLICATION", "Citizen Application", "1", "true", "false"},
-            {"DA_ENTRY", "DA Entry", "2", "false", "false"},
-            {"MANDOL_RECEIVED", "Mandol Received", "3", "false", "false"},
-            {"NOTICE_GENERATED", "Notice Generated", "4", "false", "false"},
-            {"HEARING_SCHEDULED", "Hearing Scheduled", "5", "false", "false"},
-            {"HEARING_COMPLETED", "Hearing Completed", "6", "false", "false"},
-            {"DECISION_PENDING", "Decision Pending", "7", "false", "false"},
-            {"APPROVED", "Approved", "8", "false", "false"},
-            {"MANDOL_UPDATE", "Mandol Update", "9", "false", "false"},
-            {"LAND_RECORD_UPDATED", "Land Record Updated", "10", "false", "false"},
-            {"PATTA_PREPARATION", "Patta Preparation", "11", "false", "false"},
-            {"COMPLETED", "Completed", "12", "false", "true"},
-            {"REJECTED", "Rejected", "13", "false", "true"},
-            {"RETURNED_FOR_CORRECTION", "Returned for Correction", "14", "false", "false"}
-        });
+        // States and transitions for workflow_id=1 are not seeded; create via admin APIs.
 
-        createTransitions(workflow, states, new String[][]{
-            {"SUBMIT_APPLICATION", "Submit Application", "CITIZEN_APPLICATION", "DA_ENTRY", "false"},
-            {"ENTER_IN_REGISTER", "Enter in Register", "DA_ENTRY", "MANDOL_RECEIVED", "false"},
-            {"RECEIVE_BY_MANDOL", "Receive by Mandol", "MANDOL_RECEIVED", "NOTICE_GENERATED", "false"},
-            {"GENERATE_NOTICE", "Generate Notice", "NOTICE_GENERATED", "HEARING_SCHEDULED", "false"},
-            {"SCHEDULE_HEARING", "Schedule Hearing", "HEARING_SCHEDULED", "HEARING_COMPLETED", "false"},
-            {"COMPLETE_HEARING", "Complete Hearing", "HEARING_COMPLETED", "DECISION_PENDING", "false"},
-            {"APPROVE", "Approve", "DECISION_PENDING", "APPROVED", "true"},
-            {"REJECT", "Reject", "DECISION_PENDING", "REJECTED", "true"},
-            {"RETURN_FROM_DA", "Return for Correction (DA)", "DA_ENTRY", "RETURNED_FOR_CORRECTION", "true"},
-            {"RETURN_FROM_MANDOL", "Return for Correction (Mandol)", "MANDOL_RECEIVED", "RETURNED_FOR_CORRECTION", "true"},
-            {"RETURN_FROM_SDC", "Return for Correction (SDC)", "DECISION_PENDING", "RETURNED_FOR_CORRECTION", "true"},
-            {"REVIEW_CORRECTION", "Review Correction", "RETURNED_FOR_CORRECTION", "DA_ENTRY", "false"},
-            {"PASS_TO_MANDOL", "Pass to Mandol", "APPROVED", "MANDOL_UPDATE", "false"},
-            {"UPDATE_LAND_RECORD", "Update Land Record", "MANDOL_UPDATE", "LAND_RECORD_UPDATED", "false"},
-            {"PREPARE_PATTA", "Prepare Patta", "LAND_RECORD_UPDATED", "PATTA_PREPARATION", "false"},
-            {"COMPLETE", "Complete", "PATTA_PREPARATION", "COMPLETED", "false"}
-        });
-
-        // Update CaseType with workflow code
-        updateCaseTypeWorkflowCode("MUTATION_GIFT_SALE", workflowCode);
+        updateCaseNatureWorkflowCode("MUTATION_GIFT_SALE", workflowCode);
     }
 
     /**
@@ -157,7 +123,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"COMPLETE", "Complete", "LAND_RECORD_UPDATED", "COMPLETED", "false"}
         });
 
-        updateCaseTypeWorkflowCode("MUTATION_DEATH", workflowCode);
+        updateCaseNatureWorkflowCode("MUTATION_DEATH", workflowCode);
     }
 
     /**
@@ -213,7 +179,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"COMPLETE", "Complete", "LAND_RECORD_UPDATED", "COMPLETED", "false"}
         });
 
-        updateCaseTypeWorkflowCode("PARTITION", workflowCode);
+        updateCaseNatureWorkflowCode("PARTITION", workflowCode);
     }
 
     /**
@@ -253,7 +219,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"COMPLETE", "Complete", "LAND_RECORD_UPDATED", "COMPLETED", "false"}
         });
 
-        updateCaseTypeWorkflowCode("CLASSIFICATION_CHANGE_BEFORE_2014", workflowCode);
+        updateCaseNatureWorkflowCode("CLASSIFICATION_CHANGE_BEFORE_2014", workflowCode);
     }
 
     /**
@@ -284,7 +250,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"REVIEW_CORRECTION_STATE", "Review Correction (State)", "RETURNED_FOR_CORRECTION", "REVENUE_APPROVAL", "false"}
         });
 
-        updateCaseTypeWorkflowCode("CLASSIFICATION_CHANGE_AFTER_2014", workflowCode);
+        updateCaseNatureWorkflowCode("CLASSIFICATION_CHANGE_AFTER_2014", workflowCode);
     }
 
     /**
@@ -314,7 +280,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"REVIEW_CORRECTION_SDC", "Review Correction (SDC)", "RETURNED_FOR_CORRECTION", "SDC_MUTATION_CASE", "false"}
         });
 
-        updateCaseTypeWorkflowCode("HIGHER_COURT_ORDER", workflowCode);
+        updateCaseNatureWorkflowCode("HIGHER_COURT_ORDER", workflowCode);
     }
 
     /**
@@ -361,7 +327,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"UPDATE_LAND_RECORD", "Update Land Record", "LAND_RECORD_UPDATED", "COMPLETED", "false"}
         });
 
-        updateCaseTypeWorkflowCode("ALLOTMENT", workflowCode);
+        updateCaseNatureWorkflowCode("ALLOTMENT", workflowCode);
     }
 
     /**
@@ -401,7 +367,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"REVIEW_CORRECTION_DC", "Review Correction (DC)", "RETURNED_FOR_CORRECTION", "DC_COMPENSATION_ORDER", "false"}
         });
 
-        updateCaseTypeWorkflowCode("LAND_ACQUISITION_RFCTLARR_NHA", workflowCode);
+        updateCaseNatureWorkflowCode("LAND_ACQUISITION_RFCTLARR_NHA", workflowCode);
     }
 
     /**
@@ -447,7 +413,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             {"UPDATE_LAND_RECORD", "Update Land Record", "LAND_RECORD_UPDATED", "COMPLETED", "false"}
         });
 
-        updateCaseTypeWorkflowCode("ACQUISITION_DIRECT_PURCHASE", workflowCode);
+        updateCaseNatureWorkflowCode("ACQUISITION_DIRECT_PURCHASE", workflowCode);
     }
 
     /**
@@ -709,14 +675,14 @@ public class WorkflowDataInitializer implements CommandLineRunner {
     }
 
     /**
-     * Helper method to update CaseType with workflow code
+     * Helper method to update CaseNature with workflow code
      */
-    private void updateCaseTypeWorkflowCode(String caseTypeCode, String workflowCode) {
-        caseTypeRepository.findByCode(caseTypeCode).ifPresent(caseType -> {
-            if (caseType.getWorkflowCode() == null || !caseType.getWorkflowCode().equals(workflowCode)) {
-                caseType.setWorkflowCode(workflowCode);
-                caseTypeRepository.save(caseType);
-                log.info("Updated CaseType {} with workflow code: {}", caseTypeCode, workflowCode);
+    private void updateCaseNatureWorkflowCode(String caseNatureCode, String workflowCode) {
+        caseNatureRepository.findByCode(caseNatureCode).ifPresent(caseNature -> {
+            if (caseNature.getWorkflowCode() == null || !caseNature.getWorkflowCode().equals(workflowCode)) {
+                caseNature.setWorkflowCode(workflowCode);
+                caseNatureRepository.save(caseNature);
+                log.info("Updated CaseNature {} with workflow code: {}", caseNatureCode, workflowCode);
             }
         });
     }

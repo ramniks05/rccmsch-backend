@@ -15,7 +15,7 @@ import lombok.NoArgsConstructor;
 public class CreateFormFieldDTO {
     
     @NotNull(message = "Case type ID is required")
-    private Long caseTypeId;
+    private Long caseTypeId; // Case Type ID (NEW_FILE, APPEAL, REVISION, etc.)
     
     @NotBlank(message = "Field name is required")
     private String fieldName;
@@ -36,14 +36,20 @@ public class CreateFormFieldDTO {
     
     private String defaultValue;
     
-    private String fieldOptions; // JSON string for SELECT/RADIO
+    private String fieldOptions; // JSON string for SELECT/RADIO (static options)
     
     private String placeholder;
     
     private String helpText;
     
-    private String fieldGroup;
+    private String fieldGroup; // Group code (references FormFieldGroup.groupCode)
     
-    private String conditionalLogic; // JSON string
+    private String dataSource; // JSON: {type:"ADMIN_UNITS", level:"DISTRICT", parentField:"stateId", apiEndpoint:"..."}
+    
+    private String dependsOnField; // Field name this field depends on for conditional dropdowns
+    
+    private String dependencyCondition; // JSON: {operator:"equals", value:"expectedValue"}
+    
+    private String conditionalLogic; // JSON: {showIf: {field: "fieldName", operator: "equals", value: "expectedValue"}}
 }
 

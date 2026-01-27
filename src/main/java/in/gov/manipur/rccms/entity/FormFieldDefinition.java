@@ -11,12 +11,14 @@ import java.time.LocalDateTime;
  * Form Field Definition Entity
  * Defines form fields dynamically for each case type
  * Allows admin to configure form structure without code changes
+ * Supports form groups, data source dropdowns, and conditional logic
  */
 @Entity
 @Table(name = "form_field_definitions", indexes = {
     @Index(name = "idx_form_field_case_type", columnList = "case_type_id"),
     @Index(name = "idx_form_field_active", columnList = "is_active"),
-    @Index(name = "idx_form_field_name", columnList = "field_name")
+    @Index(name = "idx_form_field_name", columnList = "field_name"),
+    @Index(name = "idx_form_field_group", columnList = "field_group")
 })
 @Data
 @NoArgsConstructor
@@ -68,10 +70,19 @@ public class FormFieldDefinition {
     private String helpText;
 
     @Column(name = "field_group", length = 100)
-    private String fieldGroup; // Group fields together (e.g., "deed_details", "applicant_info")
+    private String fieldGroup; // Group code (references FormFieldGroup.groupCode)
+
+    @Column(name = "data_source", columnDefinition = "TEXT")
+    private String dataSource; // JSON: {type:"ADMIN_UNITS", level:"DISTRICT", parentField:"stateId", apiEndpoint:"..."}
+
+    @Column(name = "depends_on_field", length = 100)
+    private String dependsOnField; // Field name this field depends on for conditional dropdowns
+
+    @Column(name = "dependency_condition", columnDefinition = "TEXT")
+    private String dependencyCondition; // JSON: {operator:"equals", value:"expectedValue"} - when to show/enable
 
     @Column(name = "conditional_logic", columnDefinition = "TEXT")
-    private String conditionalLogic; // JSON: {showIf: {field: "fieldName", value: "expectedValue"}}
+    private String conditionalLogic; // JSON: {showIf: {field: "fieldName", operator: "equals", value: "expectedValue"}}
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

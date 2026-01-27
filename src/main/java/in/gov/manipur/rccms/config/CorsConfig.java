@@ -40,6 +40,8 @@ public class CorsConfig {
                 "Content-Type",
                 "Authorization",
                 "X-Requested-With",
+                "X-User-Id",  // Custom header for citizen user ID
+                "x-user-id",  // Lowercase variant (browsers may send lowercase)
                 "Accept",
                 "Origin",
                 "Access-Control-Request-Method",

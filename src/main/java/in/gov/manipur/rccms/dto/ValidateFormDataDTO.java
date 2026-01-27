@@ -16,7 +16,7 @@ import java.util.Map;
 public class ValidateFormDataDTO {
     
     @NotNull(message = "Case type ID is required")
-    private Long caseTypeId;
+    private Long caseTypeId; // Case Type ID (NEW_FILE, APPEAL, REVISION, etc.)
     
     @NotNull(message = "Form data is required")
     private Map<String, Object> formData; // Key-value pairs of fieldName -> value

@@ -63,8 +63,14 @@ public class SecurityConfig {
                         // Public read-only endpoints (for frontend) - GET requests
                         .requestMatchers(HttpMethod.GET, "/api/case-types/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/admin/case-types/**").permitAll()  // Admin read-only endpoints
-                        .requestMatchers(HttpMethod.GET, "/api/admin/form-schemas/case-types/**").permitAll()
-                        .requestMatchers("/api/admin/form-schemas/case-types/**").permitAll()  // Allow all methods for this path
+                        .requestMatchers(HttpMethod.GET, "/api/case-natures/**").permitAll()  // Public case natures endpoints
+                        .requestMatchers(HttpMethod.GET, "/api/admin/case-natures/**").permitAll()  // Admin read-only case natures
+                        .requestMatchers(HttpMethod.GET, "/api/public/case-types/**").permitAll()  // Public case types
+                        .requestMatchers(HttpMethod.GET, "/api/public/courts/**").permitAll()  // Public courts
+                        .requestMatchers(HttpMethod.GET, "/api/public/form-schemas/**").permitAll()  // Public form schemas for citizens
+                        .requestMatchers(HttpMethod.GET, "/api/admin/form-schemas/case-types/**").permitAll()  // Form schemas for case types (backward compatibility)
+                        .requestMatchers(HttpMethod.GET, "/api/public/form-data-sources/**").permitAll()  // Form data source endpoints
+                        .requestMatchers("/api/admin/form-schemas/case-types/**").permitAll()  // Allow all methods for this path (backward compatibility)
                         .requestMatchers(HttpMethod.POST, "/api/admin/form-schemas/validate").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/admin-units/root").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/admin-units/parent/**").permitAll()

@@ -13,8 +13,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class PostingAssignmentDTO {
 
-    @NotNull(message = "Unit ID is required")
-    private Long unitId;
+    @NotNull(message = "Court ID is required")
+    private Long courtId;
 
     @NotNull(message = "Role code is required")
     private String roleCode;

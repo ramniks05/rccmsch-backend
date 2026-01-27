@@ -18,7 +18,7 @@ import java.util.List;
 public class BulkCreateFieldsDTO {
     
     @NotNull(message = "Case type ID is required")
-    private Long caseTypeId;
+    private Long caseTypeId; // Case Type ID (NEW_FILE, APPEAL, REVISION, etc.)
     
     @NotEmpty(message = "Fields list cannot be empty")
     @Valid

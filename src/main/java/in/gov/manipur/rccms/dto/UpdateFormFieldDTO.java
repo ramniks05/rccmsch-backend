@@ -32,7 +32,13 @@ public class UpdateFormFieldDTO {
     
     private String helpText;
     
-    private String fieldGroup;
+    private String fieldGroup; // Group code (references FormFieldGroup.groupCode)
+    
+    private String dataSource; // JSON string
+    
+    private String dependsOnField;
+    
+    private String dependencyCondition; // JSON string
     
     private String conditionalLogic; // JSON string
 }

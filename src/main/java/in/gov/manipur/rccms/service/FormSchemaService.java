@@ -31,10 +31,11 @@ public class FormSchemaService {
 
     private final FormFieldDefinitionRepository fieldRepository;
     private final CaseTypeRepository caseTypeRepository;
+    private final FormFieldGroupService formFieldGroupService;
     private final ObjectMapper objectMapper;
 
     /**
-     * Get form schema for a case type (only active fields)
+     * Get form schema for a case type (only active fields, grouped by form groups)
      */
     @Transactional(readOnly = true)
     public FormSchemaDTO getFormSchema(Long caseTypeId) {
@@ -49,17 +50,130 @@ public class FormSchemaService {
 
         List<FormFieldDefinition> fields = fieldRepository.findActiveFieldsByCaseTypeId(caseTypeId);
 
+        // Get all active groups for this case type
+        List<FormFieldGroupDTO> activeGroups = formFieldGroupService.getActiveGroups(caseTypeId);
+
+        // Convert fields to DTOs
         List<FormFieldDefinitionDTO> fieldDTOs = fields.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
 
-        return FormSchemaDTO.builder()
+        // Group fields by their groupCode
+        Map<String, List<FormFieldDefinitionDTO>> fieldsByGroup = fieldDTOs.stream()
+                .filter(f -> f.getFieldGroup() != null && !f.getFieldGroup().isEmpty())
+                .collect(Collectors.groupingBy(FormFieldDefinitionDTO::getFieldGroup));
+
+        // Get fields without a group
+        List<FormFieldDefinitionDTO> ungroupedFields = fieldDTOs.stream()
+                .filter(f -> f.getFieldGroup() == null || f.getFieldGroup().isEmpty())
+                .sorted(Comparator.comparing(f -> f.getDisplayOrder() != null ? f.getDisplayOrder() : 0))
+                .collect(Collectors.toList());
+
+        // Create FormGroupWithFieldsDTO for each group
+        List<FormGroupWithFieldsDTO> groupsWithFields = activeGroups.stream()
+                .sorted(Comparator.comparing(FormFieldGroupDTO::getDisplayOrder))
+                .map(group -> {
+                    List<FormFieldDefinitionDTO> groupFields = fieldsByGroup.getOrDefault(
+                            group.getGroupCode(), 
+                            new ArrayList<>()
+                    );
+                    // Sort fields within group by display order
+                    groupFields.sort(Comparator.comparing(f -> f.getDisplayOrder() != null ? f.getDisplayOrder() : 0));
+                    
+                    return FormGroupWithFieldsDTO.builder()
+                            .groupId(group.getId())
+                            .groupCode(group.getGroupCode())
+                            .groupLabel(group.getGroupLabel())
+                            .description(group.getDescription())
+                            .displayOrder(group.getDisplayOrder() != null ? group.getDisplayOrder() : 0)
+                            .fields(groupFields != null ? groupFields : new ArrayList<>())
+                            .fieldCount(groupFields != null ? groupFields.size() : 0)
+                            .build();
+                })
+                .filter(group -> group.getFieldCount() > 0) // Only include groups with fields
+                .collect(Collectors.toList());
+
+        // Add ungrouped fields as a special group if any exist
+        if (!ungroupedFields.isEmpty()) {
+            groupsWithFields.add(FormGroupWithFieldsDTO.builder()
+                    .groupId(null)
+                    .groupCode("UNGROUPED")
+                    .groupLabel("Other Fields")
+                    .description("Fields not assigned to any group")
+                    .displayOrder(9999)
+                    .fields(ungroupedFields)
+                    .fieldCount(ungroupedFields.size())
+                    .build());
+        }
+
+        // Sort all fields for flat list (backward compatibility)
+        Map<String, Integer> groupOrderMap = activeGroups.stream()
+                .collect(Collectors.toMap(
+                        FormFieldGroupDTO::getGroupCode,
+                        FormFieldGroupDTO::getDisplayOrder,
+                        (a, b) -> a
+                ));
+
+        List<FormFieldDefinitionDTO> sortedFieldDTOs = fieldDTOs.stream()
+                .sorted((f1, f2) -> {
+                    // Get group order (default to 9999 if no group)
+                    int order1 = f1.getFieldGroup() != null && !f1.getFieldGroup().isEmpty() 
+                            ? groupOrderMap.getOrDefault(f1.getFieldGroup(), 9999) 
+                            : 9999;
+                    int order2 = f2.getFieldGroup() != null && !f2.getFieldGroup().isEmpty() 
+                            ? groupOrderMap.getOrDefault(f2.getFieldGroup(), 9999) 
+                            : 9999;
+                    
+                    // Compare by group order first
+                    int groupCompare = Integer.compare(order1, order2);
+                    if (groupCompare != 0) {
+                        return groupCompare;
+                    }
+                    
+                    // Then by field display order
+                    int displayCompare = Integer.compare(
+                            f1.getDisplayOrder() != null ? f1.getDisplayOrder() : 0,
+                            f2.getDisplayOrder() != null ? f2.getDisplayOrder() : 0
+                    );
+                    if (displayCompare != 0) {
+                        return displayCompare;
+                    }
+                    
+                    // Finally by field ID
+                    return Long.compare(f1.getId(), f2.getId());
+                })
+                .collect(Collectors.toList());
+
+        // Ensure lists are never null
+        if (sortedFieldDTOs == null) {
+            sortedFieldDTOs = new ArrayList<>();
+        }
+        if (groupsWithFields == null) {
+            groupsWithFields = new ArrayList<>();
+        }
+        
+        // Ensure all lists are initialized (never null)
+        if (sortedFieldDTOs == null) {
+            sortedFieldDTOs = new ArrayList<>();
+        }
+        if (groupsWithFields == null) {
+            groupsWithFields = new ArrayList<>();
+        }
+        
+        FormSchemaDTO schema = FormSchemaDTO.builder()
                 .caseTypeId(caseType.getId())
-                .caseTypeName(caseType.getName())
-                .caseTypeCode(caseType.getCode())
-                .fields(fieldDTOs)
-                .totalFields(fieldDTOs.size())
+                .caseTypeName(caseType.getTypeName() != null ? caseType.getTypeName() : "")
+                .caseTypeCode(caseType.getTypeCode() != null ? caseType.getTypeCode() : "")
+                .fields(sortedFieldDTOs) // Flat list for backward compatibility
+                .groups(groupsWithFields) // Groups with their fields
+                .totalFields(fieldDTOs != null ? fieldDTOs.size() : 0)
                 .build();
+        
+        log.debug("Form schema built - caseTypeId: {}, caseTypeName: {}, totalFields: {}, groupsCount: {}", 
+                schema.getCaseTypeId(), schema.getCaseTypeName(), schema.getTotalFields(), 
+                schema.getGroups() != null ? schema.getGroups().size() : 0);
+        
+        return schema;
     }
 
     /**
@@ -116,6 +230,13 @@ public class FormSchemaService {
             throw new RuntimeException("Field name already exists for this case type: " + dto.getFieldName());
         }
 
+        // Validate field group if provided
+        if (dto.getFieldGroup() != null && !dto.getFieldGroup().trim().isEmpty()) {
+            if (!formFieldGroupService.existsActiveGroup(dto.getCaseTypeId(), dto.getFieldGroup())) {
+                throw new RuntimeException("Invalid field group: " + dto.getFieldGroup() + ". Group does not exist or is inactive for this case type.");
+            }
+        }
+
         // Create field entity
         FormFieldDefinition field = new FormFieldDefinition();
         field.setCaseType(caseType);
@@ -132,6 +253,9 @@ public class FormSchemaService {
         field.setPlaceholder(dto.getPlaceholder());
         field.setHelpText(dto.getHelpText());
         field.setFieldGroup(dto.getFieldGroup());
+        field.setDataSource(dto.getDataSource());
+        field.setDependsOnField(dto.getDependsOnField());
+        field.setDependencyCondition(dto.getDependencyCondition());
         field.setConditionalLogic(dto.getConditionalLogic());
 
         FormFieldDefinition saved = fieldRepository.save(field);
@@ -185,7 +309,22 @@ public class FormSchemaService {
             field.setHelpText(dto.getHelpText());
         }
         if (dto.getFieldGroup() != null) {
+            // Validate field group if provided
+            if (!dto.getFieldGroup().trim().isEmpty()) {
+                if (!formFieldGroupService.existsActiveGroup(field.getCaseTypeId(), dto.getFieldGroup())) {
+                    throw new RuntimeException("Invalid field group: " + dto.getFieldGroup() + ". Group does not exist or is inactive for this case type.");
+                }
+            }
             field.setFieldGroup(dto.getFieldGroup());
+        }
+        if (dto.getDataSource() != null) {
+            field.setDataSource(dto.getDataSource());
+        }
+        if (dto.getDependsOnField() != null) {
+            field.setDependsOnField(dto.getDependsOnField());
+        }
+        if (dto.getDependencyCondition() != null) {
+            field.setDependencyCondition(dto.getDependencyCondition());
         }
         if (dto.getConditionalLogic() != null) {
             field.setConditionalLogic(dto.getConditionalLogic());
@@ -609,6 +748,7 @@ public class FormSchemaService {
 
     /**
      * Convert entity to DTO
+     * Fetches group information from master FormFieldGroup table
      */
     private FormFieldDefinitionDTO convertToDTO(FormFieldDefinition field) {
         FormFieldDefinitionDTO dto = FormFieldDefinitionDTO.builder()
@@ -617,23 +757,40 @@ public class FormSchemaService {
                 .fieldName(field.getFieldName())
                 .fieldLabel(field.getFieldLabel())
                 .fieldType(field.getFieldType())
-                .isRequired(field.getIsRequired())
+                .isRequired(field.getIsRequired() != null ? field.getIsRequired() : false)
                 .validationRules(field.getValidationRules())
-                .displayOrder(field.getDisplayOrder())
-                .isActive(field.getIsActive())
+                .displayOrder(field.getDisplayOrder() != null ? field.getDisplayOrder() : 0)
+                .isActive(field.getIsActive() != null ? field.getIsActive() : true)
                 .defaultValue(field.getDefaultValue())
                 .fieldOptions(field.getFieldOptions())
                 .placeholder(field.getPlaceholder())
                 .helpText(field.getHelpText())
                 .fieldGroup(field.getFieldGroup())
+                .dataSource(field.getDataSource())
+                .dependsOnField(field.getDependsOnField())
+                .dependencyCondition(field.getDependencyCondition())
                 .conditionalLogic(field.getConditionalLogic())
-                .createdAt(field.getCreatedAt())
-                .updatedAt(field.getUpdatedAt())
+                // Exclude timestamps for public API - they're not needed for form rendering
                 .build();
 
         if (field.getCaseType() != null) {
-            dto.setCaseTypeName(field.getCaseType().getName());
-            dto.setCaseTypeCode(field.getCaseType().getCode());
+            dto.setCaseTypeName(field.getCaseType().getTypeName());
+            dto.setCaseTypeCode(field.getCaseType().getTypeCode());
+        }
+
+        // Fetch group information from master table if fieldGroup is set
+        if (field.getFieldGroup() != null && !field.getFieldGroup().trim().isEmpty() && field.getCaseTypeId() != null) {
+            try {
+                formFieldGroupService.getActiveGroups(field.getCaseTypeId()).stream()
+                        .filter(g -> g.getGroupCode().equals(field.getFieldGroup()))
+                        .findFirst()
+                        .ifPresent(group -> {
+                            dto.setGroupLabel(group.getGroupLabel());
+                            dto.setGroupDisplayOrder(group.getDisplayOrder());
+                        });
+            } catch (Exception e) {
+                log.warn("Could not fetch group info for fieldGroup: {}", field.getFieldGroup(), e);
+            }
         }
 
         return dto;

@@ -118,7 +118,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (path.startsWith("/api/admin/case-types")) {
                 return true;
             }
+            if (path.startsWith("/api/case-natures")) {
+                return true;
+            }
+            if (path.startsWith("/api/admin/case-natures")) {
+                return true;
+            }
+            if (path.startsWith("/api/public/case-types")) {
+                return true;
+            }
+            if (path.startsWith("/api/public/courts")) {
+                return true;
+            }
+            if (path.startsWith("/api/public/form-schemas/")) {
+                return true;
+            }
             if (path.startsWith("/api/admin/form-schemas/case-types/")) {
+                return true;
+            }
+            if (path.startsWith("/api/public/form-data-sources/")) {
                 return true;
             }
             if (path.equals("/api/admin/system-settings")) {

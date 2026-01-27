@@ -26,14 +26,31 @@ public class FormSchemaController {
     private final FormSchemaService formSchemaService;
 
     /**
-     * Get form schema for a case type (for frontend - only active fields)
+     * Get form schema for a case type (for frontend - only active fields, grouped)
      * Public endpoint - can be used by citizens to get form structure
      */
     @GetMapping("/case-types/{caseTypeId}")
     public ResponseEntity<ApiResponse<FormSchemaDTO>> getFormSchema(@PathVariable Long caseTypeId) {
-        log.info("Getting form schema for case type: {}", caseTypeId);
-        FormSchemaDTO schema = formSchemaService.getFormSchema(caseTypeId);
-        return ResponseEntity.ok(ApiResponse.success("Form schema retrieved successfully", schema));
+        try {
+            log.info("Getting form schema for case type: {}", caseTypeId);
+            FormSchemaDTO schema = formSchemaService.getFormSchema(caseTypeId);
+            
+            // Log response details for debugging
+            if (schema != null) {
+                log.info("Form schema retrieved - caseTypeId: {}, caseTypeName: {}, totalFields: {}, groupsCount: {}", 
+                        schema.getCaseTypeId(), 
+                        schema.getCaseTypeName(), 
+                        schema.getTotalFields(),
+                        schema.getGroups() != null ? schema.getGroups().size() : 0);
+            } else {
+                log.warn("Form schema is null for case type: {}", caseTypeId);
+            }
+            
+            return ResponseEntity.ok(ApiResponse.success("Form schema retrieved successfully", schema));
+        } catch (Exception e) {
+            log.error("Error getting form schema for case type: {}", caseTypeId, e);
+            throw e; // Let GlobalExceptionHandler handle it
+        }
     }
 
     /**
