@@ -2,6 +2,8 @@ package in.gov.manipur.rccms.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import in.gov.manipur.rccms.dto.ConditionStatusDTO;
+import in.gov.manipur.rccms.dto.TransitionChecklistDTO;
 import in.gov.manipur.rccms.dto.WorkflowHistoryDTO;
 import in.gov.manipur.rccms.dto.WorkflowTransitionDTO;
 import in.gov.manipur.rccms.entity.*;
@@ -13,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -38,6 +41,8 @@ public class WorkflowEngineService {
     private final AdminUnitRepository adminUnitRepository;
     private final OfficerRepository officerRepository;
     private final OfficerDaHistoryRepository postingRepository;
+    private final CaseModuleFormSubmissionRepository moduleFormSubmissionRepository;
+    private final CaseDocumentRepository documentRepository;
     private final ObjectMapper objectMapper;
 
     /**
@@ -723,6 +728,273 @@ public class WorkflowEngineService {
         
         log.debug("  [getRolesForState] Final roles list: {}", roles);
         return roles;
+    }
+
+    /**
+     * Get checklist status for a transition on a specific case
+     * Shows which conditions are met and which are blocking
+     */
+    @Transactional(readOnly = true)
+    public TransitionChecklistDTO getTransitionChecklist(Long caseId, String transitionCode, Long officerId, String roleCode, Long unitId) {
+        log.debug("Getting checklist for transition: caseId={}, transitionCode={}, officerId={}, roleCode={}, unitId={}",
+                caseId, transitionCode, officerId, roleCode, unitId);
+
+        // Get workflow instance
+        CaseWorkflowInstance instance = instanceRepository.findByCaseId(caseId)
+                .orElseThrow(() -> new RuntimeException("Workflow instance not found for case: " + caseId));
+
+        // Get transition
+        WorkflowTransition transition = transitionRepository
+                .findByWorkflowIdAndTransitionCode(instance.getWorkflowId(), transitionCode)
+                .orElseThrow(() -> new RuntimeException("Transition not found: " + transitionCode));
+
+        // Get case
+        Case caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
+
+        // Get unit level
+        Long unitIdValue = unitId;
+        AdminUnit unit = null;
+        if (unitIdValue != null) {
+            unit = adminUnitRepository.findById(unitIdValue)
+                    .orElse(null);
+        }
+
+        // Get permissions for this transition and role
+        List<WorkflowPermission> permissions = new ArrayList<>();
+        if (unit != null) {
+            permissions = permissionRepository
+                    .findPermissionsForTransitionAndRole(transition.getId(), roleCode, unit.getUnitLevel());
+        }
+        if (permissions.isEmpty()) {
+            permissions = permissionRepository
+                    .findPermissionsForTransitionAndRoleAnyLevel(transition.getId(), roleCode);
+        }
+
+        // Build checklist from all permissions' conditions
+        List<ConditionStatusDTO> allConditions = new ArrayList<>();
+        boolean canExecute = false;
+
+        for (WorkflowPermission permission : permissions) {
+            if (!permission.getCanInitiate() || !permission.getIsActive()) {
+                continue;
+            }
+
+            // Check hierarchy rule
+            boolean hierarchyPassed = checkHierarchyRule(permission, unitId, instance);
+            if (!hierarchyPassed) {
+                continue;
+            }
+
+            // Parse and check conditions
+            List<ConditionStatusDTO> conditionStatuses = evaluateConditions(permission, instance, caseEntity);
+            allConditions.addAll(conditionStatuses);
+
+            // If all conditions pass, transition can be executed
+            boolean allConditionsPassed = conditionStatuses.stream()
+                    .allMatch(ConditionStatusDTO::getPassed);
+            if (allConditionsPassed) {
+                canExecute = true;
+            }
+        }
+
+        // Remove duplicates (same condition from multiple permissions)
+        Map<String, ConditionStatusDTO> uniqueConditions = new HashMap<>();
+        for (ConditionStatusDTO condition : allConditions) {
+            String key = condition.getType() + "_" + 
+                    (condition.getFlagName() != null ? condition.getFlagName() : "") +
+                    (condition.getModuleType() != null ? condition.getModuleType() : "") +
+                    (condition.getFieldName() != null ? condition.getFieldName() : "");
+            if (!uniqueConditions.containsKey(key) || !condition.getPassed()) {
+                uniqueConditions.put(key, condition);
+            }
+        }
+
+        List<ConditionStatusDTO> finalConditions = new ArrayList<>(uniqueConditions.values());
+        List<String> blockingReasons = finalConditions.stream()
+                .filter(c -> !c.getPassed() && c.getRequired())
+                .map(ConditionStatusDTO::getMessage)
+                .distinct()
+                .collect(Collectors.toList());
+
+        return TransitionChecklistDTO.builder()
+                .transitionCode(transition.getTransitionCode())
+                .transitionName(transition.getTransitionName())
+                .canExecute(canExecute)
+                .conditions(finalConditions)
+                .blockingReasons(blockingReasons)
+                .build();
+    }
+
+    /**
+     * Evaluate conditions and return detailed status for each
+     */
+    private List<ConditionStatusDTO> evaluateConditions(WorkflowPermission permission, 
+                                                       CaseWorkflowInstance instance, 
+                                                       Case caseEntity) {
+        List<ConditionStatusDTO> conditions = new ArrayList<>();
+        String conditionsJson = permission.getConditions();
+        
+        if (conditionsJson == null || conditionsJson.trim().isEmpty()) {
+            return conditions;
+        }
+
+        try {
+            Map<String, Object> conditionsMap = objectMapper.readValue(conditionsJson, 
+                    new TypeReference<Map<String, Object>>() {});
+
+            Map<String, Object> workflowData = parseJsonToMap(instance.getWorkflowData());
+            Map<String, Object> caseData = parseJsonToMap(caseEntity.getCaseData());
+
+            // Check workflow flags
+            if (conditionsMap.containsKey("workflowDataFieldsRequired")) {
+                List<String> requiredFlags = castToStringList(conditionsMap.get("workflowDataFieldsRequired"));
+                for (String flag : requiredFlags) {
+                    boolean passed = workflowData.containsKey(flag) && 
+                            Boolean.TRUE.equals(workflowData.get(flag));
+                    String label = getFlagDisplayLabel(flag);
+                    conditions.add(ConditionStatusDTO.builder()
+                            .label(label)
+                            .type("WORKFLOW_FLAG")
+                            .flagName(flag)
+                            .required(true)
+                            .passed(passed)
+                            .message(passed ? label + " ✓" : label + " must be completed")
+                            .build());
+                }
+            }
+
+            // Check module form fields
+            if (conditionsMap.containsKey("moduleFormFieldsRequired")) {
+                List<Map<String, Object>> moduleFields = castToMapList(conditionsMap.get("moduleFormFieldsRequired"));
+                for (Map<String, Object> fieldReq : moduleFields) {
+                    String moduleTypeStr = String.valueOf(fieldReq.get("moduleType"));
+                    String fieldName = String.valueOf(fieldReq.get("fieldName"));
+                    
+                    try {
+                        ModuleType moduleType = ModuleType.valueOf(moduleTypeStr);
+                        boolean passed = checkModuleFormField(instance.getCaseId(), moduleType, fieldName);
+                        String label = getModuleFieldDisplayLabel(moduleType, fieldName);
+                        conditions.add(ConditionStatusDTO.builder()
+                                .label(label)
+                                .type("FORM_FIELD")
+                                .moduleType(moduleTypeStr)
+                                .fieldName(fieldName)
+                                .required(true)
+                                .passed(passed)
+                                .message(passed ? label + " ✓" : label + " must be filled")
+                                .build());
+                    } catch (IllegalArgumentException e) {
+                        log.warn("Invalid module type: {}", moduleTypeStr);
+                    }
+                }
+            }
+
+            // Check case data fields
+            if (conditionsMap.containsKey("caseDataFieldsRequired")) {
+                List<String> requiredFields = castToStringList(conditionsMap.get("caseDataFieldsRequired"));
+                for (String field : requiredFields) {
+                    boolean passed = hasRequiredFields(caseData, List.of(field));
+                    String label = getCaseFieldDisplayLabel(field);
+                    conditions.add(ConditionStatusDTO.builder()
+                            .label(label)
+                            .type("CASE_DATA_FIELD")
+                            .fieldName(field)
+                            .required(true)
+                            .passed(passed)
+                            .message(passed ? label + " ✓" : label + " must be filled")
+                            .build());
+                }
+            }
+
+            // Check case data field equals
+            if (conditionsMap.containsKey("caseDataFieldEquals")) {
+                Map<String, Object> fieldEquals = castToMap(conditionsMap.get("caseDataFieldEquals"));
+                for (Map.Entry<String, Object> entry : fieldEquals.entrySet()) {
+                    String field = entry.getKey();
+                    Object expected = entry.getValue();
+                    Object actual = caseData.get(field);
+                    boolean passed = actual != null && actual.toString().equals(expected.toString());
+                    String label = getCaseFieldDisplayLabel(field) + " = " + expected;
+                    conditions.add(ConditionStatusDTO.builder()
+                            .label(label)
+                            .type("CASE_DATA_FIELD")
+                            .fieldName(field)
+                            .required(true)
+                            .passed(passed)
+                            .message(passed ? label + " ✓" : label + " required")
+                            .build());
+                }
+            }
+
+        } catch (Exception e) {
+            log.error("Error evaluating conditions: {}", e.getMessage(), e);
+        }
+
+        return conditions;
+    }
+
+    /**
+     * Check if a module form field has a value
+     */
+    private boolean checkModuleFormField(Long caseId, ModuleType moduleType, String fieldName) {
+        Optional<CaseModuleFormSubmission> submission = moduleFormSubmissionRepository
+                .findTopByCaseIdAndModuleTypeOrderBySubmittedAtDesc(caseId, moduleType);
+        
+        if (submission.isEmpty()) {
+            return false;
+        }
+
+        Map<String, Object> formData = parseJsonToMap(submission.get().getFormData());
+        Object value = formData.get(fieldName);
+        return value != null && !value.toString().trim().isEmpty();
+    }
+
+    /**
+     * Get display label for workflow flag
+     */
+    private String getFlagDisplayLabel(String flagName) {
+        Map<String, String> labels = Map.of(
+                "HEARING_SUBMITTED", "Hearing form submitted",
+                "NOTICE_SUBMITTED", "Notice form submitted",
+                "NOTICE_READY", "Notice document ready",
+                "ORDERSHEET_READY", "Ordersheet document ready",
+                "JUDGEMENT_READY", "Judgement document ready"
+        );
+        return labels.getOrDefault(flagName, flagName.replace("_", " "));
+    }
+
+    /**
+     * Get display label for module field
+     */
+    private String getModuleFieldDisplayLabel(ModuleType moduleType, String fieldName) {
+        String moduleName = moduleType.name().toLowerCase();
+        moduleName = moduleName.substring(0, 1).toUpperCase() + moduleName.substring(1);
+        return moduleName + " - " + fieldName.replaceAll("([A-Z])", " $1").trim();
+    }
+
+    /**
+     * Get display label for case data field
+     */
+    private String getCaseFieldDisplayLabel(String fieldName) {
+        return fieldName.replaceAll("([A-Z])", " $1").trim();
+    }
+
+    /**
+     * Cast to list of maps
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> castToMapList(Object value) {
+        if (value == null) {
+            return List.of();
+        }
+        if (value instanceof List<?> list) {
+            return list.stream()
+                    .filter(item -> item instanceof Map)
+                    .map(item -> (Map<String, Object>) item)
+                    .collect(Collectors.toList());
+        }
+        return List.of();
     }
 }
 

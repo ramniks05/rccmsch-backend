@@ -6,6 +6,7 @@ import in.gov.manipur.rccms.dto.CreateCaseDTO;
 import in.gov.manipur.rccms.dto.ExecuteTransitionDTO;
 import in.gov.manipur.rccms.dto.FormSchemaDTO;
 import in.gov.manipur.rccms.dto.ResubmitCaseDTO;
+import in.gov.manipur.rccms.dto.TransitionChecklistDTO;
 import in.gov.manipur.rccms.dto.WorkflowHistoryDTO;
 import in.gov.manipur.rccms.dto.WorkflowTransitionDTO;
 import in.gov.manipur.rccms.service.CaseService;
@@ -257,6 +258,30 @@ public class CaseController {
         );
 
         return ResponseEntity.ok(ApiResponse.success("Transition executed successfully", response));
+    }
+
+    /**
+     * Get transition checklist status
+     * GET /api/cases/{caseId}/transitions/{transitionCode}/checklist
+     */
+    @Operation(summary = "Get Transition Checklist", description = "Get checklist status showing which conditions are met and which are blocking a transition")
+    @GetMapping("/{caseId}/transitions/{transitionCode}/checklist")
+    public ResponseEntity<ApiResponse<TransitionChecklistDTO>> getTransitionChecklist(
+            @PathVariable Long caseId,
+            @PathVariable String transitionCode,
+            HttpServletRequest request) {
+        Long officerId = currentUserService.getCurrentOfficerId(request);
+        String roleCode = currentUserService.getCurrentRoleCode(request);
+        Long unitId = currentUserService.getCurrentUnitId(request);
+        
+        if (officerId == null || roleCode == null || unitId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("User information not found"));
+        }
+        
+        TransitionChecklistDTO checklist = workflowEngineService
+                .getTransitionChecklist(caseId, transitionCode, officerId, roleCode, unitId);
+        return ResponseEntity.ok(ApiResponse.success("Checklist retrieved successfully", checklist));
     }
 
     /**
