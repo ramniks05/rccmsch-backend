@@ -3,6 +3,7 @@ package in.gov.manipur.rccms.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.gov.manipur.rccms.dto.ConditionStatusDTO;
+import in.gov.manipur.rccms.dto.ModuleFormSchemaDTO;
 import in.gov.manipur.rccms.dto.TransitionChecklistDTO;
 import in.gov.manipur.rccms.dto.WorkflowHistoryDTO;
 import in.gov.manipur.rccms.dto.WorkflowTransitionDTO;
@@ -43,6 +44,7 @@ public class WorkflowEngineService {
     private final OfficerDaHistoryRepository postingRepository;
     private final CaseModuleFormSubmissionRepository moduleFormSubmissionRepository;
     private final CaseDocumentRepository documentRepository;
+    private final CaseModuleFormService caseModuleFormService;
     private final ObjectMapper objectMapper;
 
     /**
@@ -273,17 +275,52 @@ public class WorkflowEngineService {
             }
 
             for (WorkflowPermission permission : permissions) {
+                // Show transitions based on permissions and hierarchy only
+                // Conditions are checked when executing, not when showing available transitions
                 if (permission.getCanInitiate() &&
-                        checkHierarchyRule(permission, unitId, instance) &&
-                        checkConditions(permission, instance, caseEntity)) {
-                    WorkflowTransitionDTO dto = new WorkflowTransitionDTO();
-                    dto.setId(transition.getId());
-                    dto.setTransitionCode(transition.getTransitionCode());
-                    dto.setTransitionName(transition.getTransitionName());
-                    dto.setFromStateCode(currentState.getStateCode());
-                    dto.setToStateCode(transition.getToState().getStateCode());
-                    dto.setRequiresComment(transition.getRequiresComment());
-                    dto.setDescription(transition.getDescription());
+                        checkHierarchyRule(permission, unitId, instance)) {
+                    
+                    // Get checklist for this transition
+                    TransitionChecklistDTO checklist = null;
+                    ModuleFormSchemaDTO formSchema = null;
+                    
+                    try {
+                        checklist = getTransitionChecklist(caseId, transition.getTransitionCode(), 
+                                officerId, roleCode, unitId);
+                        
+                        // Extract module type from checklist conditions to determine if form is needed
+                        String moduleTypeStr = extractModuleTypeFromChecklist(checklist);
+                        if (moduleTypeStr != null) {
+                            try {
+                                ModuleType moduleType = ModuleType.valueOf(moduleTypeStr);
+                                // Fetch form schema for this module type
+                                formSchema = caseModuleFormService.getFormSchema(
+                                        caseEntity.getCaseNatureId(), 
+                                        caseEntity.getCaseTypeId(), 
+                                        moduleType);
+                            } catch (IllegalArgumentException e) {
+                                log.warn("Invalid module type extracted from checklist: {}", moduleTypeStr);
+                            } catch (Exception e) {
+                                log.warn("Failed to fetch form schema for module type {}: {}", 
+                                        moduleTypeStr, e.getMessage());
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.warn("Failed to get checklist for transition {}: {}", 
+                                transition.getTransitionCode(), e.getMessage());
+                    }
+                    
+                    WorkflowTransitionDTO dto = WorkflowTransitionDTO.builder()
+                            .id(transition.getId())
+                            .transitionCode(transition.getTransitionCode())
+                            .transitionName(transition.getTransitionName())
+                            .fromStateCode(currentState.getStateCode())
+                            .toStateCode(transition.getToState().getStateCode())
+                            .requiresComment(transition.getRequiresComment())
+                            .description(transition.getDescription())
+                            .checklist(checklist)
+                            .formSchema(formSchema)
+                            .build();
                     availableTransitions.add(dto);
                     break; // Add once per transition
                 }
@@ -291,6 +328,90 @@ public class WorkflowEngineService {
         }
 
         return availableTransitions;
+    }
+
+    /**
+     * Record applicant notice acceptance (creates history entry without state change)
+     */
+    @Transactional
+    public void recordApplicantNoticeAcceptance(Long caseId, Long applicantId, String comments) {
+        log.info("Recording notice acceptance: caseId={}, applicantId={}", caseId, applicantId);
+        
+        // Get workflow instance
+        CaseWorkflowInstance instance = instanceRepository.findByCaseId(caseId)
+                .orElseThrow(() -> new RuntimeException("Workflow instance not found for case: " + caseId));
+        
+        // Get current state
+        WorkflowState currentState = instance.getCurrentState();
+        if (currentState == null) {
+            throw new RuntimeException("Current state not found for case: " + caseId);
+        }
+        
+        // Create history record for notice acceptance (no state change, just acknowledgment)
+        // Note: We need a dummy transition or handle this differently since transitionId is required
+        // For now, we'll use metadata to store the action and save with minimal required fields
+        WorkflowHistory history = new WorkflowHistory();
+        history.setInstance(instance);
+        history.setCaseId(caseId);
+        history.setFromState(currentState);
+        history.setFromStateId(currentState.getId());
+        history.setToState(currentState); // Same state (no transition)
+        history.setToStateId(currentState.getId());
+        
+        // Find a dummy transition or create a special one for applicant actions
+        // For now, we'll try to find any transition from current state, or use null handling
+        // Since transitionId is required, we need to handle this differently
+        // Option: Create a special "APPLICANT_ACKNOWLEDGMENT" transition or use metadata only
+        
+        // Store in metadata as JSON for applicant actions
+        String metadataJson = String.format(
+            "{\"action\":\"NOTICE_ACCEPTED\",\"applicantId\":%d,\"type\":\"APPLICANT_ACKNOWLEDGMENT\"}", 
+            applicantId);
+        
+        // Since WorkflowHistory requires transitionId (nullable = false), we need a transition
+        // Find any transition from current state to use as a placeholder
+        // The metadata will indicate this is an applicant acknowledgment, not a real transition
+        List<WorkflowTransition> transitions = transitionRepository
+                .findTransitionsFromState(instance.getWorkflowId(), currentState.getId());
+        
+        if (transitions.isEmpty()) {
+            // If no transition exists, store acceptance in workflow data instead
+            log.warn("Cannot create history entry: No transition found from state {}. Storing in workflow data.", 
+                    currentState.getStateCode());
+            updateWorkflowDataFlag(instance, "NOTICE_ACCEPTED_BY_APPLICANT", true);
+            return;
+        }
+        
+        // Use first available transition as placeholder (metadata indicates it's an acknowledgment)
+        WorkflowTransition placeholderTransition = transitions.get(0);
+        history.setTransition(placeholderTransition);
+        history.setTransitionId(placeholderTransition.getId());
+        
+        history.setPerformedByOfficer(null); // Applicant is not an officer
+        history.setPerformedByOfficerId(applicantId); // Store applicant ID
+        history.setPerformedByRole("CITIZEN");
+        history.setPerformedAtUnit(null); // Applicant has no unit
+        history.setPerformedAtUnitId(null);
+        history.setComments(comments != null ? comments : "Notice received and accepted by applicant");
+        history.setMetadata(metadataJson);
+        
+        historyRepository.save(history);
+        
+        log.info("Notice acceptance recorded in history for case: {}", caseId);
+    }
+
+    /**
+     * Helper method to update workflow data flag
+     */
+    private void updateWorkflowDataFlag(CaseWorkflowInstance instance, String key, boolean value) {
+        Map<String, Object> data = parseJsonToMap(instance.getWorkflowData());
+        data.put(key, value);
+        try {
+            instance.setWorkflowData(objectMapper.writeValueAsString(data));
+            instanceRepository.save(instance);
+        } catch (Exception e) {
+            log.error("Failed to update workflow data flag {}: {}", key, e.getMessage());
+        }
     }
 
     /**
@@ -853,14 +974,26 @@ public class WorkflowEngineService {
                     boolean passed = workflowData.containsKey(flag) && 
                             Boolean.TRUE.equals(workflowData.get(flag));
                     String label = getFlagDisplayLabel(flag);
-                    conditions.add(ConditionStatusDTO.builder()
+                    
+                    // Detect if flag indicates a form requirement (e.g., HEARING_SUBMITTED means HEARING form)
+                    String moduleType = extractModuleTypeFromFlag(flag);
+                    
+                    ConditionStatusDTO.ConditionStatusDTOBuilder builder = ConditionStatusDTO.builder()
                             .label(label)
                             .type("WORKFLOW_FLAG")
                             .flagName(flag)
                             .required(true)
                             .passed(passed)
-                            .message(passed ? label + " ✓" : label + " must be completed")
-                            .build());
+                            .message(passed ? label + " ✓" : label + " must be completed");
+                    
+                    // Set moduleType if detected (helps frontend show the correct form)
+                    if (moduleType != null) {
+                        builder.moduleType(moduleType);
+                        // Also set type to FORM_FIELD for better frontend handling
+                        builder.type("FORM_FIELD");
+                    }
+                    
+                    conditions.add(builder.build());
                 }
             }
 
@@ -957,8 +1090,11 @@ public class WorkflowEngineService {
         Map<String, String> labels = Map.of(
                 "HEARING_SUBMITTED", "Hearing form submitted",
                 "NOTICE_SUBMITTED", "Notice form submitted",
+                "NOTICE_DRAFT_CREATED", "Draft notice created",
                 "NOTICE_READY", "Notice document ready",
+                "ORDERSHEET_DRAFT_CREATED", "Draft ordersheet created",
                 "ORDERSHEET_READY", "Ordersheet document ready",
+                "JUDGEMENT_DRAFT_CREATED", "Draft judgement created",
                 "JUDGEMENT_READY", "Judgement document ready"
         );
         return labels.getOrDefault(flagName, flagName.replace("_", " "));
@@ -978,6 +1114,46 @@ public class WorkflowEngineService {
      */
     private String getCaseFieldDisplayLabel(String fieldName) {
         return fieldName.replaceAll("([A-Z])", " $1").trim();
+    }
+
+    /**
+     * Extract module type from workflow flag name
+     * Examples: HEARING_SUBMITTED -> HEARING, NOTICE_READY -> NOTICE
+     */
+    private String extractModuleTypeFromFlag(String flagName) {
+        if (flagName == null || flagName.isEmpty()) {
+            return null;
+        }
+        
+        // Check for known module types in flag names
+        String[] moduleTypes = {"HEARING", "NOTICE", "ORDERSHEET", "JUDGEMENT"};
+        
+        for (String moduleType : moduleTypes) {
+            if (flagName.startsWith(moduleType + "_")) {
+                return moduleType;
+            }
+        }
+        
+        return null;
+    }
+
+    /**
+     * Extract module type from checklist conditions
+     * Looks for FORM_FIELD type conditions with moduleType set
+     */
+    private String extractModuleTypeFromChecklist(TransitionChecklistDTO checklist) {
+        if (checklist == null || checklist.getConditions() == null) {
+            return null;
+        }
+        
+        // Look for FORM_FIELD type conditions
+        for (ConditionStatusDTO condition : checklist.getConditions()) {
+            if ("FORM_FIELD".equals(condition.getType()) && condition.getModuleType() != null) {
+                return condition.getModuleType();
+            }
+        }
+        
+        return null;
     }
 
     /**

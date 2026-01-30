@@ -1,5 +1,7 @@
 package in.gov.manipur.rccms.controller;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import in.gov.manipur.rccms.dto.*;
 import in.gov.manipur.rccms.entity.Case;
 import in.gov.manipur.rccms.entity.ModuleType;
@@ -14,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -28,6 +31,7 @@ public class CaseModuleFormController {
     private final CaseModuleFormService moduleFormService;
     private final CaseRepository caseRepository;
     private final CurrentUserService currentUserService;
+    private final ObjectMapper objectMapper;
 
     @GetMapping("/{caseId}/module-forms/{moduleType}")
     public ResponseEntity<ApiResponse<ModuleFormSchemaDTO>> getModuleFormSchema(
@@ -54,6 +58,49 @@ public class CaseModuleFormController {
         }
         Optional<ModuleFormSubmissionDTO> submission = moduleFormService.getLatestSubmission(caseId, moduleType);
         return ResponseEntity.ok(ApiResponse.success("Latest submission retrieved", submission.orElse(null)));
+    }
+
+    @GetMapping("/{caseId}/module-forms/{moduleType}/data")
+    public ResponseEntity<ApiResponse<ModuleFormWithDataDTO>> getModuleFormData(
+            @PathVariable Long caseId,
+            @PathVariable ModuleType moduleType) {
+        if (caseId == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("Case ID cannot be null"));
+        }
+        
+        // Get case entity for schema
+        Case caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
+        
+        // Get form schema
+        ModuleFormSchemaDTO schema = moduleFormService.getFormSchema(
+                caseEntity.getCaseNatureId(), caseEntity.getCaseTypeId(), moduleType);
+        
+        // Get latest submission data
+        Optional<ModuleFormSubmissionDTO> submission = moduleFormService.getLatestSubmission(caseId, moduleType);
+        
+        Map<String, Object> formData = null;
+        boolean hasExistingData = false;
+        
+        if (submission.isPresent() && submission.get().getFormData() != null) {
+            try {
+                formData = objectMapper.readValue(submission.get().getFormData(), 
+                        new TypeReference<Map<String, Object>>() {});
+                hasExistingData = true;
+            } catch (Exception e) {
+                log.error("Error parsing form data for case {} module {}: {}", caseId, moduleType, e.getMessage());
+                // Continue with null formData if parsing fails
+            }
+        }
+        
+        ModuleFormWithDataDTO response = ModuleFormWithDataDTO.builder()
+                .schema(schema)
+                .formData(formData)
+                .hasExistingData(hasExistingData)
+                .build();
+        
+        return ResponseEntity.ok(ApiResponse.success("Module form schema and data retrieved", response));
     }
 
     @PostMapping("/{caseId}/module-forms/{moduleType}/submit")

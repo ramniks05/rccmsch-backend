@@ -47,6 +47,18 @@ public class CaseDocumentController {
         return ResponseEntity.ok(ApiResponse.success("Template retrieved", template));
     }
 
+    @GetMapping("/{caseId}/documents/{moduleType}")
+    public ResponseEntity<ApiResponse<CaseDocumentDTO>> getDocument(
+            @PathVariable Long caseId,
+            @PathVariable ModuleType moduleType) {
+        if (caseId == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("Case ID cannot be null"));
+        }
+        CaseDocumentDTO doc = documentService.getLatestDocument(caseId, moduleType);
+        return ResponseEntity.ok(ApiResponse.success("Document retrieved", doc));
+    }
+
     @GetMapping("/{caseId}/documents/{moduleType}/latest")
     public ResponseEntity<ApiResponse<CaseDocumentDTO>> getLatestDocument(
             @PathVariable Long caseId,
@@ -76,6 +88,30 @@ public class CaseDocumentController {
         }
         CaseDocumentDTO saved = documentService.createOrUpdateDocument(caseId, moduleType, officerId, dto);
         return ResponseEntity.ok(ApiResponse.success("Document saved", saved));
+    }
+
+    @PutMapping("/{caseId}/documents/{moduleType}/{documentId}")
+    public ResponseEntity<ApiResponse<CaseDocumentDTO>> updateDocument(
+            @PathVariable Long caseId,
+            @PathVariable ModuleType moduleType,
+            @PathVariable Long documentId,
+            @Valid @RequestBody CreateCaseDocumentDTO dto,
+            HttpServletRequest request) {
+        if (caseId == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("Case ID cannot be null"));
+        }
+        if (documentId == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("Document ID cannot be null"));
+        }
+        Long officerId = currentUserService.getCurrentOfficerId(request);
+        if (officerId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Officer information not found"));
+        }
+        CaseDocumentDTO saved = documentService.updateDocument(caseId, moduleType, documentId, officerId, dto);
+        return ResponseEntity.ok(ApiResponse.success("Document updated", saved));
     }
 }
 

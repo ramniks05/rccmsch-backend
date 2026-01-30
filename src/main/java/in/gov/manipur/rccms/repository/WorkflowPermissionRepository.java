@@ -17,6 +17,8 @@ public interface WorkflowPermissionRepository extends JpaRepository<WorkflowPerm
     
     List<WorkflowPermission> findByTransitionIdAndIsActiveTrue(Long transitionId);
     
+    List<WorkflowPermission> findByTransitionId(Long transitionId);
+    
     @Query("SELECT wp FROM WorkflowPermission wp WHERE wp.transitionId = :transitionId " +
            "AND wp.roleCode = :roleCode AND wp.isActive = true " +
            "AND (wp.unitLevel = :unitLevel OR wp.unitLevel IS NULL)")

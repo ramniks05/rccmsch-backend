@@ -5,11 +5,18 @@ import in.gov.manipur.rccms.entity.*;
 import in.gov.manipur.rccms.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -29,6 +36,8 @@ public class WorkflowManagementService {
     private final CaseWorkflowInstanceRepository instanceRepository;
     private final CaseNatureRepository caseNatureRepository;
     private final RoleMasterRepository roleMasterRepository;
+    @Autowired
+    private final ObjectMapper objectMapper;
 
     // ==================== Workflow Definition CRUD ====================
 
@@ -475,5 +484,57 @@ public class WorkflowManagementService {
             dto.setTransitionCode(permission.getTransition().getTransitionCode());
         }
         return dto;
+    }
+
+    /**
+     * Get all conditions for a transition (aggregated from all permissions)
+     */
+    public TransitionConditionsDTO getTransitionConditions(Long transitionId) {
+        log.debug("Getting conditions for transition: id={}", transitionId);
+
+        WorkflowTransition transition = transitionRepository.findById(transitionId)
+                .orElseThrow(() -> new RuntimeException("Transition not found: " + transitionId));
+
+        // Get all permissions for this transition
+        List<WorkflowPermission> permissions = permissionRepository.findByTransitionId(transitionId);
+
+        List<TransitionConditionsDTO.PermissionConditionsDTO> permissionConditions = new ArrayList<>();
+
+        for (WorkflowPermission permission : permissions) {
+            Map<String, Object> conditionsMap = new HashMap<>();
+            
+            // Parse conditions JSON if present
+            if (permission.getConditions() != null && !permission.getConditions().trim().isEmpty()) {
+                try {
+                    conditionsMap = objectMapper.readValue(
+                            permission.getConditions(),
+                            new TypeReference<Map<String, Object>>() {});
+                } catch (Exception e) {
+                    log.warn("Failed to parse conditions JSON for permission {}: {}", 
+                            permission.getId(), e.getMessage());
+                    conditionsMap.put("_error", "Invalid JSON: " + e.getMessage());
+                }
+            }
+
+            TransitionConditionsDTO.PermissionConditionsDTO permCond = 
+                    TransitionConditionsDTO.PermissionConditionsDTO.builder()
+                    .permissionId(permission.getId())
+                    .roleCode(permission.getRoleCode())
+                    .unitLevel(permission.getUnitLevel() != null ? permission.getUnitLevel().name() : null)
+                    .hierarchyRule(permission.getHierarchyRule())
+                    .conditions(conditionsMap)
+                    .canInitiate(permission.getCanInitiate())
+                    .isActive(permission.getIsActive())
+                    .build();
+
+            permissionConditions.add(permCond);
+        }
+
+        return TransitionConditionsDTO.builder()
+                .transitionId(transition.getId())
+                .transitionCode(transition.getTransitionCode())
+                .transitionName(transition.getTransitionName())
+                .permissions(permissionConditions)
+                .build();
     }
 }

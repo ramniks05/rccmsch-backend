@@ -87,11 +87,99 @@ public class CaseDocumentService {
 
         CaseDocument saved = documentRepository.save(doc);
 
-        // Update workflow data flag for checklist when FINAL or SIGNED
-        if (saved.getStatus() == DocumentStatus.FINAL || saved.getStatus() == DocumentStatus.SIGNED) {
-            updateWorkflowFlag(caseId, moduleType.name() + "_READY", true);
+        // Update workflow data flags based on document status
+        String moduleName = moduleType.name();
+        
+        if (saved.getStatus() == DocumentStatus.DRAFT) {
+            // Set flag to indicate draft document exists
+            updateWorkflowFlag(caseId, moduleName + "_DRAFT_CREATED", true);
+            // Remove READY flag if it was set before
+            updateWorkflowFlag(caseId, moduleName + "_READY", false);
+        } else if (saved.getStatus() == DocumentStatus.FINAL || saved.getStatus() == DocumentStatus.SIGNED) {
+            // Set READY flag when finalized or signed
+            updateWorkflowFlag(caseId, moduleName + "_READY", true);
+            // Keep DRAFT_CREATED flag (document was created as draft first)
         }
 
+        return toDto(saved);
+    }
+
+    public CaseDocumentDTO updateDocument(Long caseId, ModuleType moduleType, Long documentId, Long officerId, CreateCaseDocumentDTO dto) {
+        if (caseId == null) {
+            throw new IllegalArgumentException("Case ID cannot be null");
+        }
+        if (moduleType == null) {
+            throw new IllegalArgumentException("Module type cannot be null");
+        }
+        if (documentId == null) {
+            throw new IllegalArgumentException("Document ID cannot be null");
+        }
+        if (officerId == null) {
+            throw new IllegalArgumentException("Officer ID cannot be null");
+        }
+        if (dto == null) {
+            throw new IllegalArgumentException("CreateCaseDocumentDTO cannot be null");
+        }
+        
+        Case caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
+        
+        CaseDocument doc = documentRepository.findById(documentId)
+                .orElseThrow(() -> new RuntimeException("Document not found: " + documentId));
+        
+        // Verify document belongs to the case and module type
+        if (!doc.getCaseId().equals(caseId)) {
+            throw new RuntimeException("Document does not belong to case: " + caseId);
+        }
+        if (doc.getModuleType() != moduleType) {
+            throw new RuntimeException("Document module type mismatch. Expected: " + moduleType + ", Found: " + doc.getModuleType());
+        }
+        
+        // Check if signed document can be edited
+        if (doc.getStatus() == DocumentStatus.SIGNED) {
+            CaseDocumentTemplate template = doc.getTemplate() != null ? 
+                    templateRepository.findById(doc.getTemplateId()).orElse(null) : null;
+            boolean allowEdit = template != null && Boolean.TRUE.equals(template.getAllowEditAfterSign());
+            if (!allowEdit) {
+                throw new RuntimeException("Signed document cannot be edited");
+            }
+        }
+        
+        // Update template if provided
+        if (dto.getTemplateId() != null) {
+            CaseDocumentTemplate template = templateRepository.findById(dto.getTemplateId())
+                    .orElseThrow(() -> new RuntimeException("Template not found: " + dto.getTemplateId()));
+            doc.setTemplate(template);
+            doc.setTemplateId(template.getId());
+        }
+        
+        // Update document fields
+        doc.setContentHtml(dto.getContentHtml());
+        doc.setContentData(dto.getContentData());
+        doc.setStatus(dto.getStatus() != null ? dto.getStatus() : doc.getStatus());
+        
+        // Handle signing
+        if (doc.getStatus() == DocumentStatus.SIGNED) {
+            doc.setSignedByOfficerId(officerId);
+            doc.setSignedAt(LocalDateTime.now());
+        }
+        
+        CaseDocument saved = documentRepository.save(doc);
+        
+        // Update workflow data flags based on document status
+        String moduleName = moduleType.name();
+        
+        if (saved.getStatus() == DocumentStatus.DRAFT) {
+            // Set flag to indicate draft document exists
+            updateWorkflowFlag(caseId, moduleName + "_DRAFT_CREATED", true);
+            // Remove READY flag if it was set before
+            updateWorkflowFlag(caseId, moduleName + "_READY", false);
+        } else if (saved.getStatus() == DocumentStatus.FINAL || saved.getStatus() == DocumentStatus.SIGNED) {
+            // Set READY flag when finalized or signed
+            updateWorkflowFlag(caseId, moduleName + "_READY", true);
+            // Keep DRAFT_CREATED flag (document was created as draft first)
+        }
+        
         return toDto(saved);
     }
 

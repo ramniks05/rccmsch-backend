@@ -286,6 +286,17 @@ public class WorkflowConfigController {
     }
 
     /**
+     * Get conditions for a transition
+     * GET /api/admin/workflow/transitions/{transitionId}/conditions
+     */
+    @Operation(summary = "Get Transition Conditions", description = "Get all conditions for a transition (aggregated from all permissions)")
+    @GetMapping("/transitions/{transitionId}/conditions")
+    public ResponseEntity<ApiResponse<TransitionConditionsDTO>> getTransitionConditions(@PathVariable Long transitionId) {
+        TransitionConditionsDTO conditions = workflowManagementService.getTransitionConditions(transitionId);
+        return ResponseEntity.ok(ApiResponse.success("Conditions retrieved successfully", conditions));
+    }
+
+    /**
      * Get permission by ID
      * GET /api/admin/workflow/permissions/{id}
      */
