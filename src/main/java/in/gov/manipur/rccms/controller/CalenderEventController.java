@@ -46,13 +46,18 @@ public class CalenderEventController {
 
     }
 
-
     //Soft Deletion
     @PutMapping("/deactivate/calender-event/{eventId}")
     public ResponseEntity<ApiResponse<CalenderEventDTO>> deactivateCalenderEvent(@PathVariable Long eventId) {
 
-        return ResponseEntity.ok(ApiResponse.success("Event deactivated successfully",calenderEventService.deactivateCalenderEvent(eventId)));
+        return ResponseEntity.ok(ApiResponse.success("Event deactivated successfully", calenderEventService.deactivateCalenderEvent(eventId)));
 
+    }
+
+    @GetMapping("fetch/calender-event-list")
+    public ResponseEntity<ApiResponse<List<CalenderEventDTO>>> fetchCalenderEventList() {
+
+        return ResponseEntity.ok(ApiResponse.success("Event List Fetched Successfully", calenderEventService.fetchCalenderEventList()));
 
     }
 

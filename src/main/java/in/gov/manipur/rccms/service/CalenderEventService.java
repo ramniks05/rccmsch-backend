@@ -72,4 +72,16 @@ public class CalenderEventService {
         return new CalenderEventDTO(existingCalenderEventData);
 
     }
+
+    public List<CalenderEventDTO> fetchCalenderEventList() {
+
+        List<CalenderEvent> eventList = calenderEventRepository.findAll();
+        if (eventList.isEmpty()) {
+            throw new RuntimeException("Event List is empty");
+        } else {
+            return eventList.stream().map(CalenderEventDTO::new).toList();
+        }
+
+
+    }
 }
