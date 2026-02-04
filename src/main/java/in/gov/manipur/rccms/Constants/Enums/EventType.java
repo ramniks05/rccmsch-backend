@@ -9,7 +9,7 @@ public enum EventType {
     HALF_DAY("Half Day"),
     WORKING_DAY("Working Day"),
     SPECIAL("Special"),
-    Event("Event"),
+    EVENT("Event"),
     ;
     public final String label;
 }
