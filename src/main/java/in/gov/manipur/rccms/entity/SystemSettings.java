@@ -1,11 +1,15 @@
 package in.gov.manipur.rccms.entity;
 
+import in.gov.manipur.rccms.dto.BannerDTO;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * System Settings Entity
@@ -31,6 +35,21 @@ public class SystemSettings {
 
     @Column(name = "logo_header", length = 200)
     private String logoHeader; // Header text (e.g., "Revenue & Settlement Department")
+
+    @Column(name = "secondary_logo_url")
+    private String secondaryLogoUrl;
+
+    @Column(name = "secondary_logo_header", length = 200)
+    private String secondaryLogoHeader;
+
+    @Column(name = "tertiary_logo_url")
+    private String tertiaryLogoUrl;
+
+    @Column(name = "tertiary_logo_header", length = 200)
+    private String tertiaryLogoHeader;
+
+    @Column(name = "marquee_text", length = 2000)
+    private String marqueeText;
 
     @Column(name = "logo_subheader", length = 200)
     private String logoSubheader; // Subheader text (e.g., "Government of Manipur")
@@ -65,6 +84,10 @@ public class SystemSettings {
 
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "banners_json", columnDefinition = "jsonb")
+    private List<BannerDTO> banners;
 
     @PrePersist
     protected void onCreate() {

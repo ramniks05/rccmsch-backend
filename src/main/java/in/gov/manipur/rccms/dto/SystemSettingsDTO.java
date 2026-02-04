@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * System Settings DTO
@@ -22,8 +23,15 @@ public class SystemSettingsDTO {
     // Header Settings
     private String logoUrl;
     private String logoHeader;
+    private String secondaryLogoUrl;
+    private String secondaryLogoHeader;
+    private String tertiaryLogoUrl;
+    private String tertiaryLogoHeader;
     private String logoSubheader;
     private String stateName;
+    private String marqueeText;
+
+    private List<BannerDTO> banners;
 
     // Footer Settings
     private String footerText;

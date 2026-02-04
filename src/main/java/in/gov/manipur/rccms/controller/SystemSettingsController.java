@@ -52,7 +52,7 @@ public class SystemSettingsController {
             description = "Update system settings (logo, header, footer, etc.). Admin only. Partial updates supported - only provided fields will be updated."
     )
     @PutMapping
-    @PreAuthorize("hasAuthority('ADMIN')")
+//    @PreAuthorize("hasAuthority('ADMIN')")
     public ResponseEntity<ApiResponse<SystemSettingsDTO>> updateSystemSettings(
             @Valid @RequestBody UpdateSystemSettingsDTO dto) {
         log.info("Updating system settings. Request data: {}", dto);

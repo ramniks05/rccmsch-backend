@@ -62,6 +62,29 @@ public class SystemSettingsService {
             String value = dto.getLogoHeader().trim();
             settings.setLogoHeader(value.isEmpty() ? null : value);
         }
+
+        if (dto.getSecondaryLogoUrl() != null) {
+            String value = dto.getSecondaryLogoUrl().trim();
+            settings.setSecondaryLogoUrl(value.isEmpty() ? null : value);
+        }
+        if (dto.getSecondaryLogoHeader() != null) {
+            String value = dto.getSecondaryLogoHeader().trim();
+            settings.setSecondaryLogoHeader(value.isEmpty() ? null : value);
+        }
+
+        if (dto.getTertiaryLogoUrl() != null) {
+            String value = dto.getTertiaryLogoUrl().trim();
+            settings.setTertiaryLogoUrl(value.isEmpty() ? null : value);
+        }
+        if (dto.getTertiaryLogoHeader() != null) {
+            String value = dto.getTertiaryLogoHeader().trim();
+            settings.setTertiaryLogoHeader(value.isEmpty() ? null : value);
+        }
+
+        if (dto.getMarqueeText() != null) {
+            String value = dto.getMarqueeText().trim();
+            settings.setMarqueeText(value.isEmpty() ? null : value);
+        }
         if (dto.getLogoSubheader() != null) {
             String value = dto.getLogoSubheader().trim();
             settings.setLogoSubheader(value.isEmpty() ? null : value);
@@ -94,6 +117,8 @@ public class SystemSettingsService {
             String value = dto.getFooterWebsite().trim();
             settings.setFooterWebsite(value.isEmpty() ? null : value);
         }
+
+        settings.setBanners(dto.getBanners());
         
         SystemSettings updated = systemSettingsRepository.save(settings);
         log.info("System settings updated successfully");
@@ -129,7 +154,13 @@ public class SystemSettingsService {
                 .id(settings.getId())
                 .logoUrl(settings.getLogoUrl())
                 .logoHeader(settings.getLogoHeader())
+                .secondaryLogoUrl(settings.getSecondaryLogoUrl())
+                .secondaryLogoHeader(settings.getSecondaryLogoHeader())
+                .tertiaryLogoUrl(settings.getTertiaryLogoUrl())
+                .tertiaryLogoHeader(settings.getTertiaryLogoHeader())
                 .logoSubheader(settings.getLogoSubheader())
+                .banners(settings.getBanners())
+                .marqueeText(settings.getMarqueeText())
                 .stateName(settings.getStateName())
                 .footerText(settings.getFooterText())
                 .footerCopyright(settings.getFooterCopyright())

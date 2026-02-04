@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 /**
  * Update System Settings DTO
  * Request DTO for updating system settings
@@ -21,8 +23,23 @@ public class UpdateSystemSettingsDTO {
     @Size(max = 200, message = "Logo header must not exceed 200 characters")
     private String logoHeader;
 
-    @Size(max = 200, message = "Logo subheader must not exceed 200 characters")
+    @Size(max = 200, message = "Logo header must not exceed 200 characters")
     private String logoSubheader;
+
+    @Size(max = 500, message = "Logo URL must not exceed 500 characters")
+    private String secondaryLogoUrl;
+
+    @Size(max = 200, message = "Logo header must not exceed 200 characters")
+    private String secondaryLogoHeader;
+
+    @Size(max = 500, message = "Logo URL must not exceed 500 characters")
+    private String tertiaryLogoUrl;
+
+    @Size(max = 200, message = "Logo header must not exceed 200 characters")
+    private String tertiaryLogoHeader;
+
+    @Size(max = 1000, message = "Marquee text must not exceed 1000 characters")
+    private String marqueeText;
 
     @Size(max = 100, message = "State name must not exceed 100 characters")
     private String stateName;
@@ -45,5 +62,7 @@ public class UpdateSystemSettingsDTO {
 
     @Size(max = 200, message = "Footer website must not exceed 200 characters")
     private String footerWebsite;
+
+    private List<BannerDTO> banners;
 }
 
