@@ -200,8 +200,8 @@ public class SystemSettingsService {
 
         WhatsNew whatsNew = new WhatsNew();
         if (dto != null) {
+
             whatsNew.setWhatsNew(dto);
-            whatsNew.setCreatedOn(LocalDateTime.now());
             whatsNew.setUpdatedOn(LocalDateTime.now());
         } else
             throw new RuntimeException("invalid parameter provided");
@@ -217,11 +217,8 @@ public class SystemSettingsService {
         WhatsNew existingWhatsNew = whatsNewRepository.findById(id).
                 orElseThrow(() -> new RuntimeException("Data not found with id" + " " + id));
 
-        WhatsNew whatsNew = new WhatsNew();
-
         if (dto != null) {
             existingWhatsNew.setWhatsNew(dto);
-            existingWhatsNew.setCreatedOn(LocalDateTime.now());
             existingWhatsNew.setUpdatedOn(LocalDateTime.now());
 
         } else
@@ -238,7 +235,7 @@ public class SystemSettingsService {
 
         List<WhatsNew> whatsNewList = whatsNewRepository.findAll();
         if (whatsNewList.isEmpty()) {
-            throw new RuntimeException("List is empty" + " " + whatsNewList.size());
+            throw new RuntimeException("List is empty" + " " + 0);
         } else {
             return whatsNewList.stream().map(WhatsNewDTO::new).toList();
         }

@@ -24,15 +24,17 @@ public class CalenderEventService {
     public List<CalenderEventDTO> createCalenderEvents(CalenderEventDTO calenderEventDTO) {
 
         CalenderEvent calenderEvent = new CalenderEvent();
-        LocalDate localDate = LocalDate.parse(
-                calenderEventDTO.getDate(),
-                DateTimeFormatter.ofPattern(Constant.EVENT_DATE_FORMAT)
-        );
-        calenderEvent.setDate(localDate);
+//        LocalDate localDate = LocalDate.parse(
+//                calenderEventDTO.getDate(),
+//                DateTimeFormatter.ofPattern(Constant.EVENT_DATE_FORMAT)
+//        );
+
+        LocalDateTime localDateTime = calenderEventDTO.getDate();
+        calenderEvent.setDate(localDateTime);
         calenderEvent.setTitle(calenderEventDTO.getTitle());
         calenderEvent.setDescription(calenderEventDTO.getDescription());
         calenderEvent.setEventType(calenderEventDTO.getEventType());
-        calenderEvent.setFinancialYear(calenderEventDTO.getFinancialYear());
+        calenderEvent.setYear(String.valueOf(localDateTime.getYear()));
         calenderEvent.setCreatedDate(LocalDateTime.now());
         calenderEvent.setUpdatedDate(LocalDateTime.now());
 
@@ -53,7 +55,6 @@ public class CalenderEventService {
         existingCalenderEventData.setTitle(calenderEventDTO.getTitle());
         existingCalenderEventData.setEventType(calenderEventDTO.getEventType());
         existingCalenderEventData.setDescription(calenderEventDTO.getDescription());
-        existingCalenderEventData.setFinancialYear(calenderEventDTO.getFinancialYear());
         existingCalenderEventData.setUpdatedDate(LocalDateTime.now());
 
         CalenderEvent updatedCalenderEventData = calenderEventRepository.save(existingCalenderEventData);

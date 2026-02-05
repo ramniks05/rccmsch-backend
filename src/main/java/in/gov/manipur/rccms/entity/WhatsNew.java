@@ -8,7 +8,6 @@ import lombok.Data;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -21,8 +20,6 @@ public class WhatsNew {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "document_id", nullable = false, unique = true)
     private Long documentId;
-    @Column(name = "created_on", nullable = false)
-    private LocalDateTime createdOn;
     @Column(name = "updated_on", nullable = false)
     private LocalDateTime updatedOn;
 

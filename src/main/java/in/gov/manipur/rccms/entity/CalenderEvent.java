@@ -25,9 +25,9 @@ public class CalenderEvent {
     @Column(name = "is_active", nullable = false)
     private Boolean isActive;
     @Column(name = "event_date", nullable = false)
-    private LocalDate date;
-    @Column(name = "financial_year", nullable = false)
-    private String financialYear;
+    private LocalDateTime date;
+    @Column(name = "year", nullable = false)
+    private String year;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "event_type", nullable = false, length = 50)
