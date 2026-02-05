@@ -2,12 +2,18 @@ package in.gov.manipur.rccms.service;
 
 import in.gov.manipur.rccms.dto.SystemSettingsDTO;
 import in.gov.manipur.rccms.dto.UpdateSystemSettingsDTO;
+import in.gov.manipur.rccms.dto.WhatsNewDTO;
 import in.gov.manipur.rccms.entity.SystemSettings;
+import in.gov.manipur.rccms.entity.WhatsNew;
 import in.gov.manipur.rccms.repository.SystemSettingsRepository;
+import in.gov.manipur.rccms.repository.WhatsNewRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * System Settings Service
@@ -20,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class SystemSettingsService {
 
     private final SystemSettingsRepository systemSettingsRepository;
+
+    private final WhatsNewRepository whatsNewRepository;
 
     /**
      * Get current system settings
@@ -186,6 +194,61 @@ public class SystemSettingsService {
                 .createdAt(settings.getCreatedAt())
                 .updatedAt(settings.getUpdatedAt())
                 .build();
+    }
+
+    public WhatsNewDTO createWhatsNew(List<WhatsNewDTO> dto) {
+
+        WhatsNew whatsNew = new WhatsNew();
+        if (dto != null) {
+            whatsNew.setWhatsNew(dto);
+            whatsNew.setCreatedOn(LocalDateTime.now());
+            whatsNew.setUpdatedOn(LocalDateTime.now());
+        } else
+            throw new RuntimeException("invalid parameter provided");
+
+        WhatsNew savedWhatsNew = whatsNewRepository.save(whatsNew);
+        return new WhatsNewDTO(savedWhatsNew);
+
+
+    }
+
+    public WhatsNewDTO updateWhatsNew(Long id, List<WhatsNewDTO> dto) {
+
+        WhatsNew existingWhatsNew = whatsNewRepository.findById(id).
+                orElseThrow(() -> new RuntimeException("Data not found with id" + " " + id));
+
+        WhatsNew whatsNew = new WhatsNew();
+
+        if (dto != null) {
+            existingWhatsNew.setWhatsNew(dto);
+            existingWhatsNew.setCreatedOn(LocalDateTime.now());
+            existingWhatsNew.setUpdatedOn(LocalDateTime.now());
+
+        } else
+            throw new RuntimeException("invalid parameter provided");
+
+
+        WhatsNew updateWhatsNew = whatsNewRepository.save(existingWhatsNew);
+        return new WhatsNewDTO(updateWhatsNew);
+
+
+    }
+
+    public List<WhatsNewDTO> fetchWhatsNewList() {
+
+        List<WhatsNew> whatsNewList = whatsNewRepository.findAll();
+        if (whatsNewList.isEmpty()) {
+            throw new RuntimeException("List is empty" + " " + whatsNewList.size());
+        } else {
+            return whatsNewList.stream().map(WhatsNewDTO::new).toList();
+        }
+    }
+
+
+    public WhatsNewDTO deleteWhatsNew(Long id) {
+
+        whatsNewRepository.deleteById(id);
+        return new WhatsNewDTO();
     }
 }
 

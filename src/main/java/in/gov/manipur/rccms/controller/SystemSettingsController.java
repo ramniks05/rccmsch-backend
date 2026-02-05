@@ -3,6 +3,8 @@ package in.gov.manipur.rccms.controller;
 import in.gov.manipur.rccms.dto.ApiResponse;
 import in.gov.manipur.rccms.dto.SystemSettingsDTO;
 import in.gov.manipur.rccms.dto.UpdateSystemSettingsDTO;
+import in.gov.manipur.rccms.dto.WhatsNewDTO;
+import in.gov.manipur.rccms.entity.WhatsNew;
 import in.gov.manipur.rccms.service.SystemSettingsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -12,6 +14,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * System Settings Controller
@@ -60,5 +64,32 @@ public class SystemSettingsController {
         log.info("System settings updated successfully");
         return ResponseEntity.ok(ApiResponse.success("System settings updated successfully", updated));
     }
+
+
+    @PostMapping("/create/whats-new")
+    public ResponseEntity<ApiResponse<WhatsNewDTO>> saveWhatsNew(@Valid @RequestBody List<WhatsNewDTO> dto) {
+
+        return ResponseEntity.ok(ApiResponse.success("WhatsNew created successfully", systemSettingsService.createWhatsNew(dto)));
+    }
+
+    @GetMapping("/fetch/whats-new-list")
+    public ResponseEntity<ApiResponse<List<WhatsNewDTO>>> fetchWhatsNewList() {
+
+        return ResponseEntity.ok(ApiResponse.success("WhatsNew list fetched successfully", systemSettingsService.fetchWhatsNewList()));
+    }
+
+    @PutMapping("/update/whats-new/{id}")
+    public ResponseEntity<ApiResponse<WhatsNewDTO>> updateWhatsNew(@PathVariable Long id, @Valid @RequestBody List<WhatsNewDTO> dto) {
+
+        return ResponseEntity.ok(ApiResponse.success("WhatsNew updated successfully", systemSettingsService.updateWhatsNew(id,dto)));
+    }
+
+    @DeleteMapping("/delete/whats-new/{id}")
+    public ResponseEntity<ApiResponse<WhatsNewDTO>> deleteWhatsNew(@PathVariable Long id) {
+
+        return ResponseEntity.ok(ApiResponse.success("WhatsNew deleted successfully", systemSettingsService.deleteWhatsNew(id)));
+    }
+
+
 }
 
