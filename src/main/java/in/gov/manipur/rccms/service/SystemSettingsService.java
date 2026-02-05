@@ -27,13 +27,13 @@ public class SystemSettingsService {
      */
     public SystemSettingsDTO getSystemSettings() {
         log.info("Getting system settings");
-        
+
         SystemSettings settings = systemSettingsRepository.findByIsActiveTrue()
                 .orElseGet(() -> {
                     log.info("No active settings found, creating default settings");
                     return createDefaultSettings();
                 });
-        
+
         return mapToDTO(settings);
     }
 
@@ -43,7 +43,7 @@ public class SystemSettingsService {
      */
     public SystemSettingsDTO updateSystemSettings(UpdateSystemSettingsDTO dto) {
         log.info("Updating system settings");
-        
+
         SystemSettings settings = systemSettingsRepository.findByIsActiveTrue()
                 .orElseGet(() -> {
                     log.info("No active settings found, creating new settings");
@@ -51,7 +51,7 @@ public class SystemSettingsService {
                     newSettings.setIsActive(true);
                     return systemSettingsRepository.save(newSettings);
                 });
-        
+
         // Update only provided fields (partial update)
         // Convert empty strings to null to allow clearing fields
         if (dto.getLogoUrl() != null) {
@@ -118,11 +118,13 @@ public class SystemSettingsService {
             settings.setFooterWebsite(value.isEmpty() ? null : value);
         }
 
-        settings.setBanners(dto.getBanners());
-        
+        if (dto.getBanners() != null) {
+            settings.setBanners(dto.getBanners());
+        }
+
         SystemSettings updated = systemSettingsRepository.save(settings);
         log.info("System settings updated successfully");
-        
+
         return mapToDTO(updated);
     }
 
@@ -142,7 +144,7 @@ public class SystemSettingsService {
         settings.setFooterPhone("+91-XXX-XXXXXXX");
         settings.setFooterWebsite("https://manipur.gov.in");
         settings.setIsActive(true);
-        
+
         return systemSettingsRepository.save(settings);
     }
 

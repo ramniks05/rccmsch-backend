@@ -11,4 +11,5 @@ public class BannerDTO {
 
     private String url;
     private String header;
+    private String subHeader;
 }
