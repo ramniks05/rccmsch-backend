@@ -25,8 +25,10 @@ public class SystemSettingsDTO {
     private String logoHeader;
     private String secondaryLogoUrl;
     private String secondaryLogoHeader;
+    private String secondaryLogoSubHeader;
     private String tertiaryLogoUrl;
     private String tertiaryLogoHeader;
+    private String tertiaryLogoSubHeader;
     private String logoSubheader;
     private String stateName;
     private String marqueeText;

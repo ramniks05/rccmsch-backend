@@ -42,11 +42,17 @@ public class SystemSettings {
     @Column(name = "secondary_logo_header", length = 200)
     private String secondaryLogoHeader;
 
+    @Column(name = "secondary_logo_sub_header", length = 200)
+    private String secondaryLogoSubHeader;
+
     @Column(name = "tertiary_logo_url")
     private String tertiaryLogoUrl;
 
     @Column(name = "tertiary_logo_header", length = 200)
     private String tertiaryLogoHeader;
+
+    @Column(name = "tertiary_logo_sub_header", length = 200)
+    private String tertiaryLogoSubHeader;
 
     @Column(name = "marquee_text", length = 2000)
     private String marqueeText;

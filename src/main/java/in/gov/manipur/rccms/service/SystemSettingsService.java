@@ -72,6 +72,11 @@ public class SystemSettingsService {
             settings.setSecondaryLogoHeader(value.isEmpty() ? null : value);
         }
 
+        if (dto.getSecondaryLogoSubHeader() != null) {
+            String value = dto.getSecondaryLogoSubHeader().trim();
+            settings.setSecondaryLogoSubHeader(value.isEmpty() ? null : value);
+        }
+
         if (dto.getTertiaryLogoUrl() != null) {
             String value = dto.getTertiaryLogoUrl().trim();
             settings.setTertiaryLogoUrl(value.isEmpty() ? null : value);
@@ -79,6 +84,11 @@ public class SystemSettingsService {
         if (dto.getTertiaryLogoHeader() != null) {
             String value = dto.getTertiaryLogoHeader().trim();
             settings.setTertiaryLogoHeader(value.isEmpty() ? null : value);
+        }
+
+        if (dto.getTertiaryLogoSubHeader() != null) {
+            String value = dto.getTertiaryLogoSubHeader().trim();
+            settings.setTertiaryLogoSubHeader(value.isEmpty() ? null : value);
         }
 
         if (dto.getMarqueeText() != null) {
@@ -158,8 +168,10 @@ public class SystemSettingsService {
                 .logoHeader(settings.getLogoHeader())
                 .secondaryLogoUrl(settings.getSecondaryLogoUrl())
                 .secondaryLogoHeader(settings.getSecondaryLogoHeader())
+                .secondaryLogoSubHeader(settings.getSecondaryLogoSubHeader())
                 .tertiaryLogoUrl(settings.getTertiaryLogoUrl())
                 .tertiaryLogoHeader(settings.getTertiaryLogoHeader())
+                .tertiaryLogoSubHeader(settings.getTertiaryLogoSubHeader())
                 .logoSubheader(settings.getLogoSubheader())
                 .banners(settings.getBanners())
                 .marqueeText(settings.getMarqueeText())

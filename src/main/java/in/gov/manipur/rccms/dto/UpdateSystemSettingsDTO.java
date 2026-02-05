@@ -32,11 +32,17 @@ public class UpdateSystemSettingsDTO {
     @Size(max = 200, message = "Logo header must not exceed 200 characters")
     private String secondaryLogoHeader;
 
+    @Size(max = 200, message = "Logo Sub header must not exceed 200 characters")
+    private String secondaryLogoSubHeader;
+
     @Size(max = 500, message = "Logo URL must not exceed 500 characters")
     private String tertiaryLogoUrl;
 
     @Size(max = 200, message = "Logo header must not exceed 200 characters")
     private String tertiaryLogoHeader;
+
+    @Size(max = 200, message = "Logo Sub header must not exceed 200 characters")
+    private String tertiaryLogoSubHeader;
 
     @Size(max = 1000, message = "Marquee text must not exceed 1000 characters")
     private String marqueeText;
