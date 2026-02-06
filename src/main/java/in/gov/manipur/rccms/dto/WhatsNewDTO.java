@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Data
 @AllArgsConstructor
@@ -16,31 +17,23 @@ import java.util.List;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class WhatsNewDTO {
 
-    private Long id;
+    private Long whatsNewId;
+    private Integer itemId;
     private LocalDate publishedDate;
     private String title;
     private String pdfUrl;
 
     private List<WhatsNewDTO> whatsNewDTOS;
-//
-//    public WhatsNewDTO(WhatsNew savedWhatsNew) {
-//        this.whatsNewDTOS = savedWhatsNew.getWhatsNew();
-//    }
-//
-//    public WhatsNewDTO(WhatsNew savedWhatsNew) {
-//        this.id= savedWhatsNew.getDocumentId();
-//        this.whatsNewDTOS = savedWhatsNew.getWhatsNew();
-//    }
 
     public WhatsNewDTO(WhatsNew entity) {
 
-        this.id = entity.getDocumentId();
-
-        if (entity.getWhatsNew() != null) {
-            this.whatsNewDTOS = entity.getWhatsNew()
+        if (entity.getWhatsNewJson() != null) {
+            this.whatsNewDTOS = entity.getWhatsNewJson()
                     .stream()
                     .map(item -> {
                         WhatsNewDTO dto = new WhatsNewDTO();
+                        dto.setWhatsNewId(entity.getWhatsNewId());
+                        dto.setItemId(item.getItemId());
                         dto.setPublishedDate(item.getPublishedDate());
                         dto.setTitle(item.getTitle());
                         dto.setPdfUrl(item.getPdfUrl());

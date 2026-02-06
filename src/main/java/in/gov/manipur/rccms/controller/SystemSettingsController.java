@@ -67,7 +67,7 @@ public class SystemSettingsController {
 
 
     @PostMapping("/create/whats-new")
-    public ResponseEntity<ApiResponse<WhatsNewDTO>> saveWhatsNew(@Valid @RequestBody List<WhatsNewDTO> dto) {
+    public ResponseEntity<ApiResponse<List<WhatsNewDTO>>> saveWhatsNew(@Valid @RequestBody List<WhatsNewDTO> dto) {
 
         return ResponseEntity.ok(ApiResponse.success("WhatsNew created successfully", systemSettingsService.createWhatsNew(dto)));
     }
@@ -78,16 +78,16 @@ public class SystemSettingsController {
         return ResponseEntity.ok(ApiResponse.success("WhatsNew list fetched successfully", systemSettingsService.fetchWhatsNewList()));
     }
 
-    @PutMapping("/update/whats-new/{id}")
-    public ResponseEntity<ApiResponse<WhatsNewDTO>> updateWhatsNew(@PathVariable Long id, @Valid @RequestBody List<WhatsNewDTO> dto) {
+    @PutMapping("/update/whats-new/{whatsNewId}/{itemId}")
+    public ResponseEntity<ApiResponse<WhatsNewDTO>> updateWhatsNew(@PathVariable Long whatsNewId, @PathVariable Integer itemId, @Valid @RequestBody WhatsNewDTO dto) {
 
-        return ResponseEntity.ok(ApiResponse.success("WhatsNew updated successfully", systemSettingsService.updateWhatsNew(id,dto)));
+        return ResponseEntity.ok(ApiResponse.success("WhatsNew updated successfully", systemSettingsService.updateWhatsNew(whatsNewId, itemId, dto)));
     }
 
-    @DeleteMapping("/delete/whats-new/{id}")
-    public ResponseEntity<ApiResponse<WhatsNewDTO>> deleteWhatsNew(@PathVariable Long id) {
+    @DeleteMapping("/delete/whats-new/{whatsNewId}")
+    public ResponseEntity<ApiResponse<WhatsNewDTO>> deleteWhatsNew(@PathVariable Long whatsNewId,@RequestParam(required = false)Integer itemId) {
 
-        return ResponseEntity.ok(ApiResponse.success("WhatsNew deleted successfully", systemSettingsService.deleteWhatsNew(id)));
+        return ResponseEntity.ok(ApiResponse.success("WhatsNew deleted successfully", systemSettingsService.deleteWhatsNew(whatsNewId,itemId)));
     }
 
 

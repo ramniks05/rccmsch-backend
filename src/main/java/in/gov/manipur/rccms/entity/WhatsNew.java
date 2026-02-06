@@ -18,14 +18,14 @@ public class WhatsNew {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "document_id", nullable = false, unique = true)
-    private Long documentId;
+    @Column(name = "whats_new_id", nullable = false, unique = true)
+    private Long whatsNewId;
     @Column(name = "updated_on", nullable = false)
     private LocalDateTime updatedOn;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "whats_new_json", columnDefinition = "jsonb")
-    private List<WhatsNewDTO> whatsNew;
+    private List<WhatsNewDTO> whatsNewJson;
 
 
 }

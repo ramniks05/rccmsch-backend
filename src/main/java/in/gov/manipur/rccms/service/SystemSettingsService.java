@@ -13,7 +13,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * System Settings Service
@@ -196,56 +199,103 @@ public class SystemSettingsService {
                 .build();
     }
 
-    public WhatsNewDTO createWhatsNew(List<WhatsNewDTO> dto) {
+    public List<WhatsNewDTO> createWhatsNew(List<WhatsNewDTO> dto) {
+
+        if (dto == null || dto.isEmpty()) {
+            throw new RuntimeException("Invalid parameter provided");
+        }
 
         WhatsNew whatsNew = new WhatsNew();
-        if (dto != null) {
 
-            whatsNew.setWhatsNew(dto);
-            whatsNew.setUpdatedOn(LocalDateTime.now());
-        } else
-            throw new RuntimeException("invalid parameter provided");
+        // Step 1: find max existing itemId
+        int maxId = whatsNewRepository.findAll()
+                .stream()
+                .filter(e -> e.getWhatsNewJson() != null)
+                .flatMap(e -> e.getWhatsNewJson().stream())
+                .mapToInt(WhatsNewDTO::getItemId)
+                .max()
+                .orElse(0);   // if no data → start from 0
 
+        AtomicInteger counter = new AtomicInteger(maxId + 1);
+
+        // Step 2: assign new incremental ids
+        dto.forEach(e -> e.setItemId(counter.getAndIncrement()));
+        whatsNew.setWhatsNewJson(dto);
+        whatsNew.setUpdatedOn(LocalDateTime.now());
         WhatsNew savedWhatsNew = whatsNewRepository.save(whatsNew);
-        return new WhatsNewDTO(savedWhatsNew);
-
+        return new WhatsNewDTO(savedWhatsNew).getWhatsNewDTOS();
 
     }
 
-    public WhatsNewDTO updateWhatsNew(Long id, List<WhatsNewDTO> dto) {
+    public WhatsNewDTO updateWhatsNew(Long whatsNewId, Integer itemId, WhatsNewDTO dto) {
 
-        WhatsNew existingWhatsNew = whatsNewRepository.findById(id).
-                orElseThrow(() -> new RuntimeException("Data not found with id" + " " + id));
+        WhatsNew existingWhatsNew = whatsNewRepository.findById(whatsNewId).
+                orElseThrow(() -> new RuntimeException("Data not found with id" + " " + whatsNewId));
 
-        if (dto != null) {
-            existingWhatsNew.setWhatsNew(dto);
-            existingWhatsNew.setUpdatedOn(LocalDateTime.now());
+        List<WhatsNewDTO> updatedList = existingWhatsNew.getWhatsNewJson()
+                .stream()
+                .map(item -> {
+                    if (item.getItemId().equals(itemId)) {
+                        item.setTitle(dto.getTitle());
+                        item.setPdfUrl(dto.getPdfUrl());
+                        item.setPublishedDate(dto.getPublishedDate());
+                    }
+                    return item;
+                })
+                .toList();
 
-        } else
-            throw new RuntimeException("invalid parameter provided");
-
+        existingWhatsNew.setUpdatedOn(LocalDateTime.now());
+        existingWhatsNew.setWhatsNewJson(updatedList);
 
         WhatsNew updateWhatsNew = whatsNewRepository.save(existingWhatsNew);
         return new WhatsNewDTO(updateWhatsNew);
-
-
     }
 
     public List<WhatsNewDTO> fetchWhatsNewList() {
 
-        List<WhatsNew> whatsNewList = whatsNewRepository.findAll();
-        if (whatsNewList.isEmpty()) {
-            throw new RuntimeException("List is empty" + " " + 0);
-        } else {
-            return whatsNewList.stream().map(WhatsNewDTO::new).toList();
-        }
+        return whatsNewRepository.findAll()
+                .stream()
+                .flatMap(entity ->
+                        entity.getWhatsNewJson()
+                                .stream()
+                                .map(item -> {
+                                    WhatsNewDTO dto = new WhatsNewDTO();
+
+                                    dto.setWhatsNewId(entity.getWhatsNewId()); // ⭐ parent id
+                                    dto.setItemId(item.getItemId());
+                                    dto.setTitle(item.getTitle());
+                                    dto.setPdfUrl(item.getPdfUrl());
+                                    dto.setPublishedDate(item.getPublishedDate());
+
+                                    return dto;
+                                })
+                )
+                .toList();
+
+
     }
 
 
-    public WhatsNewDTO deleteWhatsNew(Long id) {
+    public WhatsNewDTO deleteWhatsNew(Long whatsNewId, Integer itemId) {
 
-        whatsNewRepository.deleteById(id);
-        return new WhatsNewDTO();
+        WhatsNew entity = whatsNewRepository.findById(whatsNewId)
+                .orElseThrow(() -> new RuntimeException("Not found"));
+
+        // delete whole whatsNew batch
+        if (itemId == null) {
+            whatsNewRepository.delete(entity);
+            return new WhatsNewDTO();
+        }
+
+        // delete only one item
+        List<WhatsNewDTO> updated = entity.getWhatsNewJson();
+
+        updated.removeIf(item -> item.getItemId().equals(itemId));
+
+        entity.setWhatsNewJson(updated);
+
+        return new WhatsNewDTO(whatsNewRepository.save(entity));
+
     }
 }
 
