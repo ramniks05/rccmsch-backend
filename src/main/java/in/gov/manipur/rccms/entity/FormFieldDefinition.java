@@ -43,7 +43,7 @@ public class FormFieldDefinition {
     private String fieldLabel; // e.g., "Registered Deed Number"
 
     @Column(name = "field_type", nullable = false, length = 50)
-    private String fieldType; // TEXT, NUMBER, DATE, DATETIME, EMAIL, PHONE, TEXTAREA, SELECT, RADIO, CHECKBOX, FILE
+    private String fieldType; // TEXT, TEXTAREA, RICH_TEXT, NUMBER, DATE, DATETIME, SELECT, MULTISELECT, CHECKBOX, RADIO, FILE
 
     @Column(name = "is_required", nullable = false)
     private Boolean isRequired = false;

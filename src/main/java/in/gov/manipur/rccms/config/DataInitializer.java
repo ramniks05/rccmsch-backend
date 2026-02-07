@@ -317,6 +317,7 @@ public class DataInitializer implements CommandLineRunner {
     /**
      * Save admin unit if it doesn't exist
      */
+    @SuppressWarnings("null")
     private AdminUnit saveIfNotExists(AdminUnit adminUnit, String code) {
         if (!adminUnitRepository.existsByUnitCode(code)) {
             return adminUnitRepository.save(adminUnit);

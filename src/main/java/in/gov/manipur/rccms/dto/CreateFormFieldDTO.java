@@ -24,7 +24,7 @@ public class CreateFormFieldDTO {
     private String fieldLabel;
     
     @NotBlank(message = "Field type is required")
-    private String fieldType; // TEXT, NUMBER, DATE, DATETIME, EMAIL, PHONE, TEXTAREA, SELECT, RADIO, CHECKBOX, FILE
+    private String fieldType; // TEXT, TEXTAREA, RICH_TEXT, NUMBER, DATE, DATETIME, SELECT, MULTISELECT, CHECKBOX, RADIO, FILE
     
     private Boolean isRequired = false;
     
