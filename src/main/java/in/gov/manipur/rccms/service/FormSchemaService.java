@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
@@ -524,7 +525,16 @@ public class FormSchemaService {
      */
     private String validateFieldValue(FormFieldDefinition field, Object value) {
         String fieldType = field.getFieldType();
-        String valueStr = value.toString().trim();
+        String valueStr;
+        if (value instanceof List) {
+            try {
+                valueStr = objectMapper.writeValueAsString(value);
+            } catch (Exception e) {
+                valueStr = value.toString();
+            }
+        } else {
+            valueStr = value.toString().trim();
+        }
 
         try {
             // Parse validation rules
@@ -533,11 +543,14 @@ public class FormSchemaService {
             switch (fieldType.toUpperCase()) {
                 case "TEXT":
                 case "TEXTAREA":
+                case "RICH_TEXT":
                     return validateText(valueStr, rules);
                 case "NUMBER":
                     return validateNumber(valueStr, rules);
                 case "DATE":
                     return validateDate(valueStr, rules);
+                case "DATETIME":
+                    return validateDatetime(valueStr, rules);
                 case "EMAIL":
                     return validateEmail(valueStr, rules);
                 case "PHONE":
@@ -545,6 +558,12 @@ public class FormSchemaService {
                 case "SELECT":
                 case "RADIO":
                     return validateSelect(valueStr, field.getFieldOptions());
+                case "MULTISELECT":
+                    return validateMultiselect(valueStr, field.getFieldOptions());
+                case "CHECKBOX":
+                    return validateCheckbox(valueStr);
+                case "FILE":
+                    return null; // File path/identifier - no strict validation
                 default:
                     return null; // No validation for unknown types
             }
@@ -635,6 +654,54 @@ public class FormSchemaService {
         } catch (DateTimeParseException e) {
             return "Must be a valid date (YYYY-MM-DD)";
         }
+    }
+
+    /**
+     * Validate datetime field
+     */
+    private String validateDatetime(String value, Map<String, Object> rules) {
+        try {
+            LocalDateTime.parse(value, DateTimeFormatter.ISO_DATE_TIME);
+            return null; // Valid format; optional rules for min/max could be added later
+        } catch (DateTimeParseException e) {
+            return "Must be a valid datetime (ISO 8601 format)";
+        }
+    }
+
+    /**
+     * Validate multiselect field - value is JSON array of selected option values
+     */
+    private String validateMultiselect(String value, String fieldOptions) {
+        if (fieldOptions == null || fieldOptions.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            List<String> selectedValues = objectMapper.readValue(value, new TypeReference<List<String>>() {});
+            List<Map<String, String>> options = objectMapper.readValue(fieldOptions, new TypeReference<List<Map<String, String>>>() {});
+            Set<String> validValues = options.stream()
+                    .map(opt -> opt.get("value"))
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toSet());
+            for (String v : selectedValues) {
+                if (!validValues.contains(v)) {
+                    return "Invalid option selected: " + v;
+                }
+            }
+            return null;
+        } catch (Exception e) {
+            return "Invalid multiselect value format (expected JSON array)";
+        }
+    }
+
+    /**
+     * Validate checkbox field - accepts "true", "false", true, false
+     */
+    private String validateCheckbox(String value) {
+        String lower = value.toLowerCase();
+        if ("true".equals(lower) || "false".equals(lower)) {
+            return null;
+        }
+        return "Checkbox must be true or false";
     }
 
     /**

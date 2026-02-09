@@ -52,7 +52,7 @@ public class CaseModuleFormFieldDefinition {
     private String fieldLabel;
 
     @Column(name = "field_type", nullable = false, length = 50)
-    private String fieldType;
+    private String fieldType; // TEXT, TEXTAREA, RICH_TEXT, NUMBER, DATE, DATETIME, SELECT, MULTISELECT, CHECKBOX, RADIO, FILE
 
     @Column(name = "is_required", nullable = false)
     private Boolean isRequired = false;

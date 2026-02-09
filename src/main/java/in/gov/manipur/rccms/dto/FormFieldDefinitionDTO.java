@@ -24,7 +24,7 @@ public class FormFieldDefinitionDTO {
     private String caseTypeCode;
     private String fieldName;
     private String fieldLabel;
-    private String fieldType;
+    private String fieldType; // TEXT, TEXTAREA, RICH_TEXT, NUMBER, DATE, DATETIME, SELECT, MULTISELECT, CHECKBOX, RADIO, FILE
     
     @Builder.Default
     private Boolean isRequired = false;

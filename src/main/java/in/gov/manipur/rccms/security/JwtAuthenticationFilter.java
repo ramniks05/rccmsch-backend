@@ -139,13 +139,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             if (path.startsWith("/api/public/form-data-sources/")) {
                 return true;
             }
-            if (path.equals("/api/admin/system-settings")) {
+            if (path.equals("/api/admin/system-settings") || path.startsWith("/api/admin/system-settings/")) {
                 return true;
             }
         }
         
         // Public POST endpoints
         if ("POST".equalsIgnoreCase(method) && path.equals("/api/admin/form-schemas/validate")) {
+            return true;
+        }
+        
+        // Public PUT endpoints - system settings update (admin display/update without auth for initial setup)
+        if ("PUT".equalsIgnoreCase(method) && path.equals("/api/admin/system-settings")) {
             return true;
         }
         

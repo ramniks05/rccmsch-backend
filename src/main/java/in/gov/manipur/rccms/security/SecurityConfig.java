@@ -74,7 +74,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/admin/form-schemas/validate").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/admin-units/root").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/admin-units/parent/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/admin/system-settings").permitAll()  // Public system settings
+                        .requestMatchers("/api/admin/system-settings").permitAll()  // System settings - GET and PUT (for frontend display and admin update)
                         .requestMatchers(HttpMethod.GET, "/api/public/registration-forms/**").permitAll()
                         // Swagger/OpenAPI endpoints
                         .requestMatchers(
