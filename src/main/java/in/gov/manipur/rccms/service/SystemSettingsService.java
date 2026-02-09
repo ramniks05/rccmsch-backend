@@ -1,17 +1,22 @@
 package in.gov.manipur.rccms.service;
 
-import in.gov.manipur.rccms.dto.SystemSettingsDTO;
-import in.gov.manipur.rccms.dto.UpdateSystemSettingsDTO;
-import in.gov.manipur.rccms.dto.WhatsNewDTO;
+import in.gov.manipur.rccms.dto.*;
+import in.gov.manipur.rccms.entity.DocumentsAvailable;
 import in.gov.manipur.rccms.entity.SystemSettings;
 import in.gov.manipur.rccms.entity.WhatsNew;
+import in.gov.manipur.rccms.repository.DocumentAvailableRepository;
 import in.gov.manipur.rccms.repository.SystemSettingsRepository;
 import in.gov.manipur.rccms.repository.WhatsNewRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,6 +36,7 @@ public class SystemSettingsService {
     private final SystemSettingsRepository systemSettingsRepository;
 
     private final WhatsNewRepository whatsNewRepository;
+    private final DocumentAvailableRepository documentAvailableRepository;
 
     /**
      * Get current system settings
@@ -297,5 +303,71 @@ public class SystemSettingsService {
         return new WhatsNewDTO(whatsNewRepository.save(entity));
 
     }
+
+    public DocumentAvailableDTO uploadAvailableDocument(DocumentUploadRequest request) {
+
+        try {
+
+            String fileUrl;
+
+            MultipartFile file = request.getFile();
+
+            // ✅ Case 1 → File uploaded
+            if (file != null && !file.isEmpty()) {
+
+                String folder = "uploads/documents/";
+                String fileName = System.currentTimeMillis() + "_" + file.getOriginalFilename();
+
+                Path path = Paths.get(folder + fileName);
+
+                Files.createDirectories(path.getParent());
+                Files.write(path, file.getBytes());
+
+                fileUrl = "/uploads/documents/" + fileName;
+            }
+
+            // ✅ Case 2 → Only URL provided
+            else if (request.getUrl() != null && !request.getUrl().isBlank()) {
+                fileUrl = request.getUrl();
+            } else {
+                throw new IllegalArgumentException("Either file or URL must be provided");
+            }
+
+            DocumentsAvailable doc = new DocumentsAvailable();
+            doc.setTitle(request.getTitle());
+            doc.setFileUrl(fileUrl);
+            doc.setPublishedOn(LocalDate.parse(request.getPublishedOn()));
+
+            DocumentsAvailable saved = documentAvailableRepository.save(doc);
+
+            return new DocumentAvailableDTO(saved);
+
+        } catch (Exception e) {
+            throw new RuntimeException("Upload failed", e);
+        }
+    }
+
+    public List<DocumentAvailableDTO> fetchDocumentList() {
+
+        return documentAvailableRepository.findAll()
+                .stream()
+                .map(DocumentAvailableDTO::new)
+                .toList();
+    }
+
+    public DocumentAvailableDTO deleteAvailableDocument(Long documentId) {
+        DocumentsAvailable doc = documentAvailableRepository.findById(documentId)
+                .orElseThrow();
+
+        Path path = Paths.get("uploads/documents/" + doc.getTitle());
+
+        try {
+            Files.deleteIfExists(path);
+        } catch (Exception ignored) {
+        }
+        documentAvailableRepository.delete(doc);
+        return new DocumentAvailableDTO();
+    }
 }
+
 

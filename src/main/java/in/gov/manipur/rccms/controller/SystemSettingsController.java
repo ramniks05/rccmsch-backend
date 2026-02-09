@@ -1,9 +1,6 @@
 package in.gov.manipur.rccms.controller;
 
-import in.gov.manipur.rccms.dto.ApiResponse;
-import in.gov.manipur.rccms.dto.SystemSettingsDTO;
-import in.gov.manipur.rccms.dto.UpdateSystemSettingsDTO;
-import in.gov.manipur.rccms.dto.WhatsNewDTO;
+import in.gov.manipur.rccms.dto.*;
 import in.gov.manipur.rccms.entity.WhatsNew;
 import in.gov.manipur.rccms.service.SystemSettingsService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -11,9 +8,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -85,11 +84,35 @@ public class SystemSettingsController {
     }
 
     @DeleteMapping("/delete/whats-new/{whatsNewId}")
-    public ResponseEntity<ApiResponse<WhatsNewDTO>> deleteWhatsNew(@PathVariable Long whatsNewId,@RequestParam(required = false)Integer itemId) {
+    public ResponseEntity<ApiResponse<WhatsNewDTO>> deleteWhatsNew(@PathVariable Long whatsNewId, @RequestParam(required = false) Integer itemId) {
 
-        return ResponseEntity.ok(ApiResponse.success("WhatsNew deleted successfully", systemSettingsService.deleteWhatsNew(whatsNewId,itemId)));
+        return ResponseEntity.ok(ApiResponse.success("WhatsNew deleted successfully", systemSettingsService.deleteWhatsNew(whatsNewId, itemId)));
+    }
+
+    @PostMapping(value = "/document/upload/document-available", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<DocumentAvailableDTO>> upload(
+            @ModelAttribute DocumentUploadRequest request) {
+
+        return ResponseEntity.ok(ApiResponse.success(
+                        "Document uploaded successfully", systemSettingsService.uploadAvailableDocument(request)
+                )
+        );
+    }
+
+
+    @GetMapping("/document/fetch/document-list")
+    public ResponseEntity<ApiResponse<List<DocumentAvailableDTO>>> fetchDocumentList() {
+
+        return ResponseEntity.ok(ApiResponse.success("List fetched successfully", systemSettingsService.fetchDocumentList()));
+
+    }
+
+    @DeleteMapping("/document/delete/{documentId}")
+    public ResponseEntity<ApiResponse<DocumentAvailableDTO>> deleteDocument(@PathVariable Long documentId) {
+
+        return ResponseEntity.ok(ApiResponse.success("Deleted successfully", systemSettingsService.deleteAvailableDocument(documentId)));
+
     }
 
 
 }
-
