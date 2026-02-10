@@ -1,0 +1,1122 @@
+{
+  "info": {
+    "name": "Mutation Gift/Sale Workflow Configuration",
+    "description": "Complete API collection to configure Mutation (after Gift/Sale Deeds) workflow",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "workflowId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Authentication",
+      "item": [
+        {
+          "name": "Admin Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data.token) {",
+                  "        pm.collectionVariables.set('adminToken', jsonData.data.token);",
+                  "        console.log('Admin token saved:', jsonData.data.token.substring(0, 20) + '...');",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin@123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Create Workflow",
+      "item": [
+        {
+          "name": "Create Mutation Gift/Sale Workflow",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.success && jsonData.data.id) {",
+                  "        pm.collectionVariables.set('workflowId', jsonData.data.id);",
+                  "        console.log('Workflow ID saved:', jsonData.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflowCode\": \"MUTATION_GIFT_SALE\",\n  \"workflowName\": \"Mutation (after Gift/Sale Deeds)\",\n  \"description\": \"Workflow for mutation after gift/sale deeds registration. Landowner applies → Clerk enters → Mandol processes → SDC hears and decides → Mandol updates records → Patta prepared\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/definitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "definitions"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Create States",
+      "item": [
+        {
+          "name": "State 1: CITIZEN_APPLICATION (Initial)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stateCode\": \"CITIZEN_APPLICATION\",\n  \"stateName\": \"Citizen Application\",\n  \"stateOrder\": 1,\n  \"isInitialState\": true,\n  \"isFinalState\": false,\n  \"description\": \"Landowner applies for mutation in Form no. 16 with a copy of the Registered Deed\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/states",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "states"]
+            }
+          }
+        },
+        {
+          "name": "State 2: DA_ENTRY",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stateCode\": \"DA_ENTRY\",\n  \"stateName\": \"DA Entry\",\n  \"stateOrder\": 2,\n  \"isInitialState\": false,\n  \"isFinalState\": false,\n  \"description\": \"Clerk makes an entry in the Mutation Register\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/states",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "states"]
+            }
+          }
+        },
+        {
+          "name": "State 3: MANDOL_RECEIVED",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stateCode\": \"MANDOL_RECEIVED\",\n  \"stateName\": \"Mandol Received\",\n  \"stateOrder\": 3,\n  \"isInitialState\": false,\n  \"isFinalState\": false,\n  \"description\": \"Application passed to Circle Mandol\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/states",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "states"]
+            }
+          }
+        },
+        {
+          "name": "State 4: NOTICE_GENERATED",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stateCode\": \"NOTICE_GENERATED\",\n  \"stateName\": \"Notice Generated\",\n  \"stateOrder\": 4,\n  \"isInitialState\": false,\n  \"isFinalState\": false,\n  \"description\": \"Notice is sent to the parties concerned\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/states",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "states"]
+            }
+          }
+        },
+        {
+          "name": "State 5: HEARING_SCHEDULED",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stateCode\": \"HEARING_SCHEDULED\",\n  \"stateName\": \"Hearing Scheduled\",\n  \"stateOrder\": 5,\n  \"isInitialState\": false,\n  \"isFinalState\": false,\n  \"description\": \"Date for hearing is fixed\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/states",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "states"]
+            }
+          }
+        },
+        {
+          "name": "State 6: HEARING_COMPLETED",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stateCode\": \"HEARING_COMPLETED\",\n  \"stateName\": \"Hearing Completed\",\n  \"stateOrder\": 6,\n  \"isInitialState\": false,\n  \"isFinalState\": false,\n  \"description\": \"SDC hears the parties and studies the documents\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/states",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "states"]
+            }
+          }
+        },
+        {
+          "name": "State 7: DECISION_PENDING",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stateCode\": \"DECISION_PENDING\",\n  \"stateName\": \"Decision Pending\",\n  \"stateOrder\": 7,\n  \"isInitialState\": false,\n  \"isFinalState\": false,\n  \"description\": \"SDC decision pending - may approve or reject\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/states",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "states"]
+            }
+          }
+        },
+        {
+          "name": "State 8: APPROVED",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stateCode\": \"APPROVED\",\n  \"stateName\": \"Approved\",\n  \"stateOrder\": 8,\n  \"isInitialState\": false,\n  \"isFinalState\": false,\n  \"description\": \"SDC approves and passes a Mutation Order\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/states",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "states"]
+            }
+          }
+        },
+        {
+          "name": "State 9: MANDOL_UPDATE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stateCode\": \"MANDOL_UPDATE\",\n  \"stateName\": \"Mandol Update\",\n  \"stateOrder\": 9,\n  \"isInitialState\": false,\n  \"isFinalState\": false,\n  \"description\": \"SDC hands over the order to the Circle Mandol to update the land record\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/states",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "states"]
+            }
+          }
+        },
+        {
+          "name": "State 10: LAND_RECORD_UPDATED",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stateCode\": \"LAND_RECORD_UPDATED\",\n  \"stateName\": \"Land Record Updated\",\n  \"stateOrder\": 10,\n  \"isInitialState\": false,\n  \"isFinalState\": false,\n  \"description\": \"Circle Mandol updates the land record by specifying the new owner(s)\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/states",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "states"]
+            }
+          }
+        },
+        {
+          "name": "State 11: PATTA_PREPARATION",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stateCode\": \"PATTA_PREPARATION\",\n  \"stateName\": \"Patta Preparation\",\n  \"stateOrder\": 11,\n  \"isInitialState\": false,\n  \"isFinalState\": false,\n  \"description\": \"Landowner gets informed regarding preparation of new patta\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/states",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "states"]
+            }
+          }
+        },
+        {
+          "name": "State 12: COMPLETED (Final)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stateCode\": \"COMPLETED\",\n  \"stateName\": \"Completed\",\n  \"stateOrder\": 12,\n  \"isInitialState\": false,\n  \"isFinalState\": true,\n  \"description\": \"Case completed successfully\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/states",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "states"]
+            }
+          }
+        },
+        {
+          "name": "State 13: REJECTED (Final)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stateCode\": \"REJECTED\",\n  \"stateName\": \"Rejected\",\n  \"stateOrder\": 13,\n  \"isInitialState\": false,\n  \"isFinalState\": true,\n  \"description\": \"SDC rejects the application\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/states",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "states"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Create Transitions",
+      "item": [
+        {
+          "name": "Transition 1: SUBMIT_APPLICATION",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transitionCode\": \"SUBMIT_APPLICATION\",\n  \"transitionName\": \"Submit Application\",\n  \"fromStateId\": 1,\n  \"toStateId\": 2,\n  \"requiresComment\": false,\n  \"isActive\": true,\n  \"description\": \"Landowner submits mutation application with Form no. 16 and Registered Deed\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/transitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "transitions"]
+            }
+          }
+        },
+        {
+          "name": "Transition 2: ENTER_IN_REGISTER",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transitionCode\": \"ENTER_IN_REGISTER\",\n  \"transitionName\": \"Enter in Register\",\n  \"fromStateId\": 2,\n  \"toStateId\": 3,\n  \"requiresComment\": false,\n  \"isActive\": true,\n  \"description\": \"Clerk makes an entry in the Mutation Register and passes to Circle Mandol\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/transitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "transitions"]
+            }
+          }
+        },
+        {
+          "name": "Transition 3: RECEIVE_BY_MANDOL",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transitionCode\": \"RECEIVE_BY_MANDOL\",\n  \"transitionName\": \"Receive by Mandol\",\n  \"fromStateId\": 3,\n  \"toStateId\": 4,\n  \"requiresComment\": false,\n  \"isActive\": true,\n  \"description\": \"Circle Mandol receives the application\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/transitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "transitions"]
+            }
+          }
+        },
+        {
+          "name": "Transition 4: GENERATE_NOTICE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transitionCode\": \"GENERATE_NOTICE\",\n  \"transitionName\": \"Generate Notice\",\n  \"fromStateId\": 4,\n  \"toStateId\": 5,\n  \"requiresComment\": false,\n  \"isActive\": true,\n  \"description\": \"Notice is sent to the parties concerned\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/transitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "transitions"]
+            }
+          }
+        },
+        {
+          "name": "Transition 5: SCHEDULE_HEARING",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transitionCode\": \"SCHEDULE_HEARING\",\n  \"transitionName\": \"Schedule Hearing\",\n  \"fromStateId\": 5,\n  \"toStateId\": 6,\n  \"requiresComment\": false,\n  \"isActive\": true,\n  \"description\": \"Date for hearing is fixed\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/transitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "transitions"]
+            }
+          }
+        },
+        {
+          "name": "Transition 6: COMPLETE_HEARING",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transitionCode\": \"COMPLETE_HEARING\",\n  \"transitionName\": \"Complete Hearing\",\n  \"fromStateId\": 6,\n  \"toStateId\": 7,\n  \"requiresComment\": true,\n  \"isActive\": true,\n  \"description\": \"SDC hears the parties and studies the documents\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/transitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "transitions"]
+            }
+          }
+        },
+        {
+          "name": "Transition 7: APPROVE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transitionCode\": \"APPROVE\",\n  \"transitionName\": \"Approve\",\n  \"fromStateId\": 7,\n  \"toStateId\": 8,\n  \"requiresComment\": true,\n  \"isActive\": true,\n  \"description\": \"SDC approves the application and passes a Mutation Order\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/transitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "transitions"]
+            }
+          }
+        },
+        {
+          "name": "Transition 8: REJECT",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transitionCode\": \"REJECT\",\n  \"transitionName\": \"Reject\",\n  \"fromStateId\": 7,\n  \"toStateId\": 13,\n  \"requiresComment\": true,\n  \"isActive\": true,\n  \"description\": \"SDC rejects the application\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/transitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "transitions"]
+            }
+          }
+        },
+        {
+          "name": "Transition 9: PASS_TO_MANDOL",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transitionCode\": \"PASS_TO_MANDOL\",\n  \"transitionName\": \"Pass to Mandol\",\n  \"fromStateId\": 8,\n  \"toStateId\": 9,\n  \"requiresComment\": false,\n  \"isActive\": true,\n  \"description\": \"SDC hands over the order to the Circle Mandol\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/transitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "transitions"]
+            }
+          }
+        },
+        {
+          "name": "Transition 10: UPDATE_LAND_RECORD",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transitionCode\": \"UPDATE_LAND_RECORD\",\n  \"transitionName\": \"Update Land Record\",\n  \"fromStateId\": 9,\n  \"toStateId\": 10,\n  \"requiresComment\": false,\n  \"isActive\": true,\n  \"description\": \"Circle Mandol updates the land record by specifying the new owner(s)\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/transitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "transitions"]
+            }
+          }
+        },
+        {
+          "name": "Transition 11: PREPARE_PATTA",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transitionCode\": \"PREPARE_PATTA\",\n  \"transitionName\": \"Prepare Patta\",\n  \"fromStateId\": 10,\n  \"toStateId\": 11,\n  \"requiresComment\": false,\n  \"isActive\": true,\n  \"description\": \"Inform landowner regarding preparation of new patta\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/transitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "transitions"]
+            }
+          }
+        },
+        {
+          "name": "Transition 12: COMPLETE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transitionCode\": \"COMPLETE\",\n  \"transitionName\": \"Complete\",\n  \"fromStateId\": 11,\n  \"toStateId\": 12,\n  \"requiresComment\": false,\n  \"isActive\": true,\n  \"description\": \"Case completed successfully\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/transitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "transitions"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Create Permissions",
+      "item": [
+        {
+          "name": "Permission 1: SUBMIT_APPLICATION - CITIZEN",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleCode\": \"CITIZEN\",\n  \"unitLevel\": null,\n  \"canInitiate\": true,\n  \"canApprove\": false,\n  \"hierarchyRule\": \"ANY_UNIT\",\n  \"conditions\": null,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/transitions/1/permissions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "transitions", "1", "permissions"]
+            },
+            "description": "Note: Replace '1' with actual transition ID for SUBMIT_APPLICATION"
+          }
+        },
+        {
+          "name": "Permission 2: ENTER_IN_REGISTER - DEALING_ASSISTANT",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleCode\": \"DEALING_ASSISTANT\",\n  \"unitLevel\": \"CIRCLE\",\n  \"canInitiate\": true,\n  \"canApprove\": false,\n  \"hierarchyRule\": \"SAME_UNIT\",\n  \"conditions\": null,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/transitions/2/permissions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "transitions", "2", "permissions"]
+            },
+            "description": "Note: Replace '2' with actual transition ID for ENTER_IN_REGISTER"
+          }
+        },
+        {
+          "name": "Permission 3: RECEIVE_BY_MANDOL - CIRCLE_MANDOL",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleCode\": \"CIRCLE_MANDOL\",\n  \"unitLevel\": \"CIRCLE\",\n  \"canInitiate\": true,\n  \"canApprove\": false,\n  \"hierarchyRule\": \"SAME_UNIT\",\n  \"conditions\": null,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/transitions/3/permissions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "transitions", "3", "permissions"]
+            },
+            "description": "Note: Replace '3' with actual transition ID for RECEIVE_BY_MANDOL"
+          }
+        },
+        {
+          "name": "Permission 4: GENERATE_NOTICE - CIRCLE_MANDOL",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleCode\": \"CIRCLE_MANDOL\",\n  \"unitLevel\": \"CIRCLE\",\n  \"canInitiate\": true,\n  \"canApprove\": false,\n  \"hierarchyRule\": \"SAME_UNIT\",\n  \"conditions\": null,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/transitions/4/permissions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "transitions", "4", "permissions"]
+            },
+            "description": "Note: Replace '4' with actual transition ID for GENERATE_NOTICE"
+          }
+        },
+        {
+          "name": "Permission 5: SCHEDULE_HEARING - CIRCLE_OFFICER",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleCode\": \"CIRCLE_OFFICER\",\n  \"unitLevel\": \"CIRCLE\",\n  \"canInitiate\": true,\n  \"canApprove\": false,\n  \"hierarchyRule\": \"SAME_UNIT\",\n  \"conditions\": null,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/transitions/5/permissions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "transitions", "5", "permissions"]
+            },
+            "description": "Note: Replace '5' with actual transition ID for SCHEDULE_HEARING"
+          }
+        },
+        {
+          "name": "Permission 6: COMPLETE_HEARING - CIRCLE_OFFICER",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleCode\": \"CIRCLE_OFFICER\",\n  \"unitLevel\": \"CIRCLE\",\n  \"canInitiate\": true,\n  \"canApprove\": false,\n  \"hierarchyRule\": \"SAME_UNIT\",\n  \"conditions\": null,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/transitions/6/permissions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "transitions", "6", "permissions"]
+            },
+            "description": "Note: Replace '6' with actual transition ID for COMPLETE_HEARING"
+          }
+        },
+        {
+          "name": "Permission 7: APPROVE - CIRCLE_OFFICER",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleCode\": \"CIRCLE_OFFICER\",\n  \"unitLevel\": \"CIRCLE\",\n  \"canInitiate\": true,\n  \"canApprove\": true,\n  \"hierarchyRule\": \"SAME_UNIT\",\n  \"conditions\": null,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/transitions/7/permissions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "transitions", "7", "permissions"]
+            },
+            "description": "Note: Replace '7' with actual transition ID for APPROVE"
+          }
+        },
+        {
+          "name": "Permission 8: REJECT - CIRCLE_OFFICER",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleCode\": \"CIRCLE_OFFICER\",\n  \"unitLevel\": \"CIRCLE\",\n  \"canInitiate\": true,\n  \"canApprove\": true,\n  \"hierarchyRule\": \"SAME_UNIT\",\n  \"conditions\": null,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/transitions/8/permissions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "transitions", "8", "permissions"]
+            },
+            "description": "Note: Replace '8' with actual transition ID for REJECT"
+          }
+        },
+        {
+          "name": "Permission 9: PASS_TO_MANDOL - CIRCLE_OFFICER",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleCode\": \"CIRCLE_OFFICER\",\n  \"unitLevel\": \"CIRCLE\",\n  \"canInitiate\": true,\n  \"canApprove\": false,\n  \"hierarchyRule\": \"SAME_UNIT\",\n  \"conditions\": null,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/transitions/9/permissions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "transitions", "9", "permissions"]
+            },
+            "description": "Note: Replace '9' with actual transition ID for PASS_TO_MANDOL"
+          }
+        },
+        {
+          "name": "Permission 10: UPDATE_LAND_RECORD - CIRCLE_MANDOL",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleCode\": \"CIRCLE_MANDOL\",\n  \"unitLevel\": \"CIRCLE\",\n  \"canInitiate\": true,\n  \"canApprove\": false,\n  \"hierarchyRule\": \"SAME_UNIT\",\n  \"conditions\": null,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/transitions/10/permissions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "transitions", "10", "permissions"]
+            },
+            "description": "Note: Replace '10' with actual transition ID for UPDATE_LAND_RECORD"
+          }
+        },
+        {
+          "name": "Permission 11: PREPARE_PATTA - DEALING_ASSISTANT",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleCode\": \"DEALING_ASSISTANT\",\n  \"unitLevel\": \"CIRCLE\",\n  \"canInitiate\": true,\n  \"canApprove\": false,\n  \"hierarchyRule\": \"SAME_UNIT\",\n  \"conditions\": null,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/transitions/11/permissions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "transitions", "11", "permissions"]
+            },
+            "description": "Note: Replace '11' with actual transition ID for PREPARE_PATTA"
+          }
+        },
+        {
+          "name": "Permission 12: COMPLETE - DEALING_ASSISTANT",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleCode\": \"DEALING_ASSISTANT\",\n  \"unitLevel\": \"CIRCLE\",\n  \"canInitiate\": true,\n  \"canApprove\": false,\n  \"hierarchyRule\": \"SAME_UNIT\",\n  \"conditions\": null,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/transitions/12/permissions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "transitions", "12", "permissions"]
+            },
+            "description": "Note: Replace '12' with actual transition ID for COMPLETE"
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Verification",
+      "item": [
+        {
+          "name": "Get All Workflows",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/definitions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "definitions"]
+            }
+          }
+        },
+        {
+          "name": "Get Workflow States",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/states",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "states"]
+            }
+          }
+        },
+        {
+          "name": "Get Workflow Transitions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/workflow/{{workflowId}}/transitions/all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "workflow", "{{workflowId}}", "transitions", "all"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

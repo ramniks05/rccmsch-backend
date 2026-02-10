@@ -1,6 +1,9 @@
 package in.gov.manipur.rccms.dto;
 
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import in.gov.manipur.rccms.Constants.Constant.Constant;
 import in.gov.manipur.rccms.Constants.Enums.EventType;
 import in.gov.manipur.rccms.entity.CalenderEvent;
@@ -19,7 +22,10 @@ public class CalenderEventDTO {
     private Long eventId;
     private String title;
     private EventType eventType;
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)  // derived from date, not accepted in request
     private String year;
+    @JsonFormat(pattern = "dd-MM-yyyy")
+    @JsonDeserialize(using = LocalDateTimeDateOnlyDeserializer.class)
     private LocalDateTime date;
     private String description;
     private Boolean isActive;
@@ -31,7 +37,7 @@ public class CalenderEventDTO {
             this.eventId = calenderEvent.getEventId();
             this.title = calenderEvent.getTitle() == null ? "NA" : calenderEvent.getTitle();
             this.eventType = calenderEvent.getEventType() == null ? eventType : calenderEvent.getEventType();
-            this.year = calenderEvent.getTitle() == null ? "NA": calenderEvent.getYear();
+            this.year = calenderEvent.getYear() == null ? "NA" : calenderEvent.getYear();
             this.date = calenderEvent.getDate() == null ? null : calenderEvent.getDate();
 //            this.date = calenderEvent.getDate() == null ? "NA" : calenderEvent.getDate().format(DateTimeFormatter.ofPattern(Constant.EVENT_DATE_FORMAT));
             this.description = calenderEvent.getDescription() == null ? "NA" : calenderEvent.getDescription();

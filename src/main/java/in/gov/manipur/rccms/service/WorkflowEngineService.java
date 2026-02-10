@@ -1087,16 +1087,18 @@ public class WorkflowEngineService {
      * Get display label for workflow flag
      */
     private String getFlagDisplayLabel(String flagName) {
-        Map<String, String> labels = Map.of(
-                "HEARING_SUBMITTED", "Hearing form submitted",
-                "NOTICE_SUBMITTED", "Notice form submitted",
-                "NOTICE_DRAFT_CREATED", "Draft notice created",
-                "NOTICE_READY", "Notice document ready",
-                "ORDERSHEET_DRAFT_CREATED", "Draft ordersheet created",
-                "ORDERSHEET_READY", "Ordersheet document ready",
-                "JUDGEMENT_DRAFT_CREATED", "Draft judgement created",
-                "JUDGEMENT_READY", "Judgement document ready"
-        );
+        Map<String, String> labels = new HashMap<>();
+        labels.put("HEARING_SUBMITTED", "Hearing form submitted");
+        labels.put("NOTICE_SUBMITTED", "Notice form submitted");
+        labels.put("NOTICE_DRAFT_CREATED", "Draft notice created");
+        labels.put("NOTICE_READY", "Notice document ready");
+        labels.put("NOTICE_SIGNED", "Notice document signed");
+        labels.put("ORDERSHEET_DRAFT_CREATED", "Draft ordersheet created");
+        labels.put("ORDERSHEET_READY", "Ordersheet document ready");
+        labels.put("ORDERSHEET_SIGNED", "Ordersheet document signed");
+        labels.put("JUDGEMENT_DRAFT_CREATED", "Draft judgement created");
+        labels.put("JUDGEMENT_READY", "Judgement document ready");
+        labels.put("JUDGEMENT_SIGNED", "Judgement document signed");
         return labels.getOrDefault(flagName, flagName.replace("_", " "));
     }
 

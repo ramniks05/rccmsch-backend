@@ -34,7 +34,9 @@ public class CalenderEventService {
         calenderEvent.setTitle(calenderEventDTO.getTitle());
         calenderEvent.setDescription(calenderEventDTO.getDescription());
         calenderEvent.setEventType(calenderEventDTO.getEventType());
-        calenderEvent.setYear(String.valueOf(localDateTime.getYear()));
+        String yearVal = String.valueOf(localDateTime.getYear());
+        calenderEvent.setYear(yearVal);
+        calenderEvent.setFinancialYear(yearVal);
         calenderEvent.setCreatedDate(LocalDateTime.now());
         calenderEvent.setUpdatedDate(LocalDateTime.now());
 
@@ -75,14 +77,7 @@ public class CalenderEventService {
     }
 
     public List<CalenderEventDTO> fetchCalenderEventList() {
-
         List<CalenderEvent> eventList = calenderEventRepository.findAll();
-        if (eventList.isEmpty()) {
-            throw new RuntimeException("Event List is empty");
-        } else {
-            return eventList.stream().map(CalenderEventDTO::new).toList();
-        }
-
-
+        return eventList.stream().map(CalenderEventDTO::new).toList();
     }
 }

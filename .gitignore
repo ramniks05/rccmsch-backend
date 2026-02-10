@@ -66,6 +66,5 @@ data/
 *.db
 *.trace.db
 
-# Documentation
-docs/
+# Documentation (docs/ is tracked for .md guides)
 

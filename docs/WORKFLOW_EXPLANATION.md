@@ -21,13 +21,14 @@ Sets workflow_data: {"HEARING_SUBMITTED": true}
 
 ### 2. **Documents** (`CaseDocument`)
 - **Purpose**: Generated documents (notices, ordersheets, judgements) from templates
-- **Statuses**: DRAFT → FINAL → SIGNED
-- **When Ready**: Sets workflow flag `{MODULE_TYPE}_READY = true` when status is FINAL or SIGNED
+- **Statuses**: DRAFT → FINAL/SIGNED (finalize and sign happen together)
+- **When Ready**: Sets `{MODULE}_READY = true` when document is finalized/signed
+- **When Signed**: Sets `{MODULE}_SIGNED = true` only when officer finalizes (status becomes SIGNED). Not set for DRAFT — drafting never requires a signature.
 
 **Example Flow:**
 ```
-Officer creates NOTICE document → status = FINAL → 
-Sets workflow_data: {"NOTICE_READY": true}
+Officer creates NOTICE (DRAFT) → NOTICE_READY = false, NOTICE_SIGNED = false
+Officer finalizes NOTICE (FINAL) → document stored as SIGNED, NOTICE_READY = true, NOTICE_SIGNED = true
 ```
 
 ### 3. **Workflow States & Transitions**
@@ -110,7 +111,11 @@ Sets workflow_data: {"NOTICE_READY": true}
 ```
 - Checks if flags exist in `workflow_data` JSON
 - Forms set `{MODULE}_SUBMITTED` flags
-- Documents set `{MODULE}_READY` flags
+- Documents set `{MODULE}_READY` and `{MODULE}_SIGNED` flags
+
+**Digital signature flags (`NOTICE_SIGNED`, `ORDERSHEET_SIGNED`, `JUDGEMENT_SIGNED`):**
+- Set **only when** an officer **finalizes** a document (finalize = sign in one action). Never set for DRAFT — drafting does not require a signature.
+- Use these flags **only on finalize transitions** (e.g. "Send notice", "Finalize ordersheet"). Do **not** add them to draft or submit-draft transitions, so that creating/editing drafts never requires a signature.
 
 #### 2. **Module Form Fields** (`moduleFormFieldsRequired`)
 ```json

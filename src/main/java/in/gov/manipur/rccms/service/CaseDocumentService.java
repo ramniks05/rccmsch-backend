@@ -78,27 +78,29 @@ public class CaseDocumentService {
         }
         doc.setContentHtml(dto.getContentHtml());
         doc.setContentData(dto.getContentData());
-        doc.setStatus(dto.getStatus() != null ? dto.getStatus() : DocumentStatus.DRAFT);
+        DocumentStatus requestedStatus = dto.getStatus() != null ? dto.getStatus() : DocumentStatus.DRAFT;
+        doc.setStatus(requestedStatus);
 
-        if (doc.getStatus() == DocumentStatus.SIGNED) {
+        // Finalize = sign: when officer finalizes (FINAL), treat as finalize + digital signature in one action
+        if (requestedStatus == DocumentStatus.FINAL || requestedStatus == DocumentStatus.SIGNED) {
             doc.setSignedByOfficerId(officerId);
             doc.setSignedAt(LocalDateTime.now());
+            doc.setStatus(DocumentStatus.SIGNED); // persist as SIGNED so document is both finalized and signed
         }
 
         CaseDocument saved = documentRepository.save(doc);
 
         // Update workflow data flags based on document status
+        // *_SIGNED is set only when document is SIGNED (finalize). Never set for DRAFT — drafting never requires signature.
         String moduleName = moduleType.name();
         
         if (saved.getStatus() == DocumentStatus.DRAFT) {
-            // Set flag to indicate draft document exists
             updateWorkflowFlag(caseId, moduleName + "_DRAFT_CREATED", true);
-            // Remove READY flag if it was set before
             updateWorkflowFlag(caseId, moduleName + "_READY", false);
-        } else if (saved.getStatus() == DocumentStatus.FINAL || saved.getStatus() == DocumentStatus.SIGNED) {
-            // Set READY flag when finalized or signed
+            updateWorkflowFlag(caseId, moduleName + "_SIGNED", false);
+        } else if (saved.getStatus() == DocumentStatus.SIGNED) {
             updateWorkflowFlag(caseId, moduleName + "_READY", true);
-            // Keep DRAFT_CREATED flag (document was created as draft first)
+            updateWorkflowFlag(caseId, moduleName + "_SIGNED", true); // only set when finalized/signed
         }
 
         return toDto(saved);
@@ -156,28 +158,28 @@ public class CaseDocumentService {
         // Update document fields
         doc.setContentHtml(dto.getContentHtml());
         doc.setContentData(dto.getContentData());
-        doc.setStatus(dto.getStatus() != null ? dto.getStatus() : doc.getStatus());
-        
-        // Handle signing
-        if (doc.getStatus() == DocumentStatus.SIGNED) {
+        DocumentStatus requestedStatus = dto.getStatus() != null ? dto.getStatus() : doc.getStatus();
+        doc.setStatus(requestedStatus);
+
+        // Finalize = sign: when officer finalizes (FINAL), treat as finalize + digital signature in one action
+        if (requestedStatus == DocumentStatus.FINAL || requestedStatus == DocumentStatus.SIGNED) {
             doc.setSignedByOfficerId(officerId);
             doc.setSignedAt(LocalDateTime.now());
+            doc.setStatus(DocumentStatus.SIGNED);
         }
         
         CaseDocument saved = documentRepository.save(doc);
         
-        // Update workflow data flags based on document status
+        // Update workflow data flags. *_SIGNED only when document is SIGNED (finalize). Not set for DRAFT.
         String moduleName = moduleType.name();
         
         if (saved.getStatus() == DocumentStatus.DRAFT) {
-            // Set flag to indicate draft document exists
             updateWorkflowFlag(caseId, moduleName + "_DRAFT_CREATED", true);
-            // Remove READY flag if it was set before
             updateWorkflowFlag(caseId, moduleName + "_READY", false);
-        } else if (saved.getStatus() == DocumentStatus.FINAL || saved.getStatus() == DocumentStatus.SIGNED) {
-            // Set READY flag when finalized or signed
+            updateWorkflowFlag(caseId, moduleName + "_SIGNED", false);
+        } else if (saved.getStatus() == DocumentStatus.SIGNED) {
             updateWorkflowFlag(caseId, moduleName + "_READY", true);
-            // Keep DRAFT_CREATED flag (document was created as draft first)
+            updateWorkflowFlag(caseId, moduleName + "_SIGNED", true);
         }
         
         return toDto(saved);

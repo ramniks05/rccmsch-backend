@@ -76,6 +76,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/admin-units/parent/**").permitAll()
                         .requestMatchers("/api/admin/system-settings").permitAll()  // System settings - GET and PUT (for frontend display and admin update)
                         .requestMatchers(HttpMethod.GET, "/api/public/registration-forms/**").permitAll()
+                        // Calendar: allow all (fetch, create, update, deactivate) without auth
+                        .requestMatchers("/api/calender/**").permitAll()
                         // Swagger/OpenAPI endpoints
                         .requestMatchers(
                                 "/swagger-ui/**", 
