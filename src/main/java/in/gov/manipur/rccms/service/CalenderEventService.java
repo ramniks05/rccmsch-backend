@@ -36,7 +36,6 @@ public class CalenderEventService {
         calenderEvent.setEventType(calenderEventDTO.getEventType());
         String yearVal = String.valueOf(localDateTime.getYear());
         calenderEvent.setYear(yearVal);
-        calenderEvent.setFinancialYear(yearVal);
         calenderEvent.setCreatedDate(LocalDateTime.now());
         calenderEvent.setUpdatedDate(LocalDateTime.now());
 

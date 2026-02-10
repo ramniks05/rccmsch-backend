@@ -28,9 +28,6 @@ public class CalenderEvent {
     private LocalDateTime date;
     @Column(name = "year", nullable = false)
     private String year;
-    @Column(name = "financial_year", nullable = false)
-    private String financialYear;
-
     @Enumerated(EnumType.STRING)
     @Column(name = "event_type", nullable = false, length = 50)
     private EventType eventType;
