@@ -11,6 +11,6 @@ public class DocumentUploadRequest {
 
     private String title;
     private String publishedOn;
-    private String url;           // optional external link
+    private String filePath;           // optional external link
     private MultipartFile file;
 }

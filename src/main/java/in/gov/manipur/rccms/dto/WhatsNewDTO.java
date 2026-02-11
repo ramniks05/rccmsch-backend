@@ -8,8 +8,9 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
 
 @Data
 @AllArgsConstructor
@@ -19,7 +20,7 @@ public class WhatsNewDTO {
 
     private Long whatsNewId;
     private Integer itemId;
-    private LocalDate publishedDate;
+    private LocalDateTime publishedDate;
     private String title;
     private String pdfUrl;
 

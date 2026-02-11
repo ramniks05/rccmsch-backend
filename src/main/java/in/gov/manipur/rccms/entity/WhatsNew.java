@@ -1,7 +1,5 @@
 package in.gov.manipur.rccms.entity;
 
-
-import in.gov.manipur.rccms.dto.BannerDTO;
 import in.gov.manipur.rccms.dto.WhatsNewDTO;
 import jakarta.persistence.*;
 import lombok.Data;

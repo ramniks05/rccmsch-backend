@@ -1,5 +1,8 @@
 package in.gov.manipur.rccms.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import in.gov.manipur.rccms.dto.*;
 import in.gov.manipur.rccms.entity.DocumentsAvailable;
 import in.gov.manipur.rccms.entity.SystemSettings;
@@ -37,6 +40,7 @@ public class SystemSettingsService {
 
     private final WhatsNewRepository whatsNewRepository;
     private final DocumentAvailableRepository documentAvailableRepository;
+    private final ObjectMapper mapper;
 
     /**
      * Get current system settings
@@ -205,13 +209,9 @@ public class SystemSettingsService {
                 .build();
     }
 
-    public List<WhatsNewDTO> createWhatsNew(List<WhatsNewDTO> dto) {
+    public List<WhatsNewDTO> createWhatsNew(JsonNode dto) {
 
-        if (dto == null || dto.isEmpty()) {
-            throw new RuntimeException("Invalid parameter provided");
-        }
-
-        WhatsNew whatsNew = new WhatsNew();
+        List<WhatsNewDTO> list = new ArrayList<>();
 
         // Step 1: find max existing itemId
         int maxId = whatsNewRepository.findAll()
@@ -224,9 +224,19 @@ public class SystemSettingsService {
 
         AtomicInteger counter = new AtomicInteger(maxId + 1);
 
+        if (dto.isArray()) {
+            list = mapper.convertValue(dto, new TypeReference<>() {
+            });
+        } else {
+
+            list.add(mapper.convertValue(dto, WhatsNewDTO.class));
+        }
+
+        WhatsNew whatsNew = new WhatsNew();
+
         // Step 2: assign new incremental ids
-        dto.forEach(e -> e.setItemId(counter.getAndIncrement()));
-        whatsNew.setWhatsNewJson(dto);
+        list.forEach(e -> e.setItemId(counter.getAndIncrement()));
+        whatsNew.setWhatsNewJson(list);
         whatsNew.setUpdatedOn(LocalDateTime.now());
         WhatsNew savedWhatsNew = whatsNewRepository.save(whatsNew);
         return new WhatsNewDTO(savedWhatsNew).getWhatsNewDTOS();
@@ -277,10 +287,7 @@ public class SystemSettingsService {
                                 })
                 )
                 .toList();
-
-
     }
-
 
     public WhatsNewDTO deleteWhatsNew(Long whatsNewId, Integer itemId) {
 
@@ -308,7 +315,7 @@ public class SystemSettingsService {
 
         try {
 
-            String fileUrl;
+            String filePath;
 
             MultipartFile file = request.getFile();
 
@@ -323,20 +330,20 @@ public class SystemSettingsService {
                 Files.createDirectories(path.getParent());
                 Files.write(path, file.getBytes());
 
-                fileUrl = "/uploads/documents/" + fileName;
+                filePath = "/uploads/documents/" + fileName;
             }
 
             // ✅ Case 2 → Only URL provided
-            else if (request.getUrl() != null && !request.getUrl().isBlank()) {
-                fileUrl = request.getUrl();
+            else if (request.getFilePath() != null && !request.getFilePath().isBlank()) {
+                filePath = request.getFilePath();
             } else {
                 throw new IllegalArgumentException("Either file or URL must be provided");
             }
 
             DocumentsAvailable doc = new DocumentsAvailable();
             doc.setTitle(request.getTitle());
-            doc.setFileUrl(fileUrl);
-            doc.setPublishedOn(LocalDate.parse(request.getPublishedOn()));
+            doc.setFilePath(filePath);
+            doc.setPublishedOn(LocalDate.now());
 
             DocumentsAvailable saved = documentAvailableRepository.save(doc);
 
