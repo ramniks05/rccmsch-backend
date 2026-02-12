@@ -334,8 +334,8 @@ public class SystemSettingsService {
             }
 
             // ✅ Case 2 → Only URL provided
-            else if (request.getUrl() != null && !request.getUrl().isBlank()) {
-                filePath = request.getUrl();
+            else if (request.getFilePath() != null && !request.getFilePath().isBlank()) {
+                filePath = request.getFilePath();
             } else {
                 throw new IllegalArgumentException("Either file or URL must be provided");
             }
