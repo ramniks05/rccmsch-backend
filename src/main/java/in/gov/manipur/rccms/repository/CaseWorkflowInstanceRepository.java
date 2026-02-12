@@ -60,5 +60,9 @@ public interface CaseWorkflowInstanceRepository extends JpaRepository<CaseWorkfl
            "WHERE cwi.assignedToOfficerId IS NULL " +
            "AND cwi.assignedToUnitId = :unitId")
     List<CaseWorkflowInstance> findUnassignedCasesByUnit(@Param("unitId") Long unitId);
+
+    long countByCurrentState_IsFinalStateFalseAndCaseEntity_IsActiveTrue();
+
+    long countByCurrentState_IsFinalStateTrueAndCaseEntity_IsActiveTrue();
 }
 
