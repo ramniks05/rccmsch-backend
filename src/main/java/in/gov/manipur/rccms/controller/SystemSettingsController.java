@@ -1,5 +1,6 @@
 package in.gov.manipur.rccms.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import in.gov.manipur.rccms.dto.*;
 import in.gov.manipur.rccms.entity.WhatsNew;
 import in.gov.manipur.rccms.service.SystemSettingsService;
@@ -66,7 +67,7 @@ public class SystemSettingsController {
 
 
     @PostMapping("/create/whats-new")
-    public ResponseEntity<ApiResponse<List<WhatsNewDTO>>> saveWhatsNew(@Valid @RequestBody List<WhatsNewDTO> dto) {
+    public ResponseEntity<ApiResponse<List<WhatsNewDTO>>> saveWhatsNew(@Valid @RequestBody JsonNode dto) {
 
         return ResponseEntity.ok(ApiResponse.success("WhatsNew created successfully", systemSettingsService.createWhatsNew(dto)));
     }
@@ -99,12 +100,10 @@ public class SystemSettingsController {
         );
     }
 
-
     @GetMapping("/document/fetch/document-list")
     public ResponseEntity<ApiResponse<List<DocumentAvailableDTO>>> fetchDocumentList() {
 
         return ResponseEntity.ok(ApiResponse.success("List fetched successfully", systemSettingsService.fetchDocumentList()));
-
     }
 
     @DeleteMapping("/document/delete/{documentId}")
@@ -113,6 +112,5 @@ public class SystemSettingsController {
         return ResponseEntity.ok(ApiResponse.success("Deleted successfully", systemSettingsService.deleteAvailableDocument(documentId)));
 
     }
-
 
 }

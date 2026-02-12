@@ -20,8 +20,8 @@ public class DocumentsAvailable {
     @Column(name = "title", nullable = false)
     private String title;
 
-    @Column(name = "file_url", nullable = false)
-    private String fileUrl;
+    @Column(name = "file_path", nullable = false)
+    private String filePath;
 
     @Column(name = "published_on", nullable = false)
     private LocalDate publishedOn;
