@@ -21,7 +21,8 @@ import java.time.LocalDateTime;
     @Index(name = "idx_case_applicant", columnList = "applicant_id"),
     @Index(name = "idx_case_unit", columnList = "unit_id"),
     @Index(name = "idx_case_status", columnList = "status"),
-    @Index(name = "idx_case_court", columnList = "court_id")
+    @Index(name = "idx_case_court", columnList = "court_id"),
+    @Index(name = "idx_case_hearing_date", columnList = "hearing_date")
 })
 @Data
 @NoArgsConstructor
@@ -90,6 +91,9 @@ public class Case {
 
     @Column(name = "resolved_date")
     private LocalDate resolvedDate;
+
+    @Column(name = "hearing_date")
+    private LocalDate hearingDate; // Set when hearing is scheduled (from HEARING form)
 
     @Column(name = "remarks", columnDefinition = "TEXT")
     private String remarks;
