@@ -84,11 +84,12 @@ public class SystemSettingsController {
         return ResponseEntity.ok(ApiResponse.success("WhatsNew updated successfully", systemSettingsService.updateWhatsNew(whatsNewId, itemId, dto)));
     }
 
-    @DeleteMapping("/delete/whats-new/{whatsNewId}")
-    public ResponseEntity<ApiResponse<WhatsNewDTO>> deleteWhatsNew(@PathVariable Long whatsNewId, @RequestParam(required = false) Integer itemId) {
+    @DeleteMapping("/delete/whats-new/{whatsNewId}/{itemId}")
+    public ResponseEntity<ApiResponse<WhatsNewDTO>> deleteWhatsNew(@PathVariable Long whatsNewId, @PathVariable(required = false) Integer itemId) {
 
         return ResponseEntity.ok(ApiResponse.success("WhatsNew deleted successfully", systemSettingsService.deleteWhatsNew(whatsNewId, itemId)));
     }
+
 
     @PostMapping(value = "/document/upload/document-available", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<DocumentAvailableDTO>> upload(
