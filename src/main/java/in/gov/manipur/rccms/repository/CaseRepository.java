@@ -15,25 +15,25 @@ import java.util.Optional;
  */
 @Repository
 public interface CaseRepository extends JpaRepository<Case, Long> {
-    
+
     Optional<Case> findByCaseNumber(String caseNumber);
-    
+
     boolean existsByCaseNumber(String caseNumber);
-    
+
     List<Case> findByApplicantIdOrderByApplicationDateDesc(Long applicantId);
-    
+
     List<Case> findByUnitIdOrderByApplicationDateDesc(Long unitId);
-    
+
     List<Case> findByCaseTypeIdOrderByApplicationDateDesc(Long caseTypeId);
-    
+
     List<Case> findByStatusOrderByApplicationDateDesc(String status);
-    
+
     @Query("SELECT c FROM Case c WHERE c.unitId = :unitId AND c.status = :status ORDER BY c.applicationDate DESC")
     List<Case> findByUnitIdAndStatus(@Param("unitId") Long unitId, @Param("status") String status);
-    
+
     @Query("SELECT c FROM Case c WHERE c.applicationDate BETWEEN :startDate AND :endDate ORDER BY c.applicationDate DESC")
     List<Case> findByApplicationDateBetween(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
-    
+
     @Query("SELECT c FROM Case c WHERE c.applicantId = :applicantId AND c.isActive = true ORDER BY c.applicationDate DESC")
     List<Case> findActiveCasesByApplicant(@Param("applicantId") Long applicantId);
 
@@ -49,5 +49,15 @@ public interface CaseRepository extends JpaRepository<Case, Long> {
             @Param("courtId") Long courtId,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate);
+
+    @Query("""
+                       SELECT c.hearingDate, c.court.courtName, COUNT(c) FROM Case c WHERE c.hearingDate BETWEEN :startDate AND :endDate
+            AND c.isActive = true AND (:courtId IS NULL OR c.courtId = :courtId) GROUP BY c.hearingDate, c.court.courtName ORDER BY c.hearingDate""")
+    List<Object[]> findMonthlyHearings(
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate,
+            @Param("courtId") Long courtId
+    );
+
 }
 

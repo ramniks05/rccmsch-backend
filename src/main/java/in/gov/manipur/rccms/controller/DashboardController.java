@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * Dashboard APIs for case summary and hearing reports.
@@ -47,4 +48,23 @@ public class DashboardController {
         HearingsByCourtResponseDTO data = dashboardService.getHearingsByCourt(courtId, start);
         return ResponseEntity.ok(ApiResponse.success("Hearings by court", data));
     }
+
+    @GetMapping("/hearings/calendar")
+    @Operation(summary = "Monthly Hearing Dates with and without court filtering ", description = "All monthly active hearings with dates and tooltip ")
+
+    public ResponseEntity<List<CalendarHearingDTO>> getCalendarHearings(
+            @RequestParam Integer year,
+            @RequestParam Integer month,
+            @RequestParam(required = false) Long courtId) {
+
+        return ResponseEntity.ok(
+                dashboardService.getMonthlyHearings(year, month, courtId)
+        );
+    }
+
+
+
+
+
+
 }

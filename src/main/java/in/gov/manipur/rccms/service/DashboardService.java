@@ -7,10 +7,13 @@ import in.gov.manipur.rccms.repository.CaseRepository;
 import in.gov.manipur.rccms.repository.CaseWorkflowInstanceRepository;
 import in.gov.manipur.rccms.repository.CourtRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.Month;
+import java.time.YearMonth;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -21,6 +24,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Slf4j
 public class DashboardService {
 
     private static final String HEARING_SCHEDULED_STATUS = "HEARING_SCHEDULED";
@@ -49,7 +53,6 @@ public class DashboardService {
         Map<Long, List<Case>> byCourt = cases.stream()
                 .filter(c -> c.getCourtId() != null)
                 .collect(Collectors.groupingBy(Case::getCourtId));
-
         List<CourtHearingSummaryDTO> courts = new ArrayList<>();
         for (Map.Entry<Long, List<Case>> e : byCourt.entrySet()) {
             Long courtId = e.getKey();
@@ -118,4 +121,35 @@ public class DashboardService {
                 .days(days)
                 .build();
     }
+
+
+    public List<CalendarHearingDTO> getMonthlyHearings(Integer year, Integer month, Long courtId) {
+
+        YearMonth yearMonth = YearMonth.of(year, month);
+
+        LocalDate startDate = yearMonth.atDay(1);
+        LocalDate endDate = yearMonth.atEndOfMonth();
+
+        List<Object[]> results = caseRepository
+                .findMonthlyHearings(startDate, endDate, courtId);
+
+        List<CalendarHearingDTO> response = new ArrayList<>();
+
+        for (Object[] row : results) {
+
+            LocalDate hearingDate = (LocalDate) row[0];
+            String courtName = (String) row[1];
+            Long count = (Long) row[2];
+
+            CalendarHearingDTO dto = new CalendarHearingDTO();
+            dto.setDate(hearingDate.getDayOfMonth());
+            dto.setIsHearing(true);
+            dto.setTooltip(courtName + "\nTotal Cases - " + count);
+
+            response.add(dto);
+        }
+
+        return response;
+    }
+
 }
