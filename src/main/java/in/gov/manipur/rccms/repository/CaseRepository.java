@@ -1,5 +1,6 @@
 package in.gov.manipur.rccms.repository;
 
+import in.gov.manipur.rccms.Projection.CauseListProjection;
 import in.gov.manipur.rccms.entity.Case;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -60,11 +61,10 @@ public interface CaseRepository extends JpaRepository<Case, Long> {
     );
 
     @Query("""
-            SELECT  c.court.courtName, c.court.address, COUNT(c), c.hearingDate FROM Case c WHERE c.isActive = true
-            AND c.hearingDate IS NOT NULL
+            SELECT  c.court.courtName as courtName, c.court.address as courtAddress, COUNT(c) as totalCases, c.hearingDate as hearingDate FROM Case c WHERE c.isActive = true
             AND (:courtId IS NULL OR c.court.id = :courtId) GROUP BY c.court.courtName, c.court.address, c.hearingDate
             ORDER BY c.hearingDate DESC""")
-    List<Object[]> getCauseList(@Param("courtId") Long courtId);
+    List<CauseListProjection> getCauseList(@Param("courtId") Long courtId);
 
 
 }
