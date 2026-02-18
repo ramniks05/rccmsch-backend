@@ -63,11 +63,10 @@ public class DashboardController {
     }
 
 
-    @GetMapping("/cause-list/{courtId}")
+    @GetMapping("/cause-list")
     @Operation(summary = "Cause List", description = "Fetching cause list for dashboard ")
     public ResponseEntity<List<CauseListDTO>> getCauseList(
-            @PathVariable(required = false) Long courtId) {
-
+            @RequestParam(required = false) Long courtId) {
         return ResponseEntity.ok(
                 dashboardService.getCauseList(courtId)
         );
