@@ -1,6 +1,7 @@
 package in.gov.manipur.rccms.service;
 
 import in.gov.manipur.rccms.Constants.Constant.Constant;
+import in.gov.manipur.rccms.Projection.CalendarHearingProjection;
 import in.gov.manipur.rccms.Projection.CauseListProjection;
 import in.gov.manipur.rccms.dto.*;
 import in.gov.manipur.rccms.entity.Case;
@@ -133,26 +134,14 @@ public class DashboardService {
         LocalDate startDate = yearMonth.atDay(1);
         LocalDate endDate = yearMonth.atEndOfMonth();
 
-        List<Object[]> results = caseRepository
+        List<CalendarHearingProjection> results = caseRepository
                 .findMonthlyHearings(startDate, endDate, courtId);
 
-        List<CalendarHearingDTO> response = new ArrayList<>();
 
-        for (Object[] row : results) {
+        return results.stream()
+                .map(CalendarHearingDTO::new)
+                .toList();
 
-            LocalDate hearingDate = (LocalDate) row[0];
-            String courtName = (String) row[1];
-            Long count = (Long) row[2];
-
-            CalendarHearingDTO dto = new CalendarHearingDTO();
-            dto.setDate(hearingDate.getDayOfMonth());
-            dto.setIsHearing(true);
-            dto.setTooltip(courtName + "\nTotal Cases - " + count);
-
-            response.add(dto);
-        }
-
-        return response;
     }
 
     public List<CauseListDTO> getCauseList(Long courtId) {
@@ -160,17 +149,8 @@ public class DashboardService {
         List<CauseListProjection> results =
                 caseRepository.getCauseList(courtId);
 
-        DateTimeFormatter formatter =
-                DateTimeFormatter.ofPattern("dd/MM/yyyy");
-
         return results.stream()
-                .map(r -> new CauseListDTO(
-                        r.getCourtName(),
-                        r.getCourtAddress(),
-                        r.getTotalCases(),
-                        r.getHearingDate().format(formatter)
-
-                ))
+                .map(CauseListDTO::new)
                 .toList();
     }
 

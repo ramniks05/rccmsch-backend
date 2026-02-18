@@ -1,5 +1,6 @@
 package in.gov.manipur.rccms.repository;
 
+import in.gov.manipur.rccms.Projection.CalendarHearingProjection;
 import in.gov.manipur.rccms.Projection.CauseListProjection;
 import in.gov.manipur.rccms.entity.Case;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -52,9 +53,9 @@ public interface CaseRepository extends JpaRepository<Case, Long> {
             @Param("endDate") LocalDate endDate);
 
     @Query("""
-                       SELECT c.hearingDate, c.court.courtName, COUNT(c) FROM Case c WHERE c.hearingDate BETWEEN :startDate AND :endDate
+                       SELECT c.hearingDate as hearingDate, c.court.courtName as courtName, COUNT(c) as totalCases FROM Case c WHERE c.hearingDate BETWEEN :startDate AND :endDate
             AND c.isActive = true AND (:courtId IS NULL OR c.courtId = :courtId) GROUP BY c.hearingDate, c.court.courtName ORDER BY c.hearingDate""")
-    List<Object[]> findMonthlyHearings(
+    List<CalendarHearingProjection> findMonthlyHearings(
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate,
             @Param("courtId") Long courtId
