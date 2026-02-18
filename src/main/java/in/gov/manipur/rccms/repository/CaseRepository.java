@@ -59,5 +59,13 @@ public interface CaseRepository extends JpaRepository<Case, Long> {
             @Param("courtId") Long courtId
     );
 
+    @Query("""
+            SELECT  c.court.courtName, c.court.address, COUNT(c), c.hearingDate FROM Case c WHERE c.isActive = true
+            AND c.hearingDate IS NOT NULL
+            AND (:courtId IS NULL OR c.court.id = :courtId) GROUP BY c.court.courtName, c.court.address, c.hearingDate
+            ORDER BY c.hearingDate DESC""")
+    List<Object[]> getCauseList(@Param("courtId") Long courtId);
+
+
 }
 

@@ -6,4 +6,5 @@ import org.springframework.stereotype.Component;
 public class Constant {
 
     public static final String EVENT_DATE_FORMAT = "dd-MM-yyyy";
+    public static final String HEARING_DATE_FORMAT = "dd/MM/yyyy";
 }
