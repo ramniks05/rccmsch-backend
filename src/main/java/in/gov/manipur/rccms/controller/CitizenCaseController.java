@@ -3,12 +3,14 @@ package in.gov.manipur.rccms.controller;
 import in.gov.manipur.rccms.dto.ApiResponse;
 import in.gov.manipur.rccms.dto.CaseDTO;
 import in.gov.manipur.rccms.dto.CaseDocumentDTO;
+import in.gov.manipur.rccms.dto.CitizenActionsRequiredDTO;
 import in.gov.manipur.rccms.dto.CreateCaseDTO;
 import in.gov.manipur.rccms.dto.ResubmitCaseDTO;
 import in.gov.manipur.rccms.entity.Case;
 import in.gov.manipur.rccms.entity.ModuleType;
 import in.gov.manipur.rccms.repository.CaseRepository;
 import in.gov.manipur.rccms.repository.CaseWorkflowInstanceRepository;
+import in.gov.manipur.rccms.service.ActionsRequiredService;
 import in.gov.manipur.rccms.service.CaseDocumentService;
 import in.gov.manipur.rccms.service.CaseService;
 import in.gov.manipur.rccms.service.CurrentUserService;
@@ -41,6 +43,29 @@ public class CitizenCaseController {
     private final CaseRepository caseRepository;
     private final CaseWorkflowInstanceRepository workflowInstanceRepository;
     private final WorkflowEngineService workflowEngineService;
+    private final ActionsRequiredService actionsRequiredService;
+
+    /**
+     * Citizen dashboard – "Actions required"
+     * GET /api/citizen/dashboard/actions-required
+     * Returns count of cases needing citizen action and optional short list (case id, case number, subject, action needed).
+     */
+    @Operation(
+            summary = "Actions required (Citizen)",
+            description = "Count and optional list of cases needing citizen action (e.g. acknowledge notice, resubmit after correction). User from auth."
+    )
+    @GetMapping("/dashboard/actions-required")
+    public ResponseEntity<ApiResponse<CitizenActionsRequiredDTO>> getActionsRequired(
+            @RequestParam(required = false) Integer limit,
+            HttpServletRequest request) {
+        Long applicantId = getApplicantId(request);
+        if (applicantId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("User ID not found"));
+        }
+        CitizenActionsRequiredDTO dto = actionsRequiredService.getCitizenActionsRequired(applicantId, limit);
+        return ResponseEntity.ok(ApiResponse.success("Actions required", dto));
+    }
 
     /**
      * Create a new case (Citizen endpoint)

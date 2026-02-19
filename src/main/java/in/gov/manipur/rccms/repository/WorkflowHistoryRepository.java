@@ -31,5 +31,9 @@ public interface WorkflowHistoryRepository extends JpaRepository<WorkflowHistory
     
     @Query("SELECT wh FROM WorkflowHistory wh WHERE wh.transitionId = :transitionId ORDER BY wh.performedAt DESC")
     List<WorkflowHistory> findByTransition(@Param("transitionId") Long transitionId);
+
+    /** Count history entries with metadata containing the given substring (e.g. NOTICE_ACCEPTED) for this case */
+    @Query("SELECT COUNT(wh) FROM WorkflowHistory wh WHERE wh.caseId = :caseId AND wh.metadata LIKE CONCAT('%', :substring, '%')")
+    long countByCaseIdAndMetadataContaining(@Param("caseId") Long caseId, @Param("substring") String substring);
 }
 

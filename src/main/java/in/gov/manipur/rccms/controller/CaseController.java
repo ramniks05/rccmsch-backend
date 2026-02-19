@@ -1,14 +1,7 @@
 package in.gov.manipur.rccms.controller;
 
-import in.gov.manipur.rccms.dto.ApiResponse;
-import in.gov.manipur.rccms.dto.CaseDTO;
-import in.gov.manipur.rccms.dto.CreateCaseDTO;
-import in.gov.manipur.rccms.dto.ExecuteTransitionDTO;
-import in.gov.manipur.rccms.dto.FormSchemaDTO;
-import in.gov.manipur.rccms.dto.ResubmitCaseDTO;
-import in.gov.manipur.rccms.dto.TransitionChecklistDTO;
-import in.gov.manipur.rccms.dto.WorkflowHistoryDTO;
-import in.gov.manipur.rccms.dto.WorkflowTransitionDTO;
+import in.gov.manipur.rccms.dto.*;
+import in.gov.manipur.rccms.service.ActionsRequiredService;
 import in.gov.manipur.rccms.service.CaseService;
 import in.gov.manipur.rccms.service.CurrentUserService;
 import in.gov.manipur.rccms.service.FormSchemaService;
@@ -41,6 +34,7 @@ public class CaseController {
     private final WorkflowEngineService workflowEngineService;
     private final CurrentUserService currentUserService;
     private final FormSchemaService formSchemaService;
+    private final ActionsRequiredService actionsRequiredService;
 
     /**
      * Get form schema for a case type
@@ -134,6 +128,18 @@ public class CaseController {
     }
 
     /**
+     * Get full case detail on demand: case info, workflow history, and documents summary.
+     * Frontend can use this for "case detail" view; individual documents at GET /api/cases/{caseId}/documents/{moduleType}.
+     * GET /api/cases/{id}/detail
+     */
+    @Operation(summary = "Get Case Detail", description = "Full case detail: case info, workflow history, and list of documents (notice, ordersheet, judgement). Use for case detail view; fetch document content via /documents/{moduleType} as needed.")
+    @GetMapping("/{id}/detail")
+    public ResponseEntity<ApiResponse<CaseDetailDTO>> getCaseDetail(@PathVariable Long id) {
+        CaseDetailDTO detail = actionsRequiredService.getCaseDetail(id);
+        return ResponseEntity.ok(ApiResponse.success("Case detail", detail));
+    }
+
+    /**
      * Get case by case number
      * GET /api/cases/number/{caseNumber}
      */
@@ -178,18 +184,69 @@ public class CaseController {
     }
 
     /**
-     * Get cases assigned to current logged-in officer
-     * GET /api/cases/my-cases
+     * Officer dashboard – "Actions required"
+     * GET /api/cases/dashboard/actions-required
+     * Returns count of assigned cases that need action (have at least one available transition) and optional short list.
      */
-    @Operation(summary = "Get My Assigned Cases", description = "Retrieve all cases assigned to the current logged-in officer")
+    @Operation(summary = "Actions required (Officer)", description = "Count and optional list of assigned cases needing action (with current state and available transitions). User from auth.")
+    @GetMapping("/dashboard/actions-required")
+    public ResponseEntity<ApiResponse<OfficerActionsRequiredDTO>> getOfficerActionsRequired(
+            @RequestParam(required = false) Integer limit,
+            HttpServletRequest request) {
+        Long officerId = currentUserService.getCurrentOfficerId(request);
+        String roleCode = currentUserService.getCurrentRoleCode(request);
+        Long unitId = currentUserService.getCurrentUnitId(request);
+        if (officerId == null || roleCode == null || unitId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Officer information not found. Please login as an officer."));
+        }
+        OfficerActionsRequiredDTO dto = actionsRequiredService.getOfficerActionsRequired(officerId, roleCode, unitId, limit);
+        return ResponseEntity.ok(ApiResponse.success("Actions required", dto));
+    }
+
+    /**
+     * Get action types (transition codes + labels) that exist in the officer's caseload.
+     * Use to build "filter by action" dropdown for My Cases.
+     * GET /api/cases/my-cases/action-types
+     */
+    @Operation(summary = "My Cases action types", description = "List of transition codes/labels that currently exist in the officer's assigned cases (for filter dropdown)")
+    @GetMapping("/my-cases/action-types")
+    public ResponseEntity<ApiResponse<List<TransitionSummaryDTO>>> getMyCasesActionTypes(HttpServletRequest request) {
+        Long officerId = currentUserService.getCurrentOfficerId(request);
+        String roleCode = currentUserService.getCurrentRoleCode(request);
+        Long unitId = currentUserService.getCurrentUnitId(request);
+        if (officerId == null || roleCode == null || unitId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Officer information not found. Please login as an officer."));
+        }
+        List<TransitionSummaryDTO> list = actionsRequiredService.getOfficerCaseloadActionTypes(officerId, roleCode, unitId);
+        return ResponseEntity.ok(ApiResponse.success("Action types in caseload", list));
+    }
+
+    /**
+     * Get cases assigned to current logged-in officer.
+     * Optional filter: transitionCode – only cases where this transition is currently available.
+     * GET /api/cases/my-cases
+     * GET /api/cases/my-cases?transitionCode=RECORD_HEARING
+     */
+    @Operation(summary = "Get My Assigned Cases", description = "Retrieve cases assigned to the current officer. Optionally filter by transitionCode (e.g. RECORD_HEARING) to show only cases where that action is available.")
     @GetMapping("/my-cases")
-    public ResponseEntity<ApiResponse<List<CaseDTO>>> getMyAssignedCases(HttpServletRequest request) {
+    public ResponseEntity<ApiResponse<List<CaseDTO>>> getMyAssignedCases(
+            @RequestParam(required = false) String transitionCode,
+            HttpServletRequest request) {
         Long officerId = currentUserService.getCurrentOfficerId(request);
         if (officerId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error("Officer information not found. Please login as an officer."));
         }
-        List<CaseDTO> cases = caseService.getCasesAssignedToOfficer(officerId);
+        String roleCode = currentUserService.getCurrentRoleCode(request);
+        Long unitId = currentUserService.getCurrentUnitId(request);
+        List<CaseDTO> cases;
+        if (transitionCode != null && !transitionCode.isBlank()) {
+            cases = actionsRequiredService.getOfficerCasesFilteredByTransition(officerId, roleCode, unitId, transitionCode);
+        } else {
+            cases = caseService.getCasesAssignedToOfficer(officerId);
+        }
         return ResponseEntity.ok(ApiResponse.success("Cases retrieved successfully", cases));
     }
 
