@@ -1,6 +1,5 @@
 package in.gov.manipur.rccms.config;
 
-import in.gov.manipur.rccms.entity.SystemSettings;
 import in.gov.manipur.rccms.repository.SystemSettingsRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,23 +27,9 @@ public class SystemSettingsDataInitializer implements CommandLineRunner {
         
         // Check if settings already exist
         if (systemSettingsRepository.findByIsActiveTrue().isEmpty()) {
-            log.info("No system settings found, creating default settings");
-            
-            SystemSettings settings = new SystemSettings();
-            settings.setLogoUrl("/assets/images/logo.png");
-            settings.setLogoHeader("Revenue & Settlement Department");
-            settings.setLogoSubheader("Government of Manipur");
-            settings.setStateName("Manipur");
-            settings.setFooterText("Revenue & Settlement Department, Government of Manipur");
-            settings.setFooterCopyright("© 2024 Government of Manipur. All rights reserved.");
-            settings.setFooterAddress("Imphal, Manipur, India");
-            settings.setFooterEmail("info@manipur.gov.in");
-            settings.setFooterPhone("+91-XXX-XXXXXXX");
-            settings.setFooterWebsite("https://manipur.gov.in");
-            settings.setIsActive(true);
-            
-            systemSettingsRepository.save(settings);
-            log.info("Default system settings created successfully");
+            log.info("No system settings found - System settings should be configured via admin APIs for Chandigarh");
+            log.info("Skipping default system settings initialization - please configure through admin panel");
+            // System settings will be configured through admin APIs based on Chandigarh's requirements
         } else {
             log.info("System settings already exist, skipping initialization");
         }

@@ -10,12 +10,11 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Role Master Data Initializer
- * Automatically inserts system-controlled roles when application starts
+ * Initializes only the default SUPER_ADMIN role required for system access.
+ * All other roles should be configured via admin APIs for Chandigarh implementation.
  */
 @Slf4j
 @Component
@@ -33,84 +32,26 @@ public class RoleDataInitializer implements CommandLineRunner {
     }
 
     /**
-     * Initialize system-controlled roles
+     * Initialize only default SUPER_ADMIN role
+     * Other roles should be configured via admin APIs
      */
     private void initializeRoles() {
-        List<RoleMaster> rolesToInsert = new ArrayList<>();
-
-        // SUPER_ADMIN - System administrator (State level)
-        rolesToInsert.add(createRole(
-            "SUPER_ADMIN",
-            "Super Administrator",
-            AdminUnit.UnitLevel.STATE,
-            "System administrator with full access"
-        ));
-
-        // STATE_ADMIN - State Administrator (State level)
-        rolesToInsert.add(createRole(
-            "STATE_ADMIN",
-            "State Administrator",
-            AdminUnit.UnitLevel.STATE,
-            "State-level administrator for Land Resource Department"
-        ));
-
-        // DISTRICT_OFFICER - District Officer (District level)
-        rolesToInsert.add(createRole(
-            "DISTRICT_OFFICER",
-            "District Officer",
-            AdminUnit.UnitLevel.DISTRICT,
-            "Revenue Court / Revenue Tribunal Officer"
-        ));
-
-        // SUB_DIVISION_OFFICER - Sub-Division Officer (Sub-Division level)
-        rolesToInsert.add(createRole(
-            "SUB_DIVISION_OFFICER",
-            "Sub-Division Officer",
-            AdminUnit.UnitLevel.SUB_DIVISION,
-            "Office of the SDO (Sub-Divisional Officer)"
-        ));
-
-        // CIRCLE_OFFICER - Circle Officer (Circle level)
-        rolesToInsert.add(createRole(
-            "CIRCLE_OFFICER",
-            "Circle Officer",
-            AdminUnit.UnitLevel.CIRCLE,
-            "Office of the SDC (Sub-Divisional Circle)"
-        ));
-
-        // CIRCLE_MANDOL - Circle Mandol (Circle level)
-        rolesToInsert.add(createRole(
-            "CIRCLE_MANDOL",
-            "Circle Mandol",
-            AdminUnit.UnitLevel.CIRCLE,
-            "Circle Mandol - Receives applications from DA, processes and forwards to SDC"
-        ));
-
-        // DEALING_ASSISTANT - Dealing Assistant (All levels)
-        rolesToInsert.add(createRole(
-            "DEALING_ASSISTANT",
-            "Dealing Assistant",
-            null, // Can be at any level
-            "Dealing Assistant supporting officers at all levels"
-        ));
-
-        // Insert roles if they don't exist
-        int insertedCount = 0;
-        int skippedCount = 0;
-
-        for (RoleMaster role : rolesToInsert) {
-            if (!roleMasterRepository.existsByRoleCode(role.getRoleCode())) {
-                roleMasterRepository.save(role);
-                insertedCount++;
-                log.info("Inserted role: {} - {}", role.getRoleCode(), role.getRoleName());
-            } else {
-                skippedCount++;
-                log.debug("Role already exists, skipping: {}", role.getRoleCode());
-            }
+        // Only initialize SUPER_ADMIN - default admin role required for system access
+        if (!roleMasterRepository.existsByRoleCode("SUPER_ADMIN")) {
+            RoleMaster superAdmin = createRole(
+                "SUPER_ADMIN",
+                "Super Administrator",
+                AdminUnit.UnitLevel.STATE,
+                "System administrator with full access - Default admin role"
+            );
+            roleMasterRepository.save(superAdmin);
+            log.info("Inserted default admin role: SUPER_ADMIN - Super Administrator");
+        } else {
+            log.debug("SUPER_ADMIN role already exists, skipping");
         }
-
-        log.info("Role Master initialization completed: {} inserted, {} skipped (already exist)",
-                insertedCount, skippedCount);
+        
+        log.info("Role Master initialization completed - Only SUPER_ADMIN initialized");
+        log.info("Other roles should be configured via admin APIs for Chandigarh");
     }
 
     /**

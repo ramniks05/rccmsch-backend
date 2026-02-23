@@ -161,19 +161,22 @@ public class SystemSettingsService {
 
     /**
      * Create default system settings
+     * NOTE: Default values removed for Chandigarh implementation.
+     * System settings should be configured via admin APIs.
      */
     private SystemSettings createDefaultSettings() {
         SystemSettings settings = new SystemSettings();
+        // Default values removed - to be configured for Chandigarh via admin APIs
         settings.setLogoUrl("/assets/images/logo.png");
-        settings.setLogoHeader("Revenue & Settlement Department");
-        settings.setLogoSubheader("Government of Manipur");
-        settings.setStateName("Manipur");
-        settings.setFooterText("Revenue & Settlement Department, Government of Manipur");
-        settings.setFooterCopyright("© 2024 Government of Manipur. All rights reserved.");
-        settings.setFooterAddress("Imphal, Manipur, India");
-        settings.setFooterEmail("info@manipur.gov.in");
-        settings.setFooterPhone("+91-XXX-XXXXXXX");
-        settings.setFooterWebsite("https://manipur.gov.in");
+        settings.setLogoHeader("Revenue Court Case Management System");
+        settings.setLogoSubheader(""); // To be configured for Chandigarh
+        settings.setStateName(""); // To be configured for Chandigarh
+        settings.setFooterText(""); // To be configured for Chandigarh
+        settings.setFooterCopyright(""); // To be configured for Chandigarh
+        settings.setFooterAddress(""); // To be configured for Chandigarh
+        settings.setFooterEmail(""); // To be configured for Chandigarh
+        settings.setFooterPhone(""); // To be configured for Chandigarh
+        settings.setFooterWebsite(""); // To be configured for Chandigarh
         settings.setIsActive(true);
 
         return systemSettingsRepository.save(settings);

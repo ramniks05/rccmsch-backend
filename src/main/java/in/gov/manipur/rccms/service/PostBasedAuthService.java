@@ -56,16 +56,23 @@ public class PostBasedAuthService {
                     return new InvalidCredentialsException("Invalid UserID or posting is not active");
                 });
 
-        // Get court (already eagerly fetched)
+        // Determine posting type and get unit
         Court court = posting.getCourt();
-        if (court == null) {
-            throw new RuntimeException("Court not found for posting UserID: " + request.getUserid());
-        }
+        AdminUnit unit;
+        boolean isCourtBased = court != null;
 
-        // Get unit from court
-        AdminUnit unit = court.getUnit();
-        if (unit == null) {
-            throw new RuntimeException("Unit not found for court in posting UserID: " + request.getUserid());
+        if (isCourtBased) {
+            // Court-based posting: get unit from court
+            unit = court.getUnit();
+            if (unit == null) {
+                throw new RuntimeException("Unit not found for court in posting UserID: " + request.getUserid());
+            }
+        } else {
+            // Unit-based posting: get unit directly
+            unit = posting.getUnit();
+            if (unit == null) {
+                throw new RuntimeException("Unit not found for unit-based posting UserID: " + request.getUserid());
+            }
         }
         
         // Eagerly fetch role
@@ -113,7 +120,7 @@ public class PostBasedAuthService {
         PostingHierarchyDTO hierarchy = buildHierarchy(unit);
 
         // Build posting details
-        PostingDetailsDTO postingDetails = PostingDetailsDTO.builder()
+        PostingDetailsDTO.PostingDetailsDTOBuilder postingBuilder = PostingDetailsDTO.builder()
                 .postingId(posting.getId())
                 .postingUserid(posting.getPostingUserid())
                 .fromDate(posting.getFromDate())
@@ -121,11 +128,6 @@ public class PostBasedAuthService {
                 .isCurrent(posting.getIsCurrent())
                 .roleCode(role.getRoleCode())
                 .roleName(role.getRoleName())
-                .courtId(court.getId())
-                .courtCode(court.getCourtCode())
-                .courtName(court.getCourtName())
-                .courtLevel(court.getCourtLevel().name())
-                .courtType(court.getCourtType().name())
                 .unitId(unit.getUnitId())
                 .unitCode(unit.getUnitCode())
                 .unitName(unit.getUnitName())
@@ -134,8 +136,18 @@ public class PostBasedAuthService {
                 .officerId(officer.getId())
                 .officerName(officer.getFullName())
                 .officerEmail(officer.getEmail())
-                .officerMobile(officer.getMobileNo())
-                .build();
+                .officerMobile(officer.getMobileNo());
+
+        // Add court information only for court-based postings
+        if (isCourtBased && court != null) {
+            postingBuilder.courtId(court.getId())
+                    .courtCode(court.getCourtCode())
+                    .courtName(court.getCourtName())
+                    .courtLevel(court.getCourtLevel().name())
+                    .courtType(court.getCourtType().name());
+        }
+
+        PostingDetailsDTO postingDetails = postingBuilder.build();
 
         log.info("Post-based login successful for UserID: {}, Officer: {}", request.getUserid(), officer.getFullName());
 

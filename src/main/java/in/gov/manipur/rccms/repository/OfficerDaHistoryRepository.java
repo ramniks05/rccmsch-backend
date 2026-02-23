@@ -24,10 +24,13 @@ public interface OfficerDaHistoryRepository extends JpaRepository<OfficerDaHisto
 
     /**
      * Find active posting by UserID (with eager fetching of court, unit, and officer)
+     * Handles both court-based and unit-based postings
      */
     @Query("SELECT p FROM OfficerDaHistory p " +
            "LEFT JOIN FETCH p.court c " +
-           "LEFT JOIN FETCH c.unit u " +
+           "LEFT JOIN FETCH c.unit cu " +
+           "LEFT JOIN FETCH cu.parentUnit " +
+           "LEFT JOIN FETCH p.unit u " +
            "LEFT JOIN FETCH u.parentUnit " +
            "LEFT JOIN FETCH p.officer " +
            "WHERE p.postingUserid = :userid AND p.isCurrent = true")
@@ -80,9 +83,44 @@ public interface OfficerDaHistoryRepository extends JpaRepository<OfficerDaHisto
     List<OfficerDaHistory> findByIsCurrentTrueOrderByFromDateDesc();
 
     /**
-     * Find all active postings by unit (through court)
+     * Find all active postings by unit (through court - court-based postings)
      */
     @Query("SELECT p FROM OfficerDaHistory p WHERE p.court.unitId = :unitId AND p.isCurrent = true")
     List<OfficerDaHistory> findActivePostingsByUnit(@Param("unitId") Long unitId);
+
+    /**
+     * Find active unit-based postings by unit ID
+     */
+    List<OfficerDaHistory> findByUnitIdAndIsCurrentTrue(Long unitId);
+
+    /**
+     * Find active unit-based posting by unit and role
+     */
+    Optional<OfficerDaHistory> findByUnitIdAndRoleCodeAndIsCurrentTrue(Long unitId, String roleCode);
+
+    /**
+     * Find active postings by unit and role (for closing existing postings)
+     */
+    @Query("SELECT p FROM OfficerDaHistory p WHERE p.unitId = :unitId AND p.roleCode = :roleCode AND p.isCurrent = true")
+    List<OfficerDaHistory> findActivePostingsByUnitAndRole(@Param("unitId") Long unitId, @Param("roleCode") String roleCode);
+
+    /**
+     * Find field officers (unit-based postings) available to a court
+     * Searches unit hierarchy: finds unit-based officers in units under the court's unit
+     */
+    @Query("SELECT p FROM OfficerDaHistory p " +
+           "WHERE p.isCurrent = true " +
+           "AND p.courtId IS NULL " +
+           "AND p.roleCode = :roleCode " +
+           "AND (p.unit.unitId = :unitId " +
+           "     OR p.unit.parentUnitId = :unitId " +
+           "     OR EXISTS (SELECT 1 FROM AdminUnit au WHERE au.unitId = :unitId AND au.parentUnitId = p.unit.unitId))")
+    List<OfficerDaHistory> findFieldOfficersForCourt(@Param("unitId") Long unitId, @Param("roleCode") String roleCode);
+
+    /**
+     * Find all unit-based postings (field officers) by role
+     */
+    @Query("SELECT p FROM OfficerDaHistory p WHERE p.courtId IS NULL AND p.roleCode = :roleCode AND p.isCurrent = true ORDER BY p.fromDate DESC")
+    List<OfficerDaHistory> findUnitBasedPostingsByRole(@Param("roleCode") String roleCode);
 }
 

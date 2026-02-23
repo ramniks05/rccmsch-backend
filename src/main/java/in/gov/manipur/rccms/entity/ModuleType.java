@@ -7,6 +7,7 @@ public enum ModuleType {
     HEARING,
     NOTICE,
     ORDERSHEET,
-    JUDGEMENT
+    JUDGEMENT,
+    ATTENDANCE
 }
 

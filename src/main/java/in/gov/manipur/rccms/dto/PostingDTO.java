@@ -9,6 +9,7 @@ import java.time.LocalDate;
 
 /**
  * DTO for Posting (Officer DA History)
+ * Supports both court-based and unit-based postings
  */
 @Data
 @NoArgsConstructor
@@ -17,7 +18,10 @@ public class PostingDTO {
 
     private Long id;
     
-    @NotNull(message = "Court ID is required")
+    /**
+     * Court ID (for court-based postings)
+     * NULL for unit-based postings
+     */
     private Long courtId;
     
     private String courtName;
@@ -25,7 +29,11 @@ public class PostingDTO {
     private String courtLevel;
     private String courtType;
     
-    // Unit information (derived from court)
+    /**
+     * Unit information
+     * For court-based: derived from court
+     * For unit-based: direct unit assignment
+     */
     private Long unitId;
     private String unitName;
     private String unitCode;
@@ -42,7 +50,17 @@ public class PostingDTO {
     private String officerName;
     private String mobileNo;
     
-    private String postingUserid; // Generated: ROLE_CODE@COURT_CODE
+    /**
+     * UserID format:
+     * - Court-based: ROLE_CODE@COURT_CODE
+     * - Unit-based: ROLE_CODE@UNIT_LGD_CODE
+     */
+    private String postingUserid;
+    
+    /**
+     * Posting type: "COURT_BASED" or "UNIT_BASED"
+     */
+    private String postingType;
     
     @NotNull(message = "From date is required")
     private LocalDate fromDate;

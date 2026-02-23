@@ -234,11 +234,17 @@ public class WorkflowEngineService {
 
         // Get workflow instance
         CaseWorkflowInstance instance = instanceRepository.findByCaseId(caseId)
-                .orElseThrow(() -> new RuntimeException("Workflow instance not found for case: " + caseId));
+                .orElse(null);
+        
+        if (instance == null) {
+            log.warn("Workflow instance not found for case: {}", caseId);
+            return new ArrayList<>();
+        }
 
         // Get current state
         WorkflowState currentState = instance.getCurrentState();
         if (currentState == null) {
+            log.debug("No current state found for case: {}", caseId);
             return new ArrayList<>();
         }
 
@@ -246,16 +252,24 @@ public class WorkflowEngineService {
         List<WorkflowTransition> transitions = transitionRepository
                 .findTransitionsFromState(instance.getWorkflowId(), currentState.getId());
 
-        // Get unit level
+        // Get unit level - handle null or invalid unitId gracefully
         Long unitIdValue = unitId;
         if (unitIdValue == null) {
+            log.debug("Unit ID is null for case: {}", caseId);
             return new ArrayList<>();
         }
-        AdminUnit unit = adminUnitRepository.findById(unitIdValue)
-                .orElseThrow(() -> new RuntimeException("Unit not found: " + unitIdValue));
+        
+        AdminUnit unit = adminUnitRepository.findById(unitIdValue).orElse(null);
+        if (unit == null) {
+            log.warn("Unit not found with ID: {} for case: {}", unitIdValue, caseId);
+            return new ArrayList<>();
+        }
 
-        Case caseEntity = caseRepository.findById(caseId)
-                .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
+        Case caseEntity = caseRepository.findById(caseId).orElse(null);
+        if (caseEntity == null) {
+            log.warn("Case not found with ID: {}", caseId);
+            return new ArrayList<>();
+        }
 
         // Filter transitions based on permissions
         List<WorkflowTransitionDTO> availableTransitions = new ArrayList<>();
@@ -1128,7 +1142,7 @@ public class WorkflowEngineService {
         }
         
         // Check for known module types in flag names
-        String[] moduleTypes = {"HEARING", "NOTICE", "ORDERSHEET", "JUDGEMENT"};
+        String[] moduleTypes = {"HEARING", "NOTICE", "ORDERSHEET", "JUDGEMENT", "ATTENDANCE"};
         
         for (String moduleType : moduleTypes) {
             if (flagName.startsWith(moduleType + "_")) {

@@ -149,16 +149,21 @@ public class AdminController {
     /**
      * Assign a person to a post
      * POST /api/admin/postings
+     * 
+     * Supports TWO types of postings:
+     * 1. Court-based: Provide courtId (for TEHSILDAR, READER, etc.)
+     * 2. Unit-based: Provide unitId, courtId must be null (for PATWARI, KANUNGO, etc.)
      */
     @Operation(
             summary = "Assign Person to Post",
-            description = "Assign a person to a post (COURT + ROLE). Existing active posting for same court+role will be closed."
+            description = "Assign a person to a post. Supports court-based (courtId) and unit-based (unitId) postings. " +
+                         "For court-based: provide courtId. For unit-based field officers: provide unitId (courtId must be null)."
     )
     @PostMapping("/postings")
     public ResponseEntity<ApiResponse<PostingDTO>> assignPersonToPost(
             @Valid @RequestBody PostingAssignmentDTO request) {
-        log.info("Assign officer to post request - Court: {}, Role: {}, Officer: {}", 
-                request.getCourtId(), request.getRoleCode(), request.getOfficerId());
+        log.info("Assign officer to post request - Court: {}, Unit: {}, Role: {}, Officer: {}", 
+                request.getCourtId(), request.getUnitId(), request.getRoleCode(), request.getOfficerId());
         
         PostingDTO posting = postingService.assignPersonToPost(request);
         
@@ -219,14 +224,69 @@ public class AdminController {
     }
 
     /**
-     * Get all active postings by unit (through court)
+     * Get all active postings by unit
      * GET /api/admin/postings/unit/{unitId}/active
+     * Returns both court-based postings (courts in this unit) and unit-based postings (directly to this unit)
      */
-    @Operation(summary = "Get Active Postings by Unit", description = "Retrieve all active postings for a unit (through courts)")
+    @Operation(
+            summary = "Get Active Postings by Unit", 
+            description = "Retrieve all active postings for a unit. Includes both court-based (courts in unit) and unit-based (direct assignments) postings."
+    )
     @GetMapping("/postings/unit/{unitId}/active")
     public ResponseEntity<ApiResponse<List<PostingDTO>>> getActivePostingsByUnit(@PathVariable Long unitId) {
         List<PostingDTO> postings = postingService.getActivePostingsByUnit(unitId);
         return ResponseEntity.ok(ApiResponse.success("Active postings retrieved successfully", postings));
+    }
+
+    /**
+     * Get field officers (unit-based postings) available to a court
+     * GET /api/admin/postings/field-officers/court/{courtId}?roleCode={roleCode}
+     * Searches unit hierarchy to find field officers (PATWARI, KANUNGO, etc.) available to the court
+     */
+    @Operation(
+            summary = "Get Field Officers for Court",
+            description = "Find field officers (unit-based postings) available to a court. " +
+                         "Searches unit hierarchy to find officers like PATWARI, KANUNGO in units under the court's jurisdiction."
+    )
+    @GetMapping("/postings/field-officers/court/{courtId}")
+    public ResponseEntity<ApiResponse<List<PostingDTO>>> getFieldOfficersForCourt(
+            @PathVariable Long courtId,
+            @RequestParam(required = false) String roleCode) {
+        if (roleCode == null || roleCode.trim().isEmpty()) {
+            throw new IllegalArgumentException("roleCode parameter is required");
+        }
+        List<PostingDTO> fieldOfficers = postingService.getFieldOfficersForCourt(courtId, roleCode.trim());
+        return ResponseEntity.ok(ApiResponse.success("Field officers retrieved successfully", fieldOfficers));
+    }
+
+    /**
+     * Get all unit-based postings (field officers) by role
+     * GET /api/admin/postings/field-officers/role/{roleCode}
+     */
+    @Operation(
+            summary = "Get Field Officers by Role",
+            description = "Retrieve all unit-based postings (field officers) for a specific role (e.g., PATWARI, KANUNGO)"
+    )
+    @GetMapping("/postings/field-officers/role/{roleCode}")
+    public ResponseEntity<ApiResponse<List<PostingDTO>>> getFieldOfficersByRole(@PathVariable String roleCode) {
+        List<PostingDTO> fieldOfficers = postingService.getUnitBasedPostingsByRole(roleCode);
+        return ResponseEntity.ok(ApiResponse.success("Field officers retrieved successfully", fieldOfficers));
+    }
+
+    /**
+     * Get unit-based postings by unit and role
+     * GET /api/admin/postings/field-officers/unit/{unitId}/role/{roleCode}
+     */
+    @Operation(
+            summary = "Get Field Officers by Unit and Role",
+            description = "Retrieve unit-based postings (field officers) for a specific unit and role"
+    )
+    @GetMapping("/postings/field-officers/unit/{unitId}/role/{roleCode}")
+    public ResponseEntity<ApiResponse<List<PostingDTO>>> getFieldOfficersByUnitAndRole(
+            @PathVariable Long unitId,
+            @PathVariable String roleCode) {
+        List<PostingDTO> fieldOfficers = postingService.getUnitBasedPostingsByUnitAndRole(unitId, roleCode);
+        return ResponseEntity.ok(ApiResponse.success("Field officers retrieved successfully", fieldOfficers));
     }
 
     /**

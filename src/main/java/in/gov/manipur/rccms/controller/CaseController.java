@@ -16,6 +16,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -264,8 +265,9 @@ public class CaseController {
     /**
      * Get available transitions for a case
      * GET /api/cases/{caseId}/transitions
+     * Supports both officers and citizens. For citizens, returns empty list if no transitions available.
      */
-    @Operation(summary = "Get Available Transitions", description = "Get all available workflow transitions for current user")
+    @Operation(summary = "Get Available Transitions", description = "Get all available workflow transitions for current user. For citizens, returns empty list if no actions are available.")
     @GetMapping("/{caseId}/transitions")
     public ResponseEntity<ApiResponse<List<WorkflowTransitionDTO>>> getAvailableTransitions(
             @PathVariable Long caseId,
@@ -274,14 +276,35 @@ public class CaseController {
         String roleCode = currentUserService.getCurrentRoleCode(request);
         Long unitId = currentUserService.getCurrentUnitId(request);
         
+        // For citizens (no officer info), return empty list with appropriate message
         if (officerId == null || roleCode == null || unitId == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(ApiResponse.error("User information not found"));
+            log.debug("Citizen or user without officer credentials accessing transitions for case: {}", caseId);
+            return ResponseEntity.ok(ApiResponse.success(
+                "No actions available at this time. Please check back later or contact the court for case updates.", 
+                new ArrayList<>()
+            ));
         }
         
-        List<WorkflowTransitionDTO> transitions = workflowEngineService
-                .getAvailableTransitions(caseId, officerId, roleCode, unitId);
-        return ResponseEntity.ok(ApiResponse.success("Available transitions retrieved successfully", transitions));
+        try {
+            List<WorkflowTransitionDTO> transitions = workflowEngineService
+                    .getAvailableTransitions(caseId, officerId, roleCode, unitId);
+            
+            if (transitions.isEmpty()) {
+                return ResponseEntity.ok(ApiResponse.success(
+                    "No actions available at this time. All required steps have been completed or are pending officer review.", 
+                    transitions
+                ));
+            }
+            
+            return ResponseEntity.ok(ApiResponse.success("Available transitions retrieved successfully", transitions));
+        } catch (RuntimeException e) {
+            log.error("Error getting available transitions for case {}: {}", caseId, e.getMessage(), e);
+            // Return empty list with message instead of 500 error
+            return ResponseEntity.ok(ApiResponse.success(
+                "No actions available at this time. Please check back later or contact the court for case updates.", 
+                new ArrayList<>()
+            ));
+        }
     }
 
     /**
