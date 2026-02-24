@@ -14,7 +14,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
-import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -27,7 +26,7 @@ import java.util.Map;
  * for all 9 case natures when application starts
  */
 @Slf4j
-@Component
+// @Component // Disabled - Workflows will be created manually through admin interface
 @RequiredArgsConstructor
 @Order(3) // Initialize after roles and case natures
 public class WorkflowDataInitializer implements CommandLineRunner {
@@ -531,6 +530,8 @@ public class WorkflowDataInitializer implements CommandLineRunner {
         if (transitionCode.contains("SUBMIT") || transitionCode.contains("APPLICATION")) {
             // Citizen can submit applications
             createPermissionIfNotExists(transitionId, "CITIZEN", null, true, false, "ANY_UNIT");
+            // READER can accept/register cases (moves from CITIZEN_APPLICATION to DA_ENTRY)
+            createPermissionIfNotExists(transitionId, "READER", AdminUnit.UnitLevel.DISTRICT, true, false, "SAME_UNIT");
         }
         
         if (transitionCode.contains("ENTER") || transitionCode.contains("REGISTER")) {

@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -244,7 +245,8 @@ public class CaseService {
                 return "PENDING";
             }
 
-            // Get initial state
+            // Get initial state - configured by setting isInitialState = true on a workflow state
+            // See docs/WORKFLOW_INITIAL_STATE_CONFIGURATION.md for details
             WorkflowState initialState = workflowStateRepository
                     .findByWorkflowIdAndIsInitialStateTrue(workflow.getId())
                     .orElse(null);
@@ -278,10 +280,15 @@ public class CaseService {
         WorkflowDefinition workflow = workflowDefinitionRepository.findByWorkflowCode(workflowCode)
                 .orElseThrow(() -> new RuntimeException("Workflow not found: " + workflowCode));
 
-        // Get initial state
+        // Get initial state - this is the state where cases start after submission
+        // The initial state is configured by setting isInitialState = true on a workflow state
+        // Only ONE state per workflow can have isInitialState = true
+        // Configure this through Admin API: PUT /api/admin/workflow/states/{id} with isInitialState: true
         WorkflowState initialState = workflowStateRepository
                 .findByWorkflowIdAndIsInitialStateTrue(workflow.getId())
-                .orElseThrow(() -> new RuntimeException("Initial state not found for workflow: " + workflowCode));
+                .orElseThrow(() -> new RuntimeException(
+                    "Initial state not found for workflow: " + workflowCode + 
+                    ". Please set isInitialState = true on one of the workflow states through Admin API."));
 
         // Create workflow instance
         CaseWorkflowInstance instance = new CaseWorkflowInstance();
@@ -294,8 +301,10 @@ public class CaseService {
         instance.setAssignedToUnit(caseEntity.getUnit());
         instance.setAssignedToUnitId(caseEntity.getUnitId());
         
-        // Automatically assign case to officer based on initial workflow state and permissions
-        assignCaseBasedOnWorkflowState(instance, initialState, caseEntity);
+        // Initially assign to CITIZEN - auto-assignment will happen after citizen executes INITIATE_CASE
+        instance.setAssignedToRole("CITIZEN");
+        instance.setAssignedToOfficer(null);
+        instance.setAssignedToOfficerId(null);
 
         workflowInstanceRepository.save(instance);
 
@@ -432,6 +441,55 @@ public class CaseService {
         return instances.stream()
                 .map(instance -> convertToDTO(instance.getCaseEntity()))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Get cases for officer including unassigned cases for READER role
+     * For READER: returns assigned cases + unassigned cases in their unit/court
+     * For other roles: returns only assigned cases
+     */
+    @Transactional(readOnly = true)
+    public List<CaseDTO> getCasesForOfficer(Long officerId, String roleCode, Long unitId, Long courtId) {
+        List<CaseDTO> cases = new ArrayList<>();
+        
+        // Always include cases directly assigned to this officer
+        List<CaseWorkflowInstance> assignedInstances = workflowInstanceRepository.findByAssignedToOfficerId(officerId);
+        cases.addAll(assignedInstances.stream()
+                .map(instance -> convertToDTO(instance.getCaseEntity()))
+                .collect(Collectors.toList()));
+        
+        // For READER role, also include unassigned cases in their unit/court
+        if ("READER".equals(roleCode)) {
+            List<CaseWorkflowInstance> unassignedInstances = new ArrayList<>();
+            
+            // Get unassigned cases by court if court-based posting
+            if (courtId != null) {
+                unassignedInstances = workflowInstanceRepository.findUnassignedCasesByCourt(courtId);
+                log.debug("Found {} unassigned cases in court {} for READER", unassignedInstances.size(), courtId);
+            } 
+            // Get unassigned cases by unit if unit-based posting or if courtId is null
+            else if (unitId != null) {
+                unassignedInstances = workflowInstanceRepository.findUnassignedCasesByUnit(unitId);
+                log.debug("Found {} unassigned cases in unit {} for READER", unassignedInstances.size(), unitId);
+            }
+            
+            // Add unassigned cases (avoid duplicates)
+            Set<Long> existingCaseIds = cases.stream()
+                    .map(CaseDTO::getId)
+                    .collect(Collectors.toSet());
+            
+            for (CaseWorkflowInstance instance : unassignedInstances) {
+                if (!existingCaseIds.contains(instance.getCaseId())) {
+                    cases.add(convertToDTO(instance.getCaseEntity()));
+                }
+            }
+            
+            log.info("READER {} sees {} total cases ({} assigned + {} unassigned)", 
+                    officerId, cases.size(), assignedInstances.size(), 
+                    cases.size() - assignedInstances.size());
+        }
+        
+        return cases;
     }
 
     /**

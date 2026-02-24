@@ -59,14 +59,14 @@ public class PostBasedAuthService {
         // Determine posting type and get unit
         Court court = posting.getCourt();
         AdminUnit unit;
-        boolean isCourtBased = court != null;
+        boolean isCourtBased = (court != null);
 
-        if (isCourtBased) {
+        if (isCourtBased && court != null) {
             // Court-based posting: get unit from court
-            unit = court.getUnit();
-            if (unit == null) {
+            if (court.getUnit() == null) {
                 throw new RuntimeException("Unit not found for court in posting UserID: " + request.getUserid());
             }
+            unit = court.getUnit();
         } else {
             // Unit-based posting: get unit directly
             unit = posting.getUnit();

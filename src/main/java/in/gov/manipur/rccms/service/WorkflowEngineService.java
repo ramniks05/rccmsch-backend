@@ -151,13 +151,16 @@ public class WorkflowEngineService {
             throw new RuntimeException("To state not found for transition: " + transitionCode);
         }
 
-        // Get officer
+        // Get officer (optional for citizens)
         Long officerIdValue = officerId;
-        if (officerIdValue == null) {
-            throw new RuntimeException("Officer ID cannot be null");
+        Officer officer = null;
+        if (officerIdValue != null) {
+            officer = officerRepository.findById(officerIdValue)
+                    .orElseThrow(() -> new RuntimeException("Officer not found: " + officerIdValue));
+        } else if (!"CITIZEN".equals(roleCode)) {
+            // Non-citizen roles require officerId
+            throw new RuntimeException("Officer ID is required for role: " + roleCode);
         }
-        Officer officer = officerRepository.findById(officerIdValue)
-                .orElseThrow(() -> new RuntimeException("Officer not found: " + officerIdValue));
 
         // Get unit
         Long unitIdValue = unitId;
@@ -211,7 +214,7 @@ public class WorkflowEngineService {
         }
         history.setTransitionId(transitionId);
         history.setPerformedByOfficer(officer);
-        history.setPerformedByOfficerId(officerIdValue);
+        history.setPerformedByOfficerId(officerIdValue); // Can be null for citizens
         history.setPerformedByRole(roleCode);
         history.setPerformedAtUnit(unit);
         history.setPerformedAtUnitId(unitIdValue);
@@ -233,18 +236,31 @@ public class WorkflowEngineService {
                 caseId, officerId, roleCode, unitId);
 
         // Get workflow instance
-        CaseWorkflowInstance instance = instanceRepository.findByCaseId(caseId)
-                .orElse(null);
+        CaseWorkflowInstance instance = null;
+        try {
+            instance = instanceRepository.findByCaseId(caseId)
+                    .orElse(null);
+        } catch (Exception e) {
+            log.error("Error fetching workflow instance for case {}: {}", caseId, e.getMessage(), e);
+            return new ArrayList<>();
+        }
         
         if (instance == null) {
-            log.warn("Workflow instance not found for case: {}", caseId);
+            log.warn("Workflow instance not found for case: {}. Case may not have been initialized with a workflow.", caseId);
             return new ArrayList<>();
         }
 
         // Get current state
-        WorkflowState currentState = instance.getCurrentState();
+        WorkflowState currentState = null;
+        try {
+            currentState = instance.getCurrentState();
+        } catch (Exception e) {
+            log.error("Error fetching current state for case {}: {}", caseId, e.getMessage(), e);
+            return new ArrayList<>();
+        }
+        
         if (currentState == null) {
-            log.debug("No current state found for case: {}", caseId);
+            log.warn("No current state found for case: {}. Workflow instance exists but state is null.", caseId);
             return new ArrayList<>();
         }
 
@@ -252,10 +268,22 @@ public class WorkflowEngineService {
         List<WorkflowTransition> transitions = transitionRepository
                 .findTransitionsFromState(instance.getWorkflowId(), currentState.getId());
 
-        // Get unit level - handle null or invalid unitId gracefully
+        // Get case entity first
+        Case caseEntity = caseRepository.findById(caseId).orElse(null);
+        if (caseEntity == null) {
+            log.warn("Case not found with ID: {}", caseId);
+            return new ArrayList<>();
+        }
+
+        // Get unit level - get from case if unitId is null
         Long unitIdValue = unitId;
         if (unitIdValue == null) {
-            log.debug("Unit ID is null for case: {}", caseId);
+            unitIdValue = caseEntity.getUnitId();
+            log.debug("UnitId was null, using case unitId: {} for role: {}", unitIdValue, roleCode);
+        }
+        
+        if (unitIdValue == null) {
+            log.warn("Unit ID is null for case: {} and role: {}. Case has no unit assigned.", caseId, roleCode);
             return new ArrayList<>();
         }
         
@@ -265,34 +293,50 @@ public class WorkflowEngineService {
             return new ArrayList<>();
         }
 
-        Case caseEntity = caseRepository.findById(caseId).orElse(null);
-        if (caseEntity == null) {
-            log.warn("Case not found with ID: {}", caseId);
-            return new ArrayList<>();
-        }
-
         // Filter transitions based on permissions
         List<WorkflowTransitionDTO> availableTransitions = new ArrayList<>();
 
         for (WorkflowTransition transition : transitions) {
             if (!transition.getIsActive()) {
+                log.debug("Skipping inactive transition: {}", transition.getTransitionCode());
                 continue;
             }
 
-            // Check permissions
-            List<WorkflowPermission> permissions = permissionRepository
-                    .findPermissionsForTransitionAndRole(transition.getId(), roleCode, unit.getUnitLevel());
+            log.debug("Checking transition: {} for role: {}, unitLevel: {}", 
+                    transition.getTransitionCode(), roleCode, unit.getUnitLevel());
 
-            if (permissions.isEmpty()) {
+            // Check permissions
+            // For citizens, try any level first (since they don't have a unit level)
+            List<WorkflowPermission> permissions = new ArrayList<>();
+            if ("CITIZEN".equals(roleCode)) {
                 permissions = permissionRepository
                         .findPermissionsForTransitionAndRoleAnyLevel(transition.getId(), roleCode);
+            } else {
+                permissions = permissionRepository
+                        .findPermissionsForTransitionAndRole(transition.getId(), roleCode, unit.getUnitLevel());
+                
+                if (permissions.isEmpty()) {
+                    log.debug("No permissions found with unit level match, trying any level for transition: {}", 
+                            transition.getTransitionCode());
+                    permissions = permissionRepository
+                            .findPermissionsForTransitionAndRoleAnyLevel(transition.getId(), roleCode);
+                }
             }
 
+            log.debug("Found {} permission(s) for transition: {}, role: {}", 
+                    permissions.size(), transition.getTransitionCode(), roleCode);
+
             for (WorkflowPermission permission : permissions) {
+                log.debug("Checking permission - canInitiate: {}, hierarchyRule: {}, unitLevel: {}", 
+                        permission.getCanInitiate(), permission.getHierarchyRule(), permission.getUnitLevel());
+                
+                boolean hierarchyPassed = checkHierarchyRule(permission, unitId, instance);
+                log.debug("Hierarchy check result: {} (officer unitId: {}, case assignedToUnitId: {})", 
+                        hierarchyPassed, unitId, instance.getAssignedToUnitId());
+                
                 // Show transitions based on permissions and hierarchy only
                 // Conditions are checked when executing, not when showing available transitions
-                if (permission.getCanInitiate() &&
-                        checkHierarchyRule(permission, unitId, instance)) {
+                if (permission.getCanInitiate() && hierarchyPassed) {
                     
                     // Get checklist for this transition
                     TransitionChecklistDTO checklist = null;
@@ -503,18 +547,29 @@ public class WorkflowEngineService {
         String hierarchyRule = permission.getHierarchyRule();
         
         if (hierarchyRule == null || hierarchyRule.isEmpty()) {
+            log.debug("No hierarchy rule specified, allowing access");
             return true; // No rule means allowed
+        }
+
+        // ANY_UNIT always passes
+        if ("ANY_UNIT".equalsIgnoreCase(hierarchyRule)) {
+            log.debug("ANY_UNIT rule - allowing access");
+            return true;
         }
 
         Long unitIdValue = unitId;
         if (unitIdValue == null) {
+            log.debug("UnitId is null, hierarchy check failed for rule: {}", hierarchyRule);
             return false;
         }
 
         switch (hierarchyRule.toUpperCase()) {
             case "SAME_UNIT":
-                return instance.getAssignedToUnitId() != null && 
+                boolean result = instance.getAssignedToUnitId() != null && 
                        instance.getAssignedToUnitId().equals(unitIdValue);
+                log.debug("SAME_UNIT check: unitId={}, case assignedToUnitId={}, result={}", 
+                        unitIdValue, instance.getAssignedToUnitId(), result);
+                return result;
             
             case "PARENT_UNIT":
                 Long assignedUnitId = instance.getAssignedToUnitId();
@@ -925,11 +980,18 @@ public class WorkflowEngineService {
             List<ConditionStatusDTO> conditionStatuses = evaluateConditions(permission, instance, caseEntity);
             allConditions.addAll(conditionStatuses);
 
-            // If all conditions pass, transition can be executed
-            boolean allConditionsPassed = conditionStatuses.stream()
-                    .allMatch(ConditionStatusDTO::getPassed);
-            if (allConditionsPassed) {
+            // If no conditions are defined, transition can be executed (no restrictions)
+            // If conditions exist, all must pass
+            if (conditionStatuses.isEmpty()) {
+                // No conditions = allowed by default
                 canExecute = true;
+            } else {
+                // Check if all conditions pass
+                boolean allConditionsPassed = conditionStatuses.stream()
+                        .allMatch(ConditionStatusDTO::getPassed);
+                if (allConditionsPassed) {
+                    canExecute = true;
+                }
             }
         }
 

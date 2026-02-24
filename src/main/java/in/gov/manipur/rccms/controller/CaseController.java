@@ -1,6 +1,8 @@
 package in.gov.manipur.rccms.controller;
 
 import in.gov.manipur.rccms.dto.*;
+import in.gov.manipur.rccms.entity.Case;
+import in.gov.manipur.rccms.repository.CaseRepository;
 import in.gov.manipur.rccms.service.ActionsRequiredService;
 import in.gov.manipur.rccms.service.CaseService;
 import in.gov.manipur.rccms.service.CurrentUserService;
@@ -36,6 +38,7 @@ public class CaseController {
     private final CurrentUserService currentUserService;
     private final FormSchemaService formSchemaService;
     private final ActionsRequiredService actionsRequiredService;
+    private final CaseRepository caseRepository;
 
     /**
      * Get form schema for a case type
@@ -230,7 +233,7 @@ public class CaseController {
      * GET /api/cases/my-cases
      * GET /api/cases/my-cases?transitionCode=RECORD_HEARING
      */
-    @Operation(summary = "Get My Assigned Cases", description = "Retrieve cases assigned to the current officer. Optionally filter by transitionCode (e.g. RECORD_HEARING) to show only cases where that action is available.")
+    @Operation(summary = "Get My Assigned Cases", description = "Retrieve cases assigned to the current officer. For READER role, also includes unassigned cases in their unit/court. Optionally filter by transitionCode (e.g. RECORD_HEARING) to show only cases where that action is available.")
     @GetMapping("/my-cases")
     public ResponseEntity<ApiResponse<List<CaseDTO>>> getMyAssignedCases(
             @RequestParam(required = false) String transitionCode,
@@ -242,11 +245,20 @@ public class CaseController {
         }
         String roleCode = currentUserService.getCurrentRoleCode(request);
         Long unitId = currentUserService.getCurrentUnitId(request);
+        
+        // Get court ID from posting if available
+        Long courtId = null;
+        var posting = currentUserService.getCurrentPosting(request);
+        if (posting != null && posting.getCourtId() != null) {
+            courtId = posting.getCourtId();
+        }
+        
         List<CaseDTO> cases;
         if (transitionCode != null && !transitionCode.isBlank()) {
             cases = actionsRequiredService.getOfficerCasesFilteredByTransition(officerId, roleCode, unitId, transitionCode);
         } else {
-            cases = caseService.getCasesAssignedToOfficer(officerId);
+            // Use new method that includes unassigned cases for READER
+            cases = caseService.getCasesForOfficer(officerId, roleCode, unitId, courtId);
         }
         return ResponseEntity.ok(ApiResponse.success("Cases retrieved successfully", cases));
     }
@@ -276,9 +288,34 @@ public class CaseController {
         String roleCode = currentUserService.getCurrentRoleCode(request);
         Long unitId = currentUserService.getCurrentUnitId(request);
         
-        // For citizens (no officer info), return empty list with appropriate message
-        if (officerId == null || roleCode == null || unitId == null) {
-            log.debug("Citizen or user without officer credentials accessing transitions for case: {}", caseId);
+        // Get case entity to use for unitId if needed
+        Case caseEntity = null;
+        try {
+            caseEntity = caseRepository.findById(caseId)
+                    .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
+        } catch (RuntimeException e) {
+            log.error("Case not found: {}", caseId, e);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error("Case not found: " + caseId));
+        }
+        
+        // For citizens or if unitId is null, get unitId from case
+        if (unitId == null) {
+            if (caseEntity.getUnitId() != null) {
+                unitId = caseEntity.getUnitId();
+                log.debug("Using case unitId: {} for role: {}", unitId, roleCode);
+            } else {
+                log.warn("Case {} has no unitId assigned", caseId);
+                return ResponseEntity.ok(ApiResponse.success(
+                    "No actions available. Case unit information is missing.", 
+                    new ArrayList<>()
+                ));
+            }
+        }
+        
+        // Role code is required
+        if (roleCode == null) {
+            log.warn("Role code not found in token for case: {}", caseId);
             return ResponseEntity.ok(ApiResponse.success(
                 "No actions available at this time. Please check back later or contact the court for case updates.", 
                 new ArrayList<>()
@@ -297,8 +334,12 @@ public class CaseController {
             }
             
             return ResponseEntity.ok(ApiResponse.success("Available transitions retrieved successfully", transitions));
-        } catch (RuntimeException e) {
+        } catch (Exception e) {
             log.error("Error getting available transitions for case {}: {}", caseId, e.getMessage(), e);
+            // Log full stack trace for debugging
+            if (log.isDebugEnabled()) {
+                e.printStackTrace();
+            }
             // Return empty list with message instead of 500 error
             return ResponseEntity.ok(ApiResponse.success(
                 "No actions available at this time. Please check back later or contact the court for case updates.", 
@@ -321,13 +362,21 @@ public class CaseController {
         String roleCode = currentUserService.getCurrentRoleCode(request);
         Long unitId = currentUserService.getCurrentUnitId(request);
         
-        if (officerId == null || roleCode == null || unitId == null) {
+        // For citizens, officerId and unitId can be null - get from case
+        if (roleCode == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error("User information not found"));
         }
         
-        log.info("Execute transition request: caseId={}, transitionCode={}, officerId={}", 
-                caseId, dto.getTransitionCode(), officerId);
+        // If citizen, get unitId from case
+        if ("CITIZEN".equals(roleCode) && unitId == null) {
+            Case caseEntity = caseRepository.findById(caseId)
+                    .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
+            unitId = caseEntity.getUnitId();
+        }
+        
+        log.info("Execute transition request: caseId={}, transitionCode={}, roleCode={}, officerId={}", 
+                caseId, dto.getTransitionCode(), roleCode, officerId);
 
         workflowEngineService.executeTransition(caseId, dto.getTransitionCode(), officerId, roleCode, unitId, dto.getComments());
 

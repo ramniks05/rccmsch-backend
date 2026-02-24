@@ -72,6 +72,16 @@ public class CurrentUserService {
                     return claims.get("roleCode", String.class);
                 } else if ("ADMIN".equals(authType)) {
                     return claims.get("role", String.class);
+                } else {
+                    // Citizen/Lawyer authentication - check userType
+                    String userType = claims.get("userType", String.class);
+                    if ("LAWYER".equalsIgnoreCase(userType)) {
+                        return "LAWYER";
+                    } else if ("OPERATOR".equalsIgnoreCase(userType)) {
+                        return "OPERATOR";
+                    } else {
+                        return "CITIZEN";
+                    }
                 }
             }
         } catch (Exception e) {
