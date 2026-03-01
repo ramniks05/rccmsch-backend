@@ -46,6 +46,10 @@ public class FormFieldDefinitionDTO {
     private String dependsOnField; // Field name this field depends on
     private String dependencyCondition; // JSON: {operator:"equals", value:"expectedValue"}
     private String conditionalLogic; // JSON: {showIf: {field: "fieldName", operator: "equals", value: "expectedValue"}}
+
+    // On-change API configuration and response mapping (optional)
+    private String onChangeApi;
+    private String onChangeResponseMapping;
     
     // Exclude timestamps from public API response
     @JsonInclude(JsonInclude.Include.NON_NULL)

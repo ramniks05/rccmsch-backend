@@ -258,6 +258,8 @@ public class FormSchemaService {
         field.setDependsOnField(dto.getDependsOnField());
         field.setDependencyCondition(dto.getDependencyCondition());
         field.setConditionalLogic(dto.getConditionalLogic());
+        field.setOnChangeApi(dto.getOnChangeApi());
+        field.setOnChangeResponseMapping(dto.getOnChangeResponseMapping());
 
         FormFieldDefinition saved = fieldRepository.save(field);
         log.info("Form field created successfully: fieldId={}", saved.getId());
@@ -329,6 +331,12 @@ public class FormSchemaService {
         }
         if (dto.getConditionalLogic() != null) {
             field.setConditionalLogic(dto.getConditionalLogic());
+        }
+        if (dto.getOnChangeApi() != null) {
+            field.setOnChangeApi(dto.getOnChangeApi());
+        }
+        if (dto.getOnChangeResponseMapping() != null) {
+            field.setOnChangeResponseMapping(dto.getOnChangeResponseMapping());
         }
 
         FormFieldDefinition saved = fieldRepository.save(field);
@@ -837,6 +845,8 @@ public class FormSchemaService {
                 .dependsOnField(field.getDependsOnField())
                 .dependencyCondition(field.getDependencyCondition())
                 .conditionalLogic(field.getConditionalLogic())
+                .onChangeApi(field.getOnChangeApi())
+                .onChangeResponseMapping(field.getOnChangeResponseMapping())
                 // Exclude timestamps for public API - they're not needed for form rendering
                 .build();
 

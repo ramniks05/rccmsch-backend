@@ -84,6 +84,12 @@ public class FormFieldDefinition {
     @Column(name = "conditional_logic", columnDefinition = "TEXT")
     private String conditionalLogic; // JSON: {showIf: {field: "fieldName", operator: "equals", value: "expectedValue"}}
 
+    @Column(name = "on_change_api", columnDefinition = "TEXT")
+    private String onChangeApi; // JSON string: on-change API config (External API for detail lookup)
+
+    @Column(name = "on_change_response_mapping", columnDefinition = "TEXT")
+    private String onChangeResponseMapping; // JSON string: mapping from API response fields to form fields
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

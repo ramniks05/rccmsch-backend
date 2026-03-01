@@ -70,6 +70,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/public/form-schemas/**").permitAll()  // Public form schemas for citizens
                         .requestMatchers(HttpMethod.GET, "/api/admin/form-schemas/case-types/**").permitAll()  // Form schemas for case types (backward compatibility)
                         .requestMatchers(HttpMethod.GET, "/api/public/form-data-sources/**").permitAll()  // Form data source endpoints
+                        .requestMatchers(HttpMethod.POST, "/api/public/form-data-sources/external-api").permitAll()  // External API proxy (login + fetch data)
                         .requestMatchers("/api/admin/form-schemas/case-types/**").permitAll()  // Allow all methods for this path (backward compatibility)
                         .requestMatchers(HttpMethod.POST, "/api/admin/form-schemas/validate").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/admin-units/root").permitAll()

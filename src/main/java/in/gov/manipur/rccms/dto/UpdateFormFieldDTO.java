@@ -41,5 +41,9 @@ public class UpdateFormFieldDTO {
     private String dependencyCondition; // JSON string
     
     private String conditionalLogic; // JSON string
+
+    // Optional on-change API and response mapping
+    private String onChangeApi; // JSON string
+    private String onChangeResponseMapping; // JSON string
 }
 

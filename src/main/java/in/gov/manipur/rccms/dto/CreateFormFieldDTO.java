@@ -51,5 +51,9 @@ public class CreateFormFieldDTO {
     private String dependencyCondition; // JSON: {operator:"equals", value:"expectedValue"}
     
     private String conditionalLogic; // JSON: {showIf: {field: "fieldName", operator: "equals", value: "expectedValue"}}
+
+    // Optional on-change API and response mapping (used by frontend to configure dependent detail fetch)
+    private String onChangeApi; // JSON string
+    private String onChangeResponseMapping; // JSON string
 }
 

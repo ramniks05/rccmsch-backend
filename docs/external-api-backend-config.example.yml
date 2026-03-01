@@ -1,0 +1,14 @@
+# External API configuration (CHD Revenue) – copy this block into application.yml under `app`
+# Backend forwards runtimeParams as query params with the same keys; for GetMustkhas_Rccms use Nvcode (not parentId).
+
+app:
+  external-apis:
+    ssl-verify: ${EXTERNAL_API_SSL_VERIFY:false}
+    apis:
+      chd-revenue:
+        base-url: ${CHD_REVENUE_BASE_URL:https://revenue.chd.gov.in}
+        login-path: ${CHD_REVENUE_LOGIN_PATH:/rccmsapi/UserLogin}
+        username: ${CHD_REVENUE_API_USERNAME:Admin}
+        password: ${CHD_REVENUE_API_PASSWORD:Nic@123}
+        token-cache-ttl-minutes: 50
+        token-response-path: "token"

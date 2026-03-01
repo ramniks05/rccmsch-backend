@@ -41,6 +41,20 @@ app:
     username: ${ADMIN_USERNAME:admin} # Default admin username
     password: ${ADMIN_PASSWORD:admin@123} # Default admin password (change in production)
 
+  # External APIs (e.g. CHD Revenue) - token-based auth for form data sources
+  external-apis:
+    # Set to false when the external server uses a cert not in Java truststore (e.g. self-signed). Use only in dev/internal.
+    ssl-verify: ${EXTERNAL_API_SSL_VERIFY:false}
+    apis:
+      chd-revenue:
+        base-url: ${CHD_REVENUE_BASE_URL:https://revenue.chd.gov.in}
+        login-path: ${CHD_REVENUE_LOGIN_PATH:/rccmsapi/UserLogin}
+        username: ${CHD_REVENUE_API_USERNAME:Admin}
+        password: ${CHD_REVENUE_API_PASSWORD:Nic@123}
+        token-cache-ttl-minutes: 50
+        # JSON path to token in login response (e.g. "token", "data.accessToken")
+        token-response-path: "token"
+
 # Swagger/OpenAPI Configuration
 springdoc:
   api-docs:

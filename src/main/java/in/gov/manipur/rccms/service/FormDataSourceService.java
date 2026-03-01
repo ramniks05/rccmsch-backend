@@ -1,8 +1,7 @@
 package in.gov.manipur.rccms.service;
 
-import in.gov.manipur.rccms.dto.AdminUnitDTO;
-import in.gov.manipur.rccms.dto.CaseNatureDTO;
-import in.gov.manipur.rccms.dto.CaseTypeDTO;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import in.gov.manipur.rccms.entity.AdminUnit;
 import in.gov.manipur.rccms.entity.Court;
 import in.gov.manipur.rccms.entity.CourtLevel;
@@ -19,11 +18,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.Objects;
 
 /**
  * Form Data Source Service
  * Provides data for dynamic dropdowns in forms
- * Supports ADMIN_UNITS, COURTS, ACTS, CASE_NATURES, CASE_TYPES, etc.
+ * Supports ADMIN_UNITS, COURTS, ACTS, CASE_NATURES, CASE_TYPES, API (external token-authenticated APIs), etc.
  */
 @Slf4j
 @Service
@@ -36,6 +36,8 @@ public class FormDataSourceService {
     private final CaseNatureRepository caseNatureRepository;
     private final CaseTypeRepository caseTypeRepository;
     private final ActService actService;
+    private final ExternalApiClientService externalApiClientService;
+    private final ObjectMapper objectMapper;
 
     /**
      * Get admin units by level and optional parent
@@ -159,6 +161,87 @@ public class FormDataSourceService {
                     return map;
                 })
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Get data from external API (no runtime params). Delegates to getExternalApiData(dataSourceJson, null).
+     */
+    public List<Map<String, Object>> getExternalApiData(String dataSourceJson) {
+        return getExternalApiData(dataSourceJson, null);
+    }
+
+    /**
+     * Get data from external API with optional runtime params (e.g. from frontend: parentId).
+     * Merges dataSource.queryParams with runtimeParams; runtimeParams override when same key.
+     */
+    public List<Map<String, Object>> getExternalApiData(String dataSourceJson, Map<String, Object> runtimeParams) {
+        if (dataSourceJson == null || dataSourceJson.isBlank()) {
+            log.warn("External API data source JSON is empty");
+            return List.of();
+        }
+        try {
+            JsonNode node = objectMapper.readTree(dataSourceJson);
+            if (!"API".equalsIgnoreCase(node.path("type").asText(""))) {
+                log.warn("dataSource type is not API: {}", dataSourceJson);
+                return List.of();
+            }
+            String apiConfigKey = node.path("apiConfigKey").asText(null);
+            String dataEndpoint = node.path("dataEndpoint").asText(null);
+            if (apiConfigKey == null || dataEndpoint == null) {
+                log.warn("dataSource API missing apiConfigKey or dataEndpoint: {}", dataSourceJson);
+                return List.of();
+            }
+            Map<String, String> queryParams = new HashMap<>();
+            JsonNode params = node.get("queryParams");
+            if (params != null && params.isObject()) {
+                params.fields().forEachRemaining(e -> queryParams.put(e.getKey(), e.getValue().asText()));
+            }
+            if (runtimeParams != null && !runtimeParams.isEmpty()) {
+                runtimeParams.forEach((k, v) -> {
+                    if (k != null && v != null) queryParams.put(k, Objects.toString(v));
+                });
+            }
+            log.info("External API data source: apiConfigKey={}, dataEndpoint={}, queryParams={}", apiConfigKey, dataEndpoint, queryParams);
+            List<Map<String, Object>> raw = externalApiClientService.fetchData(apiConfigKey, dataEndpoint, queryParams.isEmpty() ? null : queryParams);
+            String valueField = node.path("valueField").asText(null);
+            String labelField = node.path("labelField").asText(null);
+            if (valueField != null && !valueField.isBlank() && labelField != null && !labelField.isBlank()) {
+                return raw.stream()
+                        .map(item -> {
+                            Object val = item.get(valueField);
+                            Object lbl = item.get(labelField);
+                            // Frontend expects non-null value/label; use fallbacks to avoid "Option N missing value"
+                            Object value = val != null ? val : (lbl != null ? lbl : "");
+                            Object label = lbl != null ? lbl : (val != null ? String.valueOf(val) : "");
+                            Map<String, Object> option = new HashMap<>();
+                            option.put("value", value);
+                            option.put("label", label);
+                            return option;
+                        })
+                        .collect(Collectors.toList());
+            }
+            // Raw response: ensure each item has value and label for dropdown compatibility (use id/name or first string as fallback)
+            return raw.stream()
+                    .map(item -> {
+                        if (item.containsKey("value") && item.containsKey("label")) {
+                            return item;
+                        }
+                        Object v = item.get("value") != null ? item.get("value") : item.get("id");
+                        if (v == null) v = item.get("code");
+                        if (v == null) v = item.get("name");
+                        Object l = item.get("label") != null ? item.get("label") : item.get("name");
+                        if (l == null) l = item.get("title");
+                        if (l == null) l = v;
+                        Map<String, Object> option = new HashMap<>(item);
+                        option.put("value", v != null ? v : "");
+                        option.put("label", l != null ? l : "");
+                        return option;
+                    })
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.error("Failed to fetch external API data: {}", e.getMessage());
+            return List.of();
+        }
     }
 
     /**
