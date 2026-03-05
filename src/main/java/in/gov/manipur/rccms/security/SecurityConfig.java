@@ -79,6 +79,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/public/registration-forms/**").permitAll()
                         // Calendar: allow all (fetch, create, update, deactivate) without auth
                         .requestMatchers("/api/calender/**").permitAll()
+                        .requestMatchers("/api/admin/courts").permitAll()
                         // Dashboard: case summary and hearing reports (public, admin, officer)
                         .requestMatchers(HttpMethod.GET, "/api/dashboard/**").permitAll()
                         // Swagger/OpenAPI endpoints
