@@ -8,7 +8,6 @@ import lombok.Data;
 import java.time.format.DateTimeFormatter;
 
 
-
 @Data
 public class CauseListDTO {
 
@@ -23,9 +22,9 @@ public class CauseListDTO {
 
 
     public CauseListDTO(CauseListProjection r) {
-        this.courtName = r.getCourtName();
-        this.courtAddress = r.getCourtAddress();
-        this.totalCases = r.getTotalCases();
-        this.hearingDate = r.getHearingDate().format(FORMATTER);
+        this.courtName = r.getCourtName() != null ? r.getCourtName() : "NA";
+        this.courtAddress = r.getCourtAddress() != null ? r.getCourtAddress() : "NA";
+        this.totalCases = r.getTotalCases() != null ? r.getTotalCases() : 0L;
+        this.hearingDate = r.getHearingDate() != null ? r.getHearingDate().format(FORMATTER) : "NA";
     }
 }
