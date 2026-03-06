@@ -31,7 +31,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class DashboardService {
 
-    private static final String HEARING_SCHEDULED_STATUS = "HEARING_SCHEDULED";
+    private static final String HEARING_SCHEDULED_STATUS = "CASE_NUMBER_HEARING_DATE_GENERATED";
     private static final int NEXT_DAYS = 10;
 
     private final CaseRepository caseRepository;
