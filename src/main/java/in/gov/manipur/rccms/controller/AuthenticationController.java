@@ -83,6 +83,14 @@ public class AuthenticationController {
                 .body(ApiResponse.success("Registration successful. OTP sent to mobile number.", response));
     }
 
+    @PutMapping("/citizen/edit-profile/{id}")
+    public ResponseEntity<ApiResponse<CitizenProfileUpdateDTO>> editCitizenProfile(
+            @PathVariable Long id,
+           @Valid @RequestBody CitizenProfileUpdateDTO dto) {
+
+        return ResponseEntity.ok(ApiResponse.success("Data updated successfully.",citizenService.updateCitizenProfile(id, dto)));
+    }
+
     /**
      * Lawyer Registration
      * POST /api/auth/lawyer/register

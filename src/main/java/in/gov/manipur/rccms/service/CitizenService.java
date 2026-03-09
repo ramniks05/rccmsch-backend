@@ -1,5 +1,6 @@
 package in.gov.manipur.rccms.service;
 
+import in.gov.manipur.rccms.dto.CitizenProfileUpdateDTO;
 import in.gov.manipur.rccms.dto.CitizenRegistrationDTO;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -37,6 +38,28 @@ public class CitizenService {
      */
     public java.util.Map<String, Object> registerCitizen(CitizenRegistrationDTO dto) {
         return registerCitizenWithType(dto, Citizen.CitizenType.CITIZEN);
+    }
+
+    public CitizenProfileUpdateDTO updateCitizenProfile(Long citizenId, CitizenProfileUpdateDTO dto) {
+
+        Citizen citizen = citizenRepository.findById(citizenId)
+                .orElseThrow(() -> new RuntimeException("Citizen not found"));
+
+        citizen.setFirstName(dto.getFirstName());
+        citizen.setLastName(dto.getLastName());
+        citizen.setEmail(dto.getEmail());
+
+        if (dto.getExtraFields() != null && !dto.getExtraFields().isEmpty()) {
+            try {
+                citizen.setRegistrationData(objectMapper.writeValueAsString(dto.getExtraFields()));
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Invalid registration data format");
+            }
+        }
+
+
+        Citizen savedData = citizenRepository.save(citizen);
+        return new CitizenProfileUpdateDTO(savedData,objectMapper);
     }
 
     /**
