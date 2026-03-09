@@ -1,5 +1,6 @@
 package in.gov.manipur.rccms.dto;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -43,6 +44,7 @@ public class CreateCaseDTO {
     
     private String remarks;
     
-    private String caseData; // JSON string for case-specific data
+    @JsonDeserialize(using = JsonStringOrObjectDeserializer.class)
+    private String caseData; // JSON string for case-specific data (accepts string or object from client)
 }
 
