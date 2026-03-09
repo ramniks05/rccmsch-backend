@@ -63,7 +63,7 @@ public interface CaseRepository extends JpaRepository<Case, Long> {
 
     @Query("""
             SELECT  c.court.courtName as courtName, c.court.address as courtAddress, COUNT(c) as totalCases, c.hearingDate as hearingDate FROM Case c WHERE c.isActive = true
-            AND (:courtId IS NULL OR c.court.id = :courtId) GROUP BY c.court.courtName, c.court.address, c.hearingDate
+            AND (:courtId IS NULL OR c.court.id = :courtId) AND c.hearingDate is not NULL GROUP BY c.court.courtName, c.court.address, c.hearingDate
             ORDER BY c.hearingDate DESC""")
     List<CauseListProjection> getCauseList(@Param("courtId") Long courtId);
 

@@ -15,4 +15,5 @@ public class CaseSummaryDTO {
     private long pendingCases;
     private long disposedCases;
     private long hearingScheduledCount;
+    private long totalCourts;
 }

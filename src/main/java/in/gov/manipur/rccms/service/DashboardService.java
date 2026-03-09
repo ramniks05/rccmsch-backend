@@ -46,7 +46,8 @@ public class DashboardService {
         long pendingCases = workflowInstanceRepository.countByCurrentState_IsFinalStateFalseAndCaseEntity_IsActiveTrue();
         long disposedCases = workflowInstanceRepository.countByCurrentState_IsFinalStateTrueAndCaseEntity_IsActiveTrue();
         long hearingScheduledCount = caseRepository.countByStatusAndIsActiveTrue(HEARING_SCHEDULED_STATUS);
-        return new CaseSummaryDTO(totalCases, pendingCases, disposedCases, hearingScheduledCount);
+        long totalCourts = courtRepository.count();
+        return new CaseSummaryDTO(totalCases, pendingCases, disposedCases, hearingScheduledCount,totalCourts);
     }
 
     /**
