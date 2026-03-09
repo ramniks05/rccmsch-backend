@@ -423,5 +423,26 @@ public class CaseController {
         List<WorkflowHistoryDTO> history = workflowEngineService.getWorkflowHistoryDTOs(caseId);
         return ResponseEntity.ok(ApiResponse.success("Workflow history retrieved successfully", history));
     }
+
+    /**
+     * Assign case to a specific officer (manual assignment)
+     * PUT /api/admin/cases/{caseId}/assign-officer
+     * Used for assigning cases to field officers (Patwari, Kanungo, etc.)
+     */
+    @Operation(summary = "Assign Case to Officer", 
+               description = "Manually assign a case to a specific officer. Used for field officer assignments (Patwari, Kanungo, etc.)")
+    @PutMapping("/{caseId}/assign-officer")
+    public ResponseEntity<ApiResponse<CaseDTO>> assignCaseToOfficer(
+            @PathVariable Long caseId,
+            @Valid @RequestBody AssignCaseOfficerDTO dto) {
+        log.info("Assign case to officer: caseId={}, officerId={}, roleCode={}", 
+                caseId, dto.getOfficerId(), dto.getRoleCode());
+        
+        CaseDTO assignedCase = caseService.assignCaseToSpecificOfficer(
+                caseId, dto.getOfficerId(), dto.getRoleCode());
+        
+        return ResponseEntity.ok(ApiResponse.success(
+                "Case assigned to officer successfully", assignedCase));
+    }
 }
 

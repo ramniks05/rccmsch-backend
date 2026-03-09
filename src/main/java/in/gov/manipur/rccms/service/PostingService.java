@@ -336,6 +336,19 @@ public class PostingService {
     }
 
     /**
+     * Get all field officers (unit-based postings) below a unit in hierarchy
+     * Returns all unit-based officers in units under the given unit (all roles)
+     * Useful for showing all field officers available to a Tehsildar
+     */
+    @Transactional(readOnly = true)
+    public List<PostingDTO> getAllFieldOfficersBelowUnit(Long unitId) {
+        List<OfficerDaHistory> fieldOfficers = postingRepository.findAllFieldOfficersBelowUnit(unitId);
+        return fieldOfficers.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
      * Get all active postings
      */
     @Transactional(readOnly = true)

@@ -7,6 +7,7 @@ import in.gov.manipur.rccms.entity.Case;
 import in.gov.manipur.rccms.entity.ModuleType;
 import in.gov.manipur.rccms.repository.CaseRepository;
 import in.gov.manipur.rccms.service.CaseModuleFormService;
+import in.gov.manipur.rccms.service.CaseService;
 import in.gov.manipur.rccms.service.CurrentUserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -29,6 +30,7 @@ import java.util.Optional;
 public class CaseModuleFormController {
 
     private final CaseModuleFormService moduleFormService;
+    private final CaseService caseService;
     private final CaseRepository caseRepository;
     private final CurrentUserService currentUserService;
     private final ObjectMapper objectMapper;
@@ -120,6 +122,21 @@ public class CaseModuleFormController {
         }
         ModuleFormSubmissionDTO saved = moduleFormService.submitForm(caseId, moduleType, officerId, dto);
         return ResponseEntity.ok(ApiResponse.success("Module form submitted", saved));
+    }
+
+    /**
+     * Get parties (petitioner, respondent) for a case to mark attendance
+     * GET /api/cases/{caseId}/parties
+     */
+    @GetMapping("/{caseId}/parties")
+    public ResponseEntity<ApiResponse<CasePartiesDTO>> getCaseParties(
+            @PathVariable Long caseId) {
+        if (caseId == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("Case ID cannot be null"));
+        }
+        CasePartiesDTO parties = caseService.getCaseParties(caseId);
+        return ResponseEntity.ok(ApiResponse.success("Case parties retrieved successfully", parties));
     }
 }
 

@@ -1,10 +1,12 @@
 package in.gov.manipur.rccms.service;
 
 import in.gov.manipur.rccms.dto.CaseDTO;
+import in.gov.manipur.rccms.dto.CasePartiesDTO;
 import in.gov.manipur.rccms.dto.CreateCaseDTO;
 import in.gov.manipur.rccms.dto.FormDataDisplayItemDTO;
 import in.gov.manipur.rccms.dto.FormFieldDefinitionDTO;
 import in.gov.manipur.rccms.dto.FormSchemaDTO;
+import in.gov.manipur.rccms.dto.PartyInfoDTO;
 import in.gov.manipur.rccms.dto.ResubmitCaseDTO;
 import in.gov.manipur.rccms.entity.*;
 import in.gov.manipur.rccms.repository.*;
@@ -885,6 +887,87 @@ public class CaseService {
         }
         
         return roles;
+    }
+
+    /**
+     * Extract parties (petitioner, respondent) from case data for attendance marking
+     * Looks for common field names like: petitionerName, respondentName, petitioner_name, respondent_name, etc.
+     */
+    @Transactional(readOnly = true)
+    public CasePartiesDTO getCaseParties(Long caseId) {
+        Case caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
+
+        List<PartyInfoDTO> parties = new ArrayList<>();
+
+        // Parse caseData JSON
+        Map<String, Object> caseData = new java.util.HashMap<>();
+        if (caseEntity.getCaseData() != null && !caseEntity.getCaseData().trim().isEmpty()) {
+            try {
+                caseData = objectMapper.readValue(caseEntity.getCaseData(), 
+                        new TypeReference<Map<String, Object>>() {});
+            } catch (Exception e) {
+                log.warn("Could not parse caseData for case {}: {}", caseId, e.getMessage());
+            }
+        }
+
+        // Extract petitioner (check multiple possible field names)
+        String petitionerName = extractPartyName(caseData, 
+                "petitionerName", "petitioner_name", "petitioner", "applicantName", "applicant_name");
+        if (petitionerName != null && !petitionerName.trim().isEmpty()) {
+            parties.add(PartyInfoDTO.builder()
+                    .partyId("petitioner")
+                    .partyName(petitionerName)
+                    .partyType("PETITIONER")
+                    .partyLabel("Petitioner")
+                    .build());
+        }
+
+        // Extract respondent (check multiple possible field names)
+        String respondentName = extractPartyName(caseData, 
+                "respondentName", "respondent_name", "respondent", "oppositePartyName", "opposite_party_name");
+        if (respondentName != null && !respondentName.trim().isEmpty()) {
+            parties.add(PartyInfoDTO.builder()
+                    .partyId("respondent")
+                    .partyName(respondentName)
+                    .partyType("RESPONDENT")
+                    .partyLabel("Respondent")
+                    .build());
+        }
+
+        // If no parties found in caseData, use applicant name as petitioner
+        if (parties.isEmpty() && caseEntity.getApplicant() != null) {
+            String applicantName = caseEntity.getApplicant().getFirstName() + " " + 
+                    (caseEntity.getApplicant().getLastName() != null ? caseEntity.getApplicant().getLastName() : "");
+            parties.add(PartyInfoDTO.builder()
+                    .partyId("petitioner")
+                    .partyName(applicantName.trim())
+                    .partyType("PETITIONER")
+                    .partyLabel("Petitioner")
+                    .build());
+        }
+
+        return CasePartiesDTO.builder()
+                .caseId(caseId)
+                .caseNumber(caseEntity.getCaseNumber())
+                .parties(parties)
+                .build();
+    }
+
+    /**
+     * Extract party name from caseData map, checking multiple possible field names
+     */
+    private String extractPartyName(Map<String, Object> caseData, String... fieldNames) {
+        for (String fieldName : fieldNames) {
+            Object value = caseData.get(fieldName);
+            if (value != null) {
+                String name = value.toString().trim();
+                if (!name.isEmpty()) {
+                    return name;
+                }
+            }
+        }
+        return null;
     }
 }
 

@@ -122,5 +122,19 @@ public interface OfficerDaHistoryRepository extends JpaRepository<OfficerDaHisto
      */
     @Query("SELECT p FROM OfficerDaHistory p WHERE p.courtId IS NULL AND p.roleCode = :roleCode AND p.isCurrent = true ORDER BY p.fromDate DESC")
     List<OfficerDaHistory> findUnitBasedPostingsByRole(@Param("roleCode") String roleCode);
+
+    /**
+     * Find all field officers (unit-based postings) below a unit in hierarchy
+     * Returns all unit-based officers in units under the given unit (child units)
+     * This includes officers at the unit itself, direct children, and nested children
+     */
+    @Query("SELECT p FROM OfficerDaHistory p " +
+           "WHERE p.isCurrent = true " +
+           "AND p.courtId IS NULL " +
+           "AND (p.unit.unitId = :unitId " +
+           "     OR p.unit.parentUnitId = :unitId " +
+           "     OR EXISTS (SELECT 1 FROM AdminUnit au WHERE au.unitId = :unitId AND au.parentUnitId = p.unit.unitId)) " +
+           "ORDER BY p.roleCode, p.unit.unitName, p.officer.fullName")
+    List<OfficerDaHistory> findAllFieldOfficersBelowUnit(@Param("unitId") Long unitId);
 }
 
