@@ -1,5 +1,6 @@
 package in.gov.manipur.rccms.controller;
 
+import in.gov.manipur.rccms.Projection.OfficerCaseStatsProjection;
 import in.gov.manipur.rccms.dto.*;
 import in.gov.manipur.rccms.service.DashboardService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,24 +53,31 @@ public class DashboardController {
     @GetMapping("/hearings/calendar")
     @Operation(summary = "Monthly Hearing Dates with and without court filtering ", description = "All monthly active hearings with dates and tooltip ")
 
-    public ResponseEntity<List<CalendarHearingDTO>> getCalendarHearings(
+    public ResponseEntity<ApiResponse<List<CalendarHearingDTO>>> getCalendarHearings(
             @RequestParam Integer year,
             @RequestParam Integer month,
             @RequestParam(required = false) Long courtId) {
 
-        return ResponseEntity.ok(
-                dashboardService.getMonthlyHearings(year, month, courtId)
+        return ResponseEntity.ok(ApiResponse.success("Fetched Successfully",  dashboardService.getMonthlyHearings(year, month, courtId))
+
         );
     }
 
-
     @GetMapping("/cause-list")
     @Operation(summary = "Cause List", description = "Fetching cause list for dashboard ")
-    public ResponseEntity<List<CauseListDTO>> getCauseList(
+    public ResponseEntity<ApiResponse<List<CauseListDTO>>> getCauseList(
             @RequestParam(required = false) Long courtId) {
-        return ResponseEntity.ok(
-                dashboardService.getCauseList(courtId)
-        );
+        return ResponseEntity.ok(ApiResponse.success("Cause List", dashboardService.getCauseList(courtId)));
+
+    }
+
+    @GetMapping("/officer-case-stats")
+    @Operation(summary = "Officer Case Statistics", description = "Fetch officer-wise case statistics for dashboard")
+    public ResponseEntity<ApiResponse<List<OfficerCaseStatsProjection>>> getOfficerCaseStatistics(
+            ) {
+
+        return ResponseEntity.ok(ApiResponse.success("Officer Statistics Fetched Successfully", dashboardService.getOfficerCaseStatistics()));
+
     }
 
 

@@ -15,13 +15,17 @@ public class CalendarHearingDTO {
     private Integer date;
     private Boolean isHearing;
     private String tooltip;
+    private long totalCases;
 
 
     public CalendarHearingDTO(CalendarHearingProjection r) {
 
         this.date = r.getHearingDate().getDayOfMonth();
-        this.tooltip = r.getCourtName() + "-" + r.getTotalCases();
         this.isHearing = true;
+        this.tooltip = r.getCourtName() ;
+        this.totalCases =  r.getTotalCases();
+
+
 
     }
 }

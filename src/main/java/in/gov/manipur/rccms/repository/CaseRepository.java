@@ -2,6 +2,7 @@ package in.gov.manipur.rccms.repository;
 
 import in.gov.manipur.rccms.Projection.CalendarHearingProjection;
 import in.gov.manipur.rccms.Projection.CauseListProjection;
+import in.gov.manipur.rccms.Projection.OfficerCaseStatsProjection;
 import in.gov.manipur.rccms.entity.Case;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -66,6 +67,24 @@ public interface CaseRepository extends JpaRepository<Case, Long> {
             AND (:courtId IS NULL OR c.court.id = :courtId) AND c.hearingDate is not NULL GROUP BY c.court.courtName, c.court.address, c.hearingDate
             ORDER BY c.hearingDate DESC""")
     List<CauseListProjection> getCauseList(@Param("courtId") Long courtId);
+
+    @Query(value = """
+            SELECT 
+                o.full_name AS name,
+                ohd.role_code AS designation,
+                au.unit_name AS district,
+                COUNT(DISTINCT c.id) FILTER (WHERE c.status != 'DISPOSED') AS pending,
+                COUNT(DISTINCT c.id) FILTER (WHERE c.status = 'DISPOSED') AS disposed,
+                COUNT(DISTINCT c.id) AS totalCases
+            FROM workflow_history wh
+            JOIN cases c ON c.id = wh.case_id
+            JOIN officers o ON o.id = wh.performed_by_officer_id
+            JOIN officer_da_history ohd ON ohd.officer_id=o.id
+            LEFT JOIN admin_unit au ON au.unit_id = wh.performed_at_unit_id
+            WHERE c.is_active = true
+            GROUP BY o.id, o.full_name, ohd.role_code, au.unit_name
+            """, nativeQuery = true)
+    List<OfficerCaseStatsProjection> getOfficerCaseStats();
 
 
 }

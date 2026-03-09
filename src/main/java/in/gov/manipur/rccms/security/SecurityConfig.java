@@ -16,6 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
+import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfigurationSource;
 
@@ -42,6 +43,10 @@ public class SecurityConfig {
     private final CorsConfigurationSource corsConfigurationSource;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
+    private static final String [] AUTH_WHITELIST = {
+            "/api/contactUs/submit"
+    };
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -59,7 +64,9 @@ public class SecurityConfig {
                                 "/api/admin/auth/login",
                                 "/api/health",
                                 "/api/captcha/**"
+
                         ).permitAll()
+                        .requestMatchers(AUTH_WHITELIST).permitAll()
                         // Public read-only endpoints (for frontend) - GET requests
                         .requestMatchers(HttpMethod.GET, "/api/case-types/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/admin/case-types/**").permitAll()  // Admin read-only endpoints

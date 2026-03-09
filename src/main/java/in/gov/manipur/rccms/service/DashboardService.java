@@ -3,6 +3,7 @@ package in.gov.manipur.rccms.service;
 import in.gov.manipur.rccms.Constants.Constant.Constant;
 import in.gov.manipur.rccms.Projection.CalendarHearingProjection;
 import in.gov.manipur.rccms.Projection.CauseListProjection;
+import in.gov.manipur.rccms.Projection.OfficerCaseStatsProjection;
 import in.gov.manipur.rccms.dto.*;
 import in.gov.manipur.rccms.entity.Case;
 import in.gov.manipur.rccms.entity.Court;
@@ -153,6 +154,11 @@ public class DashboardService {
         return results.stream()
                 .map(CauseListDTO::new)
                 .toList();
+    }
+
+    public List<OfficerCaseStatsProjection> getOfficerCaseStatistics() {
+
+        return caseRepository.getOfficerCaseStats();
     }
 
 }
