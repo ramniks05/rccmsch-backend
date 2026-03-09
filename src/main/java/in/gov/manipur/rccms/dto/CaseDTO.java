@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
@@ -56,5 +57,11 @@ public class CaseDTO {
     private String assignedToRole;
     private Long assignedToUnitId;
     private String assignedToUnitName;
+
+    /** Form/case-specific data as JSON (e.g. applicant_name, respondent_name, area details). */
+    private String caseData;
+
+    /** Form data with field labels and groups for display (fieldName, fieldLabel, fieldGroup, groupLabel, value, displayOrder). */
+    private List<FormDataDisplayItemDTO> formDataWithLabels;
 }
 

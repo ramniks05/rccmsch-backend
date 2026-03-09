@@ -2,6 +2,9 @@ package in.gov.manipur.rccms.service;
 
 import in.gov.manipur.rccms.dto.CaseDTO;
 import in.gov.manipur.rccms.dto.CreateCaseDTO;
+import in.gov.manipur.rccms.dto.FormDataDisplayItemDTO;
+import in.gov.manipur.rccms.dto.FormFieldDefinitionDTO;
+import in.gov.manipur.rccms.dto.FormSchemaDTO;
 import in.gov.manipur.rccms.dto.ResubmitCaseDTO;
 import in.gov.manipur.rccms.entity.*;
 import in.gov.manipur.rccms.repository.*;
@@ -144,6 +147,16 @@ public class CaseService {
         caseEntity.setApplicationDate(dto.getApplicationDate() != null ? dto.getApplicationDate() : LocalDate.now());
         caseEntity.setRemarks(dto.getRemarks());
         caseEntity.setCaseData(dto.getCaseData());
+        if (dto.getCaseData() != null && !dto.getCaseData().trim().isEmpty()) {
+            try {
+                Map<String, Object> formDataMap = objectMapper.readValue(dto.getCaseData(),
+                        new TypeReference<Map<String, Object>>() {});
+                String displayJson = buildFormDataDisplayJson(caseTypeId, formDataMap);
+                caseEntity.setCaseDataDisplay(displayJson);
+            } catch (Exception e) {
+                log.warn("Could not build case data display for case type {}: {}", caseTypeId, e.getMessage());
+            }
+        }
         caseEntity.setIsActive(true);
 
         // Get initial workflow state and set status BEFORE saving
@@ -213,6 +226,16 @@ public class CaseService {
         }
 
         caseEntity.setCaseData(dto.getCaseData());
+        if (dto.getCaseData() != null && !dto.getCaseData().trim().isEmpty()) {
+            try {
+                Map<String, Object> formDataMap = objectMapper.readValue(dto.getCaseData(),
+                        new TypeReference<Map<String, Object>>() {});
+                String displayJson = buildFormDataDisplayJson(caseEntity.getCaseTypeId(), formDataMap);
+                caseEntity.setCaseDataDisplay(displayJson);
+            } catch (Exception e) {
+                log.warn("Could not build case data display for resubmit case {}: {}", caseId, e.getMessage());
+            }
+        }
         caseEntity.setRemarks(dto.getRemarks());
         Case saved = caseRepository.save(caseEntity);
 
@@ -673,6 +696,42 @@ public class CaseService {
     }
 
     /**
+     * Build JSON string of form data with field labels and groups for display.
+     * Uses form schema for the case type so each value is paired with fieldLabel, fieldGroup, groupLabel, displayOrder.
+     */
+    private String buildFormDataDisplayJson(Long caseTypeId, Map<String, Object> formData) {
+        if (formData == null || formData.isEmpty()) {
+            return null;
+        }
+        try {
+            FormSchemaDTO schema = formSchemaService.getFormSchema(caseTypeId);
+            if (schema == null || schema.getFields() == null || schema.getFields().isEmpty()) {
+                return null;
+            }
+            List<FormDataDisplayItemDTO> list = new ArrayList<>();
+            for (FormFieldDefinitionDTO f : schema.getFields()) {
+                Object value = formData.get(f.getFieldName());
+                if (value == null) {
+                    value = "";
+                }
+                list.add(FormDataDisplayItemDTO.builder()
+                        .fieldName(f.getFieldName())
+                        .fieldLabel(f.getFieldLabel())
+                        .fieldGroup(f.getFieldGroup())
+                        .groupLabel(f.getGroupLabel())
+                        .value(value)
+                        .displayOrder(f.getDisplayOrder())
+                        .groupDisplayOrder(f.getGroupDisplayOrder())
+                        .build());
+            }
+            return objectMapper.writeValueAsString(list);
+        } catch (Exception e) {
+            log.warn("Failed to build form data display for caseTypeId {}: {}", caseTypeId, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Convert Entity to DTO
      */
     private CaseDTO convertToDTO(Case caseEntity) {
@@ -709,6 +768,16 @@ public class CaseService {
         }
         dto.setSubject(caseEntity.getSubject());
         dto.setDescription(caseEntity.getDescription());
+        dto.setCaseData(caseEntity.getCaseData());
+        if (caseEntity.getCaseDataDisplay() != null && !caseEntity.getCaseDataDisplay().trim().isEmpty()) {
+            try {
+                List<FormDataDisplayItemDTO> displayList = objectMapper.readValue(caseEntity.getCaseDataDisplay(),
+                        new TypeReference<List<FormDataDisplayItemDTO>>() {});
+                dto.setFormDataWithLabels(displayList);
+            } catch (Exception e) {
+                log.debug("Could not parse caseDataDisplay for case {}: {}", caseEntity.getId(), e.getMessage());
+            }
+        }
         dto.setStatus(caseEntity.getStatus());
         dto.setPriority(caseEntity.getPriority());
         dto.setApplicationDate(caseEntity.getApplicationDate());

@@ -101,6 +101,10 @@ public class Case {
     @Column(name = "case_data", columnDefinition = "TEXT")
     private String caseData; // JSON string for case-specific data
 
+    /** JSON array of {fieldName, fieldLabel, fieldGroup, groupLabel, value, displayOrder} for display. */
+    @Column(name = "case_data_display", columnDefinition = "TEXT")
+    private String caseDataDisplay;
+
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 

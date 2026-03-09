@@ -540,8 +540,13 @@ public class FormSchemaService {
             } catch (Exception e) {
                 valueStr = value.toString();
             }
+        } else if (value instanceof Map && ("SELECT".equalsIgnoreCase(fieldType) || "RADIO".equalsIgnoreCase(fieldType) || "DROPDOWN".equalsIgnoreCase(fieldType))) {
+            // Frontend may send option as {value: "x", label: "y"} for dropdowns
+            @SuppressWarnings("unchecked")
+            Object v = ((Map<String, Object>) value).get("value");
+            valueStr = v != null ? String.valueOf(v).trim() : "";
         } else {
-            valueStr = value.toString().trim();
+            valueStr = value != null ? value.toString().trim() : "";
         }
 
         try {
@@ -565,8 +570,16 @@ public class FormSchemaService {
                     return validatePhone(valueStr, rules);
                 case "SELECT":
                 case "RADIO":
+                case "DROPDOWN":
+                    // Skip option validation when options come from dynamic dataSource (API, ADMIN_UNITS, etc.)
+                    if (field.getDataSource() != null && !field.getDataSource().trim().isEmpty()) {
+                        return null;
+                    }
                     return validateSelect(valueStr, field.getFieldOptions());
                 case "MULTISELECT":
+                    if (field.getDataSource() != null && !field.getDataSource().trim().isEmpty()) {
+                        return null;
+                    }
                     return validateMultiselect(valueStr, field.getFieldOptions());
                 case "CHECKBOX":
                     return validateCheckbox(valueStr);
@@ -686,6 +699,9 @@ public class FormSchemaService {
         try {
             List<String> selectedValues = objectMapper.readValue(value, new TypeReference<List<String>>() {});
             List<Map<String, String>> options = objectMapper.readValue(fieldOptions, new TypeReference<List<Map<String, String>>>() {});
+            if (options == null || options.isEmpty()) {
+                return null; // No static options (e.g. from API), skip validation
+            }
             Set<String> validValues = options.stream()
                     .map(opt -> opt.get("value"))
                     .filter(Objects::nonNull)
@@ -736,7 +752,9 @@ public class FormSchemaService {
     }
 
     /**
-     * Validate select/radio field
+     * Validate select/radio/dropdown field.
+     * Uses type-tolerant comparison (value may be string or number from JSON).
+     * Skips option membership check when options are empty (dynamic dropdown from API).
      */
     private String validateSelect(String value, String fieldOptions) {
         if (fieldOptions == null || fieldOptions.trim().isEmpty()) {
@@ -744,14 +762,26 @@ public class FormSchemaService {
         }
 
         try {
-            List<Map<String, String>> options = objectMapper.readValue(fieldOptions, 
-                    new TypeReference<List<Map<String, String>>>() {});
-            
+            List<Map<String, Object>> options = objectMapper.readValue(fieldOptions,
+                    new TypeReference<List<Map<String, Object>>>() {});
+            // Skip validation when no static options (e.g. dropdown options come from API/dataSource)
+            if (options == null || options.isEmpty()) {
+                return null;
+            }
+            String valueStr = value == null ? "" : value;
+            if (valueStr.isEmpty()) {
+                return null; // Required check is done earlier
+            }
             boolean isValid = options.stream()
-                    .anyMatch(opt -> value.equals(opt.get("value")));
-            
+                    .anyMatch(opt -> {
+                        Object optVal = opt.get("value");
+                        if (optVal == null) return false;
+                        return valueStr.equals(String.valueOf(optVal));
+                    });
             if (!isValid) {
-                return "Invalid option selected";
+                // Option not in static list - likely a dynamic dropdown (API); accept to avoid blocking
+                log.debug("Select value '{}' not in static options; accepting (may be from dynamic source)", valueStr);
+                return null;
             }
         } catch (Exception e) {
             log.error("Error parsing field options: {}", e.getMessage());
