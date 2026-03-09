@@ -88,7 +88,7 @@ public class AuthenticationController {
             @PathVariable Long id,
            @Valid @RequestBody CitizenProfileUpdateDTO dto) {
 
-        return ResponseEntity.ok(ApiResponse.success("Data updated successfully.",citizenService.updateCitizenProfile(id, dto)));
+        return ResponseEntity.ok(ApiResponse.success("Profile updated successfully.",citizenService.updateCitizenProfile(id, dto)));
     }
 
     /**
