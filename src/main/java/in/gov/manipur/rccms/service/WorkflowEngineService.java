@@ -1204,7 +1204,7 @@ public class WorkflowEngineService {
         }
         
         // Check for known module types in flag names
-        String[] moduleTypes = {"HEARING", "NOTICE", "ORDERSHEET", "JUDGEMENT", "ATTENDANCE"};
+        String[] moduleTypes = {"HEARING", "NOTICE", "ORDERSHEET", "JUDGEMENT", "ATTENDANCE", "FIELD_REPORT"};
         
         for (String moduleType : moduleTypes) {
             if (flagName.startsWith(moduleType + "_")) {

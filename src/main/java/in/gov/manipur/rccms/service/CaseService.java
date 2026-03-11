@@ -475,13 +475,47 @@ public class CaseService {
      */
     @Transactional(readOnly = true)
     public List<CaseDTO> getCasesForOfficer(Long officerId, String roleCode, Long unitId, Long courtId) {
+        log.info("getCasesForOfficer called: officerId={}, roleCode={}, unitId={}, courtId={}", 
+                officerId, roleCode, unitId, courtId);
         List<CaseDTO> cases = new ArrayList<>();
         
         // Always include cases directly assigned to this officer
         List<CaseWorkflowInstance> assignedInstances = workflowInstanceRepository.findByAssignedToOfficerId(officerId);
-        cases.addAll(assignedInstances.stream()
-                .map(instance -> convertToDTO(instance.getCaseEntity()))
-                .collect(Collectors.toList()));
+        log.info("Found {} workflow instances assigned to officerId={}", assignedInstances.size(), officerId);
+        
+        if (assignedInstances.isEmpty()) {
+            log.warn("No workflow instances found for officerId={}. Checking database directly...", officerId);
+            // Debug: Check if there are any cases assigned to this officer ID in the database
+            long count = workflowInstanceRepository.findAll().stream()
+                    .filter(inst -> officerId.equals(inst.getAssignedToOfficerId()))
+                    .count();
+            log.warn("Total workflow instances with assignedToOfficerId={} in repository: {}", officerId, count);
+        }
+        
+        for (CaseWorkflowInstance instance : assignedInstances) {
+            log.debug("Processing workflow instance id={}, caseId={}, assignedToOfficerId={}, assignedToRole={}", 
+                    instance.getId(), instance.getCaseId(), instance.getAssignedToOfficerId(), instance.getAssignedToRole());
+            
+            if (instance.getCaseEntity() == null) {
+                log.warn("Workflow instance {} has null case entity (caseId={})", instance.getId(), instance.getCaseId());
+                continue;
+            }
+            
+            Case caseEntity = instance.getCaseEntity();
+            log.debug("Case entity: id={}, caseNumber={}, isActive={}, status={}", 
+                    caseEntity.getId(), caseEntity.getCaseNumber(), caseEntity.getIsActive(), caseEntity.getStatus());
+            
+            if (!Boolean.TRUE.equals(caseEntity.getIsActive())) {
+                log.warn("Skipping inactive case {} (caseId={}) for officer {}", 
+                        caseEntity.getCaseNumber(), caseEntity.getId(), officerId);
+                continue;
+            }
+            
+            cases.add(convertToDTO(caseEntity));
+            log.debug("Added case {} to result list", caseEntity.getCaseNumber());
+        }
+        
+        log.info("Returning {} active cases for officerId={}, roleCode={}", cases.size(), officerId, roleCode);
         
         // For READER role, also include unassigned cases in their unit/court
         if ("READER".equals(roleCode)) {

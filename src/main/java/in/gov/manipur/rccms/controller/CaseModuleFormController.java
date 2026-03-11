@@ -111,17 +111,50 @@ public class CaseModuleFormController {
             @PathVariable ModuleType moduleType,
             @Valid @RequestBody CreateModuleFormSubmissionDTO dto,
             HttpServletRequest request) {
+        log.info("Submit module form request: caseId={}, moduleType={}", caseId, moduleType);
+        
         if (caseId == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ApiResponse.error("Case ID cannot be null"));
         }
+        
+        if (moduleType == null) {
+            log.error("ModuleType is null in path variable");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("Module type cannot be null. Valid values: HEARING, NOTICE, ORDERSHEET, JUDGEMENT, ATTENDANCE, FIELD_REPORT"));
+        }
+        
         Long officerId = currentUserService.getCurrentOfficerId(request);
         if (officerId == null) {
+            log.warn("Officer ID not found in request for caseId={}, moduleType={}", caseId, moduleType);
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error("Officer information not found"));
         }
-        ModuleFormSubmissionDTO saved = moduleFormService.submitForm(caseId, moduleType, officerId, dto);
-        return ResponseEntity.ok(ApiResponse.success("Module form submitted", saved));
+        
+        log.info("Submitting form: caseId={}, moduleType={}, officerId={}, formData={}", 
+                caseId, moduleType, officerId, dto.getFormData());
+        
+        try {
+            ModuleFormSubmissionDTO saved = moduleFormService.submitForm(caseId, moduleType, officerId, dto);
+            log.info("Form submitted successfully: caseId={}, moduleType={}, submissionId={}", 
+                    caseId, moduleType, saved.getId());
+            return ResponseEntity.ok(ApiResponse.success("Module form submitted", saved));
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid argument when submitting form: caseId={}, moduleType={}, error={}", 
+                    caseId, moduleType, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("Invalid request: " + e.getMessage()));
+        } catch (RuntimeException e) {
+            log.error("Error submitting form: caseId={}, moduleType={}, error={}", 
+                    caseId, moduleType, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("Failed to submit form: " + e.getMessage()));
+        } catch (Exception e) {
+            log.error("Unexpected error submitting form: caseId={}, moduleType={}, error={}", 
+                    caseId, moduleType, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("An unexpected error occurred: " + e.getMessage()));
+        }
     }
 
     /**

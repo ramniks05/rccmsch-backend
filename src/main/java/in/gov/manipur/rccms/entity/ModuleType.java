@@ -8,6 +8,7 @@ public enum ModuleType {
     NOTICE,
     ORDERSHEET,
     JUDGEMENT,
-    ATTENDANCE
+    ATTENDANCE,
+    FIELD_REPORT
 }
 

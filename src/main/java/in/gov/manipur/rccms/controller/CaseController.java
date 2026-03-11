@@ -2,7 +2,9 @@ package in.gov.manipur.rccms.controller;
 
 import in.gov.manipur.rccms.dto.*;
 import in.gov.manipur.rccms.entity.Case;
+import in.gov.manipur.rccms.entity.CaseWorkflowInstance;
 import in.gov.manipur.rccms.repository.CaseRepository;
+import in.gov.manipur.rccms.repository.CaseWorkflowInstanceRepository;
 import in.gov.manipur.rccms.service.ActionsRequiredService;
 import in.gov.manipur.rccms.service.CaseService;
 import in.gov.manipur.rccms.service.CurrentUserService;
@@ -39,6 +41,7 @@ public class CaseController {
     private final FormSchemaService formSchemaService;
     private final ActionsRequiredService actionsRequiredService;
     private final CaseRepository caseRepository;
+    private final CaseWorkflowInstanceRepository workflowInstanceRepository;
 
     /**
      * Get form schema for a case type
@@ -239,12 +242,14 @@ public class CaseController {
             @RequestParam(required = false) String transitionCode,
             HttpServletRequest request) {
         Long officerId = currentUserService.getCurrentOfficerId(request);
+        log.info("getMyAssignedCases: extracted officerId={} from JWT token", officerId);
         if (officerId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error("Officer information not found. Please login as an officer."));
         }
         String roleCode = currentUserService.getCurrentRoleCode(request);
         Long unitId = currentUserService.getCurrentUnitId(request);
+        log.info("getMyAssignedCases: roleCode={}, unitId={}, transitionCode={}", roleCode, unitId, transitionCode);
         
         // Get court ID from posting if available
         Long courtId = null;
@@ -261,6 +266,55 @@ public class CaseController {
             cases = caseService.getCasesForOfficer(officerId, roleCode, unitId, courtId);
         }
         return ResponseEntity.ok(ApiResponse.success("Cases retrieved successfully", cases));
+    }
+
+    /**
+     * Diagnostic endpoint: Show current user info from JWT token
+     * GET /api/cases/debug/my-info
+     */
+    @Operation(summary = "Debug: Show Current User Info", description = "Shows information extracted from JWT token for debugging")
+    @GetMapping("/debug/my-info")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getMyInfo(HttpServletRequest request) {
+        Long officerId = currentUserService.getCurrentOfficerId(request);
+        String roleCode = currentUserService.getCurrentRoleCode(request);
+        Long unitId = currentUserService.getCurrentUnitId(request);
+        var posting = currentUserService.getCurrentPosting(request);
+        
+        Map<String, Object> info = new java.util.HashMap<>();
+        info.put("officerId", officerId);
+        info.put("roleCode", roleCode);
+        info.put("unitId", unitId);
+        info.put("postingUserid", posting != null ? posting.getPostingUserid() : null);
+        info.put("postingRoleCode", posting != null ? posting.getRoleCode() : null);
+        info.put("postingUnitId", posting != null ? posting.getUnitId() : null);
+        info.put("postingCourtId", posting != null ? posting.getCourtId() : null);
+        
+        // Also check how many cases are assigned to this officer
+        if (officerId != null) {
+            List<CaseWorkflowInstance> instances = workflowInstanceRepository.findByAssignedToOfficerId(officerId);
+            info.put("assignedCasesCount", instances.size());
+            
+            // Show details of each assigned case
+            List<Map<String, Object>> caseDetails = new ArrayList<>();
+            for (CaseWorkflowInstance inst : instances) {
+                Map<String, Object> caseInfo = new java.util.HashMap<>();
+                caseInfo.put("workflowInstanceId", inst.getId());
+                caseInfo.put("caseId", inst.getCaseId());
+                caseInfo.put("assignedToRole", inst.getAssignedToRole());
+                caseInfo.put("assignedToOfficerId", inst.getAssignedToOfficerId());
+                if (inst.getCaseEntity() != null) {
+                    caseInfo.put("caseNumber", inst.getCaseEntity().getCaseNumber());
+                    caseInfo.put("isActive", inst.getCaseEntity().getIsActive());
+                    caseInfo.put("status", inst.getCaseEntity().getStatus());
+                } else {
+                    caseInfo.put("caseEntity", "NULL");
+                }
+                caseDetails.add(caseInfo);
+            }
+            info.put("assignedCases", caseDetails);
+        }
+        
+        return ResponseEntity.ok(ApiResponse.success("Current user info", info));
     }
 
     /**
