@@ -2,6 +2,14 @@ spring:
   application:
     name: rccmsmp-backend
   
+  # Multipart file upload configuration
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 50MB
+      max-request-size: 50MB
+      file-size-threshold: 2KB
+  
   # Database Configuration
   datasource:
     url: jdbc:postgresql://localhost:5432/rccms_chandigarh

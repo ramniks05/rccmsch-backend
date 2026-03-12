@@ -89,6 +89,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/admin/courts").permitAll()
                         // Dashboard: case summary and hearing reports (public, admin, officer)
                         .requestMatchers(HttpMethod.GET, "/api/dashboard/**").permitAll()
+                        // Static file uploads (documents, images, etc.)
+                        .requestMatchers("/uploads/**").permitAll()
                         // Swagger/OpenAPI endpoints
                         .requestMatchers(
                                 "/swagger-ui/**", 

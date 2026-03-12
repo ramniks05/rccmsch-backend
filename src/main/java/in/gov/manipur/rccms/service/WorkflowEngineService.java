@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -123,11 +124,12 @@ public class WorkflowEngineService {
 
     /**
      * Execute workflow transition
+     * @param assignedOfficerId Optional officer ID for manual assignment (used for REQUEST_FIELD_REPORT)
      */
     public CaseWorkflowInstance executeTransition(Long caseId, String transitionCode, Long officerId, 
-                                                   String roleCode, Long unitId, String comments) {
-        log.info("Executing transition: caseId={}, transitionCode={}, officerId={}, roleCode={}, unitId={}",
-                caseId, transitionCode, officerId, roleCode, unitId);
+                                                   String roleCode, Long unitId, String comments, Long assignedOfficerId) {
+        log.info("Executing transition: caseId={}, transitionCode={}, officerId={}, roleCode={}, unitId={}, assignedOfficerId={}",
+                caseId, transitionCode, officerId, roleCode, unitId, assignedOfficerId);
 
         // Validate permission
         if (!canPerformTransition(caseId, transitionCode, officerId, roleCode, unitId)) {
@@ -186,8 +188,14 @@ public class WorkflowEngineService {
         Case caseEntity = caseRepository.findById(caseIdValue)
                 .orElseThrow(() -> new RuntimeException("Case not found: " + caseIdValue));
         
-        // Automatically assign case based on new workflow state and permissions
-        assignCaseBasedOnWorkflowState(instance, toState, caseEntity);
+        // Handle manual assignment for REQUEST_FIELD_REPORT transition
+        if ("REQUEST_FIELD_REPORT".equals(transitionCode) && assignedOfficerId != null) {
+            // Manual assignment - assign to specified field officer
+            assignCaseToFieldOfficer(instance, caseEntity, assignedOfficerId);
+        } else {
+            // Normal auto-assignment based on workflow state and permissions
+            assignCaseBasedOnWorkflowState(instance, toState, caseEntity);
+        }
         
         // Save instance with assignment
         instanceRepository.save(instance);
@@ -225,6 +233,53 @@ public class WorkflowEngineService {
                 fromState.getStateCode(), toState.getStateCode(), caseId);
 
         return instance;
+    }
+
+    /**
+     * Manually assign case to a specific field officer
+     * Used for REQUEST_FIELD_REPORT transition when officer is selected manually
+     */
+    private void assignCaseToFieldOfficer(CaseWorkflowInstance instance, Case caseEntity, Long assignedOfficerId) {
+        log.info("Manually assigning case {} to field officer {}", instance.getCaseId(), assignedOfficerId);
+        
+        // Validate assigned officer exists
+        Officer assignedOfficer = officerRepository.findById(assignedOfficerId)
+                .orElseThrow(() -> new RuntimeException("Assigned officer not found: " + assignedOfficerId));
+        
+        // Get officer's current posting
+        List<OfficerDaHistory> postings = postingRepository.findByOfficerIdAndIsCurrentTrue(assignedOfficerId);
+        if (postings.isEmpty()) {
+            throw new RuntimeException("Officer " + assignedOfficerId + " does not have an active posting");
+        }
+        
+        // Get the first active posting (officer should have only one active posting)
+        OfficerDaHistory posting = postings.get(0);
+        
+        // Verify this is a unit-based posting (field officer)
+        if (posting.getCourtId() != null) {
+            throw new RuntimeException("Cannot assign court-based officer for field report. Officer must be unit-based (field officer)");
+        }
+        
+        // Verify officer is a field officer role (PATWARI, KANUNGO, etc.)
+        Set<String> fieldOfficerRoles = Set.of("PATWARI", "KANUNGO", "FIELD_OFFICER");
+        if (!fieldOfficerRoles.contains(posting.getRoleCode())) {
+            log.warn("Warning: Officer {} has role {} which may not be a field officer role", 
+                    assignedOfficerId, posting.getRoleCode());
+        }
+        
+        // Verify case has unit assigned (required for field officer assignment)
+        if (caseEntity.getUnitId() == null) {
+            throw new RuntimeException("Case must have a unit assigned to assign field officer");
+        }
+        
+        // Assign case to the specified field officer
+        instance.setAssignedToOfficer(assignedOfficer);
+        instance.setAssignedToOfficerId(assignedOfficerId);
+        instance.setAssignedToRole(posting.getRoleCode());
+        instance.setAssignedToUnitId(posting.getUnitId());
+        
+        log.info("Case {} manually assigned to field officer {} (role: {}, unit: {})", 
+                instance.getCaseId(), assignedOfficerId, posting.getRoleCode(), posting.getUnitId());
     }
 
     /**
@@ -732,13 +787,22 @@ public class WorkflowEngineService {
      */
     private void assignCaseBasedOnWorkflowState(CaseWorkflowInstance instance, WorkflowState state, Case caseEntity) {
         log.debug("=== AUTO-ASSIGNMENT DEBUG START ===");
-        log.debug("Case ID: {}, State: {} (ID: {}), Workflow ID: {}, Court ID: {}", 
+        log.debug("Case ID: {}, State: {} (ID: {}), Workflow ID: {}, Court ID: {}, Unit ID: {}", 
                 instance.getCaseId(), state.getStateCode(), state.getId(), 
-                instance.getWorkflowId(), caseEntity != null ? caseEntity.getCourtId() : "NULL");
+                instance.getWorkflowId(), 
+                caseEntity != null ? caseEntity.getCourtId() : "NULL",
+                caseEntity != null ? caseEntity.getUnitId() : "NULL");
         
-        if (caseEntity == null || caseEntity.getCourtId() == null) {
-            log.warn("Case {} has no court assigned. Cannot auto-assign to officer.", instance.getCaseId());
-            log.debug("=== AUTO-ASSIGNMENT DEBUG END (NO COURT) ===");
+        if (caseEntity == null) {
+            log.warn("Case entity is null. Cannot auto-assign to officer.");
+            log.debug("=== AUTO-ASSIGNMENT DEBUG END (NO CASE ENTITY) ===");
+            return;
+        }
+        
+        // Check if case has either court or unit (required for assignment)
+        if (caseEntity.getCourtId() == null && caseEntity.getUnitId() == null) {
+            log.warn("Case {} has neither court nor unit assigned. Cannot auto-assign to officer.", instance.getCaseId());
+            log.debug("=== AUTO-ASSIGNMENT DEBUG END (NO COURT OR UNIT) ===");
             return;
         }
 
@@ -777,49 +841,144 @@ public class WorkflowEngineService {
             return;
         }
 
-        // Debug: Check all officers posted to this court
-        List<OfficerDaHistory> allPostings = postingRepository.findByCourtIdAndIsCurrentTrue(caseEntity.getCourtId());
-        log.debug("Step 3: Checking officers posted to court {} (ID: {})...", 
-                caseEntity.getCourtId(), caseEntity.getCourtId());
-        log.debug("Total active postings at court {}: {}", caseEntity.getCourtId(), allPostings.size());
-        for (OfficerDaHistory posting : allPostings) {
-            log.debug("  - Officer ID: {}, Role: {}, UserID: {}", 
-                    posting.getOfficerId(), posting.getRoleCode(), posting.getPostingUserid());
+        // Define unit-based field officer roles (not linked to court)
+        Set<String> unitBasedRoles = Set.of("PATWARI", "KANUNGO", "FIELD_OFFICER");
+        
+        // Get case unit for unit-based officer assignment
+        Long caseUnitId = caseEntity.getUnitId();
+        AdminUnit caseUnit = null;
+        if (caseUnitId != null) {
+            caseUnit = adminUnitRepository.findById(caseUnitId).orElse(null);
+        }
+        
+        // Debug: Check all officers posted to this court (if court exists)
+        List<OfficerDaHistory> allCourtPostings = new ArrayList<>();
+        if (caseEntity.getCourtId() != null) {
+            allCourtPostings = postingRepository.findByCourtIdAndIsCurrentTrue(caseEntity.getCourtId());
+            log.debug("Step 3: Checking officers posted to court {} (ID: {})...", 
+                    caseEntity.getCourtId(), caseEntity.getCourtId());
+            log.debug("Total active postings at court {}: {}", caseEntity.getCourtId(), allCourtPostings.size());
+            for (OfficerDaHistory posting : allCourtPostings) {
+                log.debug("  - Officer ID: {}, Role: {}, UserID: {}, Type: COURT_BASED", 
+                        posting.getOfficerId(), posting.getRoleCode(), posting.getPostingUserid());
+            }
+        } else {
+            log.debug("Step 3: Case has no court assigned. Skipping court-based posting check.");
+        }
+        
+        // Debug: Check unit-based officers if case has unit
+        if (caseUnitId != null) {
+            List<OfficerDaHistory> allUnitPostings = postingRepository.findByUnitIdAndIsCurrentTrue(caseUnitId);
+            log.debug("Step 3b: Checking unit-based officers in unit {} (ID: {})...", 
+                    caseUnit != null ? caseUnit.getUnitName() : "Unknown", caseUnitId);
+            log.debug("Total active unit-based postings in unit {}: {}", caseUnitId, allUnitPostings.size());
+            for (OfficerDaHistory posting : allUnitPostings) {
+                log.debug("  - Officer ID: {}, Role: {}, UserID: {}, Type: UNIT_BASED", 
+                        posting.getOfficerId(), posting.getRoleCode(), posting.getPostingUserid());
+            }
         }
 
         // Try to find officer for each role (in order)
         log.debug("Step 4: Searching for officers with roles: {}...", rolesForState);
         for (String roleCode : rolesForState) {
-            log.debug("  Checking role: {} at court {}...", roleCode, caseEntity.getCourtId());
-            Optional<OfficerDaHistory> posting = postingRepository
-                    .findByCourtIdAndRoleCodeAndIsCurrentTrue(caseEntity.getCourtId(), roleCode);
+            boolean isUnitBasedRole = unitBasedRoles.contains(roleCode);
             
-            if (posting.isPresent()) {
-                // Assign case to this officer
-                instance.setAssignedToOfficer(posting.get().getOfficer());
-                instance.setAssignedToOfficerId(posting.get().getOfficerId());
-                instance.setAssignedToRole(roleCode);
-                log.info("Case {} auto-assigned to officer {} (role: {}) based on state {}. " +
-                         "Court: {}, Officer ID: {}", 
-                        instance.getCaseId(), posting.get().getOfficerId(), roleCode, state.getStateCode(),
-                        caseEntity.getCourtId(), posting.get().getOfficerId());
-                log.debug("=== AUTO-ASSIGNMENT DEBUG END (SUCCESS) ===");
-                return; // Successfully assigned
+            if (isUnitBasedRole) {
+                // ========== UNIT-BASED ROLE (PATWARI, KANUNGO, etc.) ==========
+                log.debug("  Checking unit-based role: {} in unit {}...", roleCode, caseUnitId);
+                
+                if (caseUnitId == null) {
+                    log.warn("Case {} has no unit assigned. Cannot assign unit-based role {}.", 
+                            instance.getCaseId(), roleCode);
+                    continue;
+                }
+                
+                // Try exact unit match first
+                Optional<OfficerDaHistory> unitPosting = postingRepository
+                        .findByUnitIdAndRoleCodeAndIsCurrentTrue(caseUnitId, roleCode);
+                
+                if (unitPosting.isPresent()) {
+                    // Assign case to this unit-based officer
+                    instance.setAssignedToOfficer(unitPosting.get().getOfficer());
+                    instance.setAssignedToOfficerId(unitPosting.get().getOfficerId());
+                    instance.setAssignedToRole(roleCode);
+                    instance.setAssignedToUnitId(caseUnitId);
+                    log.info("Case {} auto-assigned to unit-based officer {} (role: {}) based on state {}. " +
+                             "Unit: {}, Officer ID: {}", 
+                            instance.getCaseId(), unitPosting.get().getOfficerId(), roleCode, state.getStateCode(),
+                            caseUnitId, unitPosting.get().getOfficerId());
+                    log.debug("=== AUTO-ASSIGNMENT DEBUG END (SUCCESS - UNIT_BASED) ===");
+                    return; // Successfully assigned
+                } else {
+                    // Try to find in parent/child units (unit hierarchy)
+                    if (caseUnit != null && caseUnit.getParentUnitId() != null) {
+                        Optional<OfficerDaHistory> parentUnitPosting = postingRepository
+                                .findByUnitIdAndRoleCodeAndIsCurrentTrue(caseUnit.getParentUnitId(), roleCode);
+                        if (parentUnitPosting.isPresent()) {
+                            instance.setAssignedToOfficer(parentUnitPosting.get().getOfficer());
+                            instance.setAssignedToOfficerId(parentUnitPosting.get().getOfficerId());
+                            instance.setAssignedToRole(roleCode);
+                            instance.setAssignedToUnitId(caseUnit.getParentUnitId());
+                            log.info("Case {} auto-assigned to unit-based officer {} (role: {}) in parent unit {} based on state {}. " +
+                                     "Officer ID: {}", 
+                                    instance.getCaseId(), parentUnitPosting.get().getOfficerId(), roleCode, 
+                                    caseUnit.getParentUnitId(), state.getStateCode(),
+                                    parentUnitPosting.get().getOfficerId());
+                            log.debug("=== AUTO-ASSIGNMENT DEBUG END (SUCCESS - UNIT_BASED PARENT) ===");
+                            return;
+                        }
+                    }
+                    
+                    log.warn("No unit-based officer found for role {} in unit {} (case {}).", 
+                            roleCode, caseUnitId, instance.getCaseId());
+                }
             } else {
-                log.warn("No officer found for role {} at court {} (case {}). " +
-                        "Available roles at this court: {}", 
-                        roleCode, caseEntity.getCourtId(), instance.getCaseId(),
-                        allPostings.stream().map(OfficerDaHistory::getRoleCode).distinct().toList());
+                // ========== COURT-BASED ROLE (TEHSILDAR, READER, etc.) ==========
+                if (caseEntity.getCourtId() == null) {
+                    log.warn("Cannot assign court-based role {} to case {} - case has no court assigned.", 
+                            roleCode, instance.getCaseId());
+                    continue;
+                }
+                
+                log.debug("  Checking court-based role: {} at court {}...", roleCode, caseEntity.getCourtId());
+                Optional<OfficerDaHistory> posting = postingRepository
+                        .findByCourtIdAndRoleCodeAndIsCurrentTrue(caseEntity.getCourtId(), roleCode);
+                
+                if (posting.isPresent()) {
+                    // Assign case to this court-based officer
+                    instance.setAssignedToOfficer(posting.get().getOfficer());
+                    instance.setAssignedToOfficerId(posting.get().getOfficerId());
+                    instance.setAssignedToRole(roleCode);
+                    log.info("Case {} auto-assigned to court-based officer {} (role: {}) based on state {}. " +
+                             "Court: {}, Officer ID: {}", 
+                            instance.getCaseId(), posting.get().getOfficerId(), roleCode, state.getStateCode(),
+                            caseEntity.getCourtId(), posting.get().getOfficerId());
+                    log.debug("=== AUTO-ASSIGNMENT DEBUG END (SUCCESS - COURT_BASED) ===");
+                    return; // Successfully assigned
+                } else {
+                    log.warn("No court-based officer found for role {} at court {} (case {}). " +
+                            "Available roles at this court: {}", 
+                            roleCode, caseEntity.getCourtId(), instance.getCaseId(),
+                            allCourtPostings.stream().map(OfficerDaHistory::getRoleCode).distinct().toList());
+                }
             }
         }
 
         // No officer found - set expected role but leave unassigned
         if (!rolesForState.isEmpty()) {
-            instance.setAssignedToRole(rolesForState.get(0)); // Set first expected role
-            log.warn("Case {} cannot be auto-assigned. Expected role: {} but no officer posted to court {} with this role. " +
-                    "Available roles at court: {}", 
-                    instance.getCaseId(), rolesForState.get(0), caseEntity.getCourtId(),
-                    allPostings.stream().map(OfficerDaHistory::getRoleCode).distinct().toList());
+            String expectedRole = rolesForState.get(0);
+            instance.setAssignedToRole(expectedRole); // Set first expected role
+            
+            boolean isUnitBasedRole = unitBasedRoles.contains(expectedRole);
+            if (isUnitBasedRole) {
+                log.warn("Case {} cannot be auto-assigned. Expected unit-based role: {} but no officer posted to unit {} with this role.", 
+                        instance.getCaseId(), expectedRole, caseUnitId);
+            } else {
+                log.warn("Case {} cannot be auto-assigned. Expected court-based role: {} but no officer posted to court {} with this role. " +
+                        "Available roles at court: {}", 
+                        instance.getCaseId(), expectedRole, caseEntity.getCourtId(),
+                        allCourtPostings.stream().map(OfficerDaHistory::getRoleCode).distinct().toList());
+            }
         }
         log.debug("=== AUTO-ASSIGNMENT DEBUG END (NO OFFICER FOUND) ===");
     }

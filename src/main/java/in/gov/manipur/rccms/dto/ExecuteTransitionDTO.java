@@ -18,5 +18,12 @@ public class ExecuteTransitionDTO {
     private String transitionCode;
     
     private String comments; // Optional comments for the transition
+    
+    /**
+     * Optional officer ID for manual assignment
+     * Used for transitions like REQUEST_FIELD_REPORT where a specific officer needs to be assigned
+     * If provided, the system will assign the case to this officer instead of auto-assigning
+     */
+    private Long assignedOfficerId;
 }
 

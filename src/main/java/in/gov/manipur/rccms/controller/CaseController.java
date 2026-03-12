@@ -429,10 +429,11 @@ public class CaseController {
             unitId = caseEntity.getUnitId();
         }
         
-        log.info("Execute transition request: caseId={}, transitionCode={}, roleCode={}, officerId={}", 
-                caseId, dto.getTransitionCode(), roleCode, officerId);
+        log.info("Execute transition request: caseId={}, transitionCode={}, roleCode={}, officerId={}, assignedOfficerId={}", 
+                caseId, dto.getTransitionCode(), roleCode, officerId, dto.getAssignedOfficerId());
 
-        workflowEngineService.executeTransition(caseId, dto.getTransitionCode(), officerId, roleCode, unitId, dto.getComments());
+        workflowEngineService.executeTransition(caseId, dto.getTransitionCode(), officerId, roleCode, unitId, 
+                dto.getComments(), dto.getAssignedOfficerId());
 
         Map<String, Object> response = Map.of(
                 "caseId", caseId,
