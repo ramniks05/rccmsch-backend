@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -196,6 +197,23 @@ public class CaseDocumentService {
         return documentRepository.findTopByCaseIdAndModuleTypeOrderByUpdatedAtDesc(caseId, moduleType)
                 .map(this::toDto)
                 .orElse(null);
+    }
+
+    /**
+     * Get all documents of a specific type for a case
+     */
+    @Transactional(readOnly = true)
+    public List<CaseDocumentDTO> getAllDocuments(Long caseId, ModuleType moduleType) {
+        if (caseId == null) {
+            throw new IllegalArgumentException("Case ID cannot be null");
+        }
+        if (moduleType == null) {
+            throw new IllegalArgumentException("Module type cannot be null");
+        }
+        List<CaseDocument> documents = documentRepository.findByCaseIdAndModuleTypeOrderByUpdatedAtDesc(caseId, moduleType);
+        return documents.stream()
+                .map(this::toDto)
+                .collect(java.util.stream.Collectors.toList());
     }
 
     private void updateWorkflowFlag(Long caseId, String key, boolean value) {

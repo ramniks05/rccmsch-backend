@@ -223,7 +223,7 @@ public class CitizenCaseController {
      */
     @Operation(
             summary = "Get Notice Document (Citizen)",
-            description = "Get notice document for a case. Only visible if notice has been sent to party."
+            description = "Get latest notice document for a case. Only visible if notice has been sent to party."
     )
     @GetMapping("/{caseId}/documents/NOTICE")
     public ResponseEntity<ApiResponse<CaseDocumentDTO>> getNoticeDocument(
@@ -233,12 +233,27 @@ public class CitizenCaseController {
     }
 
     /**
+     * Get all notice documents for applicant
+     * GET /api/citizen/cases/{caseId}/documents/NOTICE/all
+     */
+    @Operation(
+            summary = "Get All Notice Documents (Citizen)",
+            description = "Get all notice documents for a case. Only visible if notices have been finalized."
+    )
+    @GetMapping("/{caseId}/documents/NOTICE/all")
+    public ResponseEntity<ApiResponse<List<CaseDocumentDTO>>> getAllNoticeDocuments(
+            @PathVariable Long caseId,
+            HttpServletRequest request) {
+        return getAllDocumentsForCitizen(caseId, ModuleType.NOTICE, request);
+    }
+
+    /**
      * Get ordersheet document for applicant
      * GET /api/citizen/cases/{caseId}/documents/ORDERSHEET
      */
     @Operation(
             summary = "Get Ordersheet Document (Citizen)",
-            description = "Get ordersheet document for a case. Only visible if ordersheet has been finalized."
+            description = "Get latest ordersheet document for a case. Only visible if ordersheet has been finalized."
     )
     @GetMapping("/{caseId}/documents/ORDERSHEET")
     public ResponseEntity<ApiResponse<CaseDocumentDTO>> getOrdersheetDocument(
@@ -248,18 +263,48 @@ public class CitizenCaseController {
     }
 
     /**
+     * Get all ordersheet documents for applicant
+     * GET /api/citizen/cases/{caseId}/documents/ORDERSHEET/all
+     */
+    @Operation(
+            summary = "Get All Ordersheet Documents (Citizen)",
+            description = "Get all ordersheet documents for a case. Only visible if ordersheets have been finalized."
+    )
+    @GetMapping("/{caseId}/documents/ORDERSHEET/all")
+    public ResponseEntity<ApiResponse<List<CaseDocumentDTO>>> getAllOrdersheetDocuments(
+            @PathVariable Long caseId,
+            HttpServletRequest request) {
+        return getAllDocumentsForCitizen(caseId, ModuleType.ORDERSHEET, request);
+    }
+
+    /**
      * Get judgement document for applicant
      * GET /api/citizen/cases/{caseId}/documents/JUDGEMENT
      */
     @Operation(
             summary = "Get Judgement Document (Citizen)",
-            description = "Get judgement document for a case. Only visible if judgement has been finalized."
+            description = "Get latest judgement document for a case. Only visible if judgement has been finalized."
     )
     @GetMapping("/{caseId}/documents/JUDGEMENT")
     public ResponseEntity<ApiResponse<CaseDocumentDTO>> getJudgementDocument(
             @PathVariable Long caseId,
             HttpServletRequest request) {
         return getDocumentForCitizen(caseId, ModuleType.JUDGEMENT, request);
+    }
+
+    /**
+     * Get all judgement documents for applicant
+     * GET /api/citizen/cases/{caseId}/documents/JUDGEMENT/all
+     */
+    @Operation(
+            summary = "Get All Judgement Documents (Citizen)",
+            description = "Get all judgement documents for a case. Only visible if judgements have been finalized."
+    )
+    @GetMapping("/{caseId}/documents/JUDGEMENT/all")
+    public ResponseEntity<ApiResponse<List<CaseDocumentDTO>>> getAllJudgementDocuments(
+            @PathVariable Long caseId,
+            HttpServletRequest request) {
+        return getAllDocumentsForCitizen(caseId, ModuleType.JUDGEMENT, request);
     }
 
     /**
@@ -301,6 +346,46 @@ public class CitizenCaseController {
         }
 
         return ResponseEntity.ok(ApiResponse.success(moduleType.name() + " retrieved", document));
+    }
+
+    /**
+     * Helper method to get all documents for citizen with access control
+     */
+    private ResponseEntity<ApiResponse<List<CaseDocumentDTO>>> getAllDocumentsForCitizen(
+            Long caseId, ModuleType moduleType, HttpServletRequest request) {
+        log.info("Citizen get all {} documents request: caseId={}", moduleType, caseId);
+
+        // Get applicant ID
+        Long applicantId = getApplicantId(request);
+        if (applicantId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("User ID not found"));
+        }
+
+        // Verify case belongs to applicant
+        Case caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
+        
+        if (!caseEntity.getApplicantId().equals(applicantId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error("You do not have access to this case"));
+        }
+
+        // Get all documents
+        List<CaseDocumentDTO> documents = documentService.getAllDocuments(caseId, moduleType);
+        
+        // Filter to only show FINAL or SIGNED documents
+        List<CaseDocumentDTO> filteredDocuments = documents.stream()
+                .filter(doc -> doc.getStatus() != null && 
+                        (doc.getStatus().name().equals("FINAL") || doc.getStatus().name().equals("SIGNED")))
+                .collect(java.util.stream.Collectors.toList());
+
+        if (filteredDocuments.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(ApiResponse.error("No finalized " + moduleType.name() + " documents found for this case"));
+        }
+
+        return ResponseEntity.ok(ApiResponse.success("All " + moduleType.name() + " documents retrieved", filteredDocuments));
     }
 
     /**
