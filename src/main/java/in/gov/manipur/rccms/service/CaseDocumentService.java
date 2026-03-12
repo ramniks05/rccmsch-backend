@@ -32,7 +32,7 @@ public class CaseDocumentService {
     private final CaseWorkflowInstanceRepository workflowInstanceRepository;
     private final ObjectMapper objectMapper;
 
-    public CaseDocumentDTO createOrUpdateDocument(Long caseId, ModuleType moduleType, Long officerId, CreateCaseDocumentDTO dto) {
+    public CaseDocumentDTO createOrUpdateDocument(Long caseId, ModuleType moduleType, Long officerId, CreateCaseDocumentDTO dto, String roleCode) {
         if (caseId == null) {
             throw new IllegalArgumentException("Case ID cannot be null");
         }
@@ -79,11 +79,27 @@ public class CaseDocumentService {
         }
         doc.setContentHtml(dto.getContentHtml());
         doc.setContentData(dto.getContentData());
+        
+        // Role-based status validation
         DocumentStatus requestedStatus = dto.getStatus() != null ? dto.getStatus() : DocumentStatus.DRAFT;
+        
+        // READER can only save as DRAFT
+        if ("READER".equals(roleCode)) {
+            if (requestedStatus != DocumentStatus.DRAFT) {
+                log.warn("READER role attempted to save document with status: {}. Forcing to DRAFT.", requestedStatus);
+                requestedStatus = DocumentStatus.DRAFT;
+            }
+        }
+        
         doc.setStatus(requestedStatus);
 
         // Finalize = sign: when officer finalizes (FINAL), treat as finalize + digital signature in one action
+        // Only TEHSILDAR and other authorized roles can finalize/sign
         if (requestedStatus == DocumentStatus.FINAL || requestedStatus == DocumentStatus.SIGNED) {
+            // Additional check: READER cannot finalize/sign
+            if ("READER".equals(roleCode)) {
+                throw new RuntimeException("READER role cannot finalize or sign documents. Only DRAFT status is allowed.");
+            }
             doc.setSignedByOfficerId(officerId);
             doc.setSignedAt(LocalDateTime.now());
             doc.setStatus(DocumentStatus.SIGNED); // persist as SIGNED so document is both finalized and signed
@@ -107,7 +123,7 @@ public class CaseDocumentService {
         return toDto(saved);
     }
 
-    public CaseDocumentDTO updateDocument(Long caseId, ModuleType moduleType, Long documentId, Long officerId, CreateCaseDocumentDTO dto) {
+    public CaseDocumentDTO updateDocument(Long caseId, ModuleType moduleType, Long documentId, Long officerId, CreateCaseDocumentDTO dto, String roleCode) {
         if (caseId == null) {
             throw new IllegalArgumentException("Case ID cannot be null");
         }
@@ -124,7 +140,8 @@ public class CaseDocumentService {
             throw new IllegalArgumentException("CreateCaseDocumentDTO cannot be null");
         }
         
-        Case caseEntity = caseRepository.findById(caseId)
+        // Verify case exists
+        caseRepository.findById(caseId)
                 .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
         
         CaseDocument doc = documentRepository.findById(documentId)
@@ -159,11 +176,27 @@ public class CaseDocumentService {
         // Update document fields
         doc.setContentHtml(dto.getContentHtml());
         doc.setContentData(dto.getContentData());
+        
+        // Role-based status validation
         DocumentStatus requestedStatus = dto.getStatus() != null ? dto.getStatus() : doc.getStatus();
+        
+        // READER can only save as DRAFT
+        if ("READER".equals(roleCode)) {
+            if (requestedStatus != DocumentStatus.DRAFT) {
+                log.warn("READER role attempted to update document with status: {}. Forcing to DRAFT.", requestedStatus);
+                requestedStatus = DocumentStatus.DRAFT;
+            }
+        }
+        
         doc.setStatus(requestedStatus);
 
         // Finalize = sign: when officer finalizes (FINAL), treat as finalize + digital signature in one action
+        // Only TEHSILDAR and other authorized roles can finalize/sign
         if (requestedStatus == DocumentStatus.FINAL || requestedStatus == DocumentStatus.SIGNED) {
+            // Additional check: READER cannot finalize/sign
+            if ("READER".equals(roleCode)) {
+                throw new RuntimeException("READER role cannot finalize or sign documents. Only DRAFT status is allowed.");
+            }
             doc.setSignedByOfficerId(officerId);
             doc.setSignedAt(LocalDateTime.now());
             doc.setStatus(DocumentStatus.SIGNED);

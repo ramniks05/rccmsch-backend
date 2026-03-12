@@ -86,8 +86,23 @@ public class CaseDocumentController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error("Officer information not found"));
         }
-        CaseDocumentDTO saved = documentService.createOrUpdateDocument(caseId, moduleType, officerId, dto);
-        return ResponseEntity.ok(ApiResponse.success("Document saved", saved));
+        String roleCode = currentUserService.getCurrentRoleCode(request);
+        if (roleCode == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Role information not found"));
+        }
+        
+        try {
+            CaseDocumentDTO saved = documentService.createOrUpdateDocument(caseId, moduleType, officerId, dto, roleCode);
+            return ResponseEntity.ok(ApiResponse.success("Document saved", saved));
+        } catch (RuntimeException e) {
+            if (e.getMessage().contains("cannot finalize") || e.getMessage().contains("cannot sign")) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(ApiResponse.error(e.getMessage()));
+            }
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("Failed to save document: " + e.getMessage()));
+        }
     }
 
     @PutMapping("/{caseId}/documents/{moduleType}/{documentId}")
@@ -110,8 +125,23 @@ public class CaseDocumentController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error("Officer information not found"));
         }
-        CaseDocumentDTO saved = documentService.updateDocument(caseId, moduleType, documentId, officerId, dto);
-        return ResponseEntity.ok(ApiResponse.success("Document updated", saved));
+        String roleCode = currentUserService.getCurrentRoleCode(request);
+        if (roleCode == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("Role information not found"));
+        }
+        
+        try {
+            CaseDocumentDTO saved = documentService.updateDocument(caseId, moduleType, documentId, officerId, dto, roleCode);
+            return ResponseEntity.ok(ApiResponse.success("Document updated", saved));
+        } catch (RuntimeException e) {
+            if (e.getMessage().contains("cannot finalize") || e.getMessage().contains("cannot sign")) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(ApiResponse.error(e.getMessage()));
+            }
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ApiResponse.error("Failed to update document: " + e.getMessage()));
+        }
     }
 }
 
