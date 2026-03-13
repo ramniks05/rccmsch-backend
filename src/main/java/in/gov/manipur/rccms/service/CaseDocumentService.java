@@ -93,16 +93,15 @@ public class CaseDocumentService {
         
         doc.setStatus(requestedStatus);
 
-        // Finalize = sign: when officer finalizes (FINAL), treat as finalize + digital signature in one action
-        // Only TEHSILDAR and other authorized roles can finalize/sign
-        if (requestedStatus == DocumentStatus.FINAL || requestedStatus == DocumentStatus.SIGNED) {
+        // Only TEHSILDAR and other authorized roles can sign
+        if (requestedStatus == DocumentStatus.SIGNED) {
             // Additional check: READER cannot finalize/sign
             if ("READER".equals(roleCode)) {
                 throw new RuntimeException("READER role cannot finalize or sign documents. Only DRAFT status is allowed.");
             }
             doc.setSignedByOfficerId(officerId);
             doc.setSignedAt(LocalDateTime.now());
-            doc.setStatus(DocumentStatus.SIGNED); // persist as SIGNED so document is both finalized and signed
+            doc.setStatus(DocumentStatus.SIGNED);
         }
 
         CaseDocument saved = documentRepository.save(doc);
@@ -115,9 +114,14 @@ public class CaseDocumentService {
             updateWorkflowFlag(caseId, moduleName + "_DRAFT_CREATED", true);
             updateWorkflowFlag(caseId, moduleName + "_READY", false);
             updateWorkflowFlag(caseId, moduleName + "_SIGNED", false);
-        } else if (saved.getStatus() == DocumentStatus.SIGNED) {
+        } else if (saved.getStatus() == DocumentStatus.FINAL) {
+            updateWorkflowFlag(caseId, moduleName + "_DRAFT_CREATED", false);
             updateWorkflowFlag(caseId, moduleName + "_READY", true);
-            updateWorkflowFlag(caseId, moduleName + "_SIGNED", true); // only set when finalized/signed
+            updateWorkflowFlag(caseId, moduleName + "_SIGNED", false);
+        } else if (saved.getStatus() == DocumentStatus.SIGNED) {
+            updateWorkflowFlag(caseId, moduleName + "_DRAFT_CREATED", false);
+            updateWorkflowFlag(caseId, moduleName + "_READY", true);
+            updateWorkflowFlag(caseId, moduleName + "_SIGNED", true); // only set when actually signed
         }
 
         return toDto(saved);
@@ -190,9 +194,8 @@ public class CaseDocumentService {
         
         doc.setStatus(requestedStatus);
 
-        // Finalize = sign: when officer finalizes (FINAL), treat as finalize + digital signature in one action
-        // Only TEHSILDAR and other authorized roles can finalize/sign
-        if (requestedStatus == DocumentStatus.FINAL || requestedStatus == DocumentStatus.SIGNED) {
+        // Only TEHSILDAR and other authorized roles can sign
+        if (requestedStatus == DocumentStatus.SIGNED) {
             // Additional check: READER cannot finalize/sign
             if ("READER".equals(roleCode)) {
                 throw new RuntimeException("READER role cannot finalize or sign documents. Only DRAFT status is allowed.");
@@ -211,7 +214,12 @@ public class CaseDocumentService {
             updateWorkflowFlag(caseId, moduleName + "_DRAFT_CREATED", true);
             updateWorkflowFlag(caseId, moduleName + "_READY", false);
             updateWorkflowFlag(caseId, moduleName + "_SIGNED", false);
+        } else if (saved.getStatus() == DocumentStatus.FINAL) {
+            updateWorkflowFlag(caseId, moduleName + "_DRAFT_CREATED", false);
+            updateWorkflowFlag(caseId, moduleName + "_READY", true);
+            updateWorkflowFlag(caseId, moduleName + "_SIGNED", false);
         } else if (saved.getStatus() == DocumentStatus.SIGNED) {
+            updateWorkflowFlag(caseId, moduleName + "_DRAFT_CREATED", false);
             updateWorkflowFlag(caseId, moduleName + "_READY", true);
             updateWorkflowFlag(caseId, moduleName + "_SIGNED", true);
         }
