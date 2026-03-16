@@ -24,14 +24,6 @@ public interface CitizenRepository extends JpaRepository<Citizen, Long> {
     Optional<Citizen> findByMobileNumber(String mobileNumber);
 
     /**
-     * Find citizen by Aadhar number
-     */
-    /**
-     * Find citizen by email or mobile number
-     */
-    Optional<Citizen> findByEmailOrMobileNumber(String email, String mobileNumber);
-
-    /**
      * Check if email exists
      */
     boolean existsByEmail(String email);
@@ -40,14 +32,5 @@ public interface CitizenRepository extends JpaRepository<Citizen, Long> {
      * Check if mobile number exists
      */
     boolean existsByMobileNumber(String mobileNumber);
-
-    /**
-     * Check if Aadhar number exists
-     */
-
-    /**
-     * Find active citizen by email or mobile number
-     */
-    Optional<Citizen> findByEmailOrMobileNumberAndIsActiveTrue(String email, String mobileNumber);
 }
 

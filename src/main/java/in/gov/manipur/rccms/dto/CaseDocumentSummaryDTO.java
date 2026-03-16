@@ -23,6 +23,6 @@ public class CaseDocumentSummaryDTO {
     private DocumentStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime signedAt;
-    /** Full document available at GET /api/cases/{caseId}/documents/{moduleType} */
+    /** Full document available at GET /api/cases/{caseId}/documents/{templateId} */
     private boolean hasContent;
 }

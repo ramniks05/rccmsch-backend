@@ -32,8 +32,6 @@ public class OtpService {
     private final LawyerRepository lawyerRepository;
     private final SmsService smsService;
     private static final Random random = new Random();
-    // Rate limiting disabled - OTP can be sent freely
-    // private static final int MAX_OTP_REQUESTS_PER_15_MIN = 3;
     private static final int OTP_EXPIRY_MINUTES = 5;
 
     /**
@@ -65,15 +63,6 @@ public class OtpService {
 
         String trimmedMobile = mobileNumber.trim();
         Otp.CitizenType otpCitizenType = convertCitizenType(citizenType);
-
-        // Rate limiting disabled - OTP can be sent freely
-        // (Rate limiting can be enabled later if needed)
-        // LocalDateTime since = LocalDateTime.now().minusMinutes(15);
-        // long recentRequests = otpRepository.countRecentOtpRequests(trimmedMobile, otpCitizenType, since);
-        // if (recentRequests >= MAX_OTP_REQUESTS_PER_15_MIN) {
-        //     log.warn("Rate limit exceeded for mobile: {} (citizenType: {})", maskMobile(trimmedMobile), citizenType);
-        //     throw new TooManyRequestsException("Too many OTP requests. Please try again after 15 minutes.");
-        // }
 
         if (Citizen.CitizenType.LAWYER.equals(citizenType)) {
             Optional<Lawyer> lawyerOpt = lawyerRepository.findByMobileNumber(trimmedMobile);

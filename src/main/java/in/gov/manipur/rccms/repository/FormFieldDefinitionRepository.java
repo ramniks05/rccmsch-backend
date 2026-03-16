@@ -40,11 +40,6 @@ public interface FormFieldDefinitionRepository extends JpaRepository<FormFieldDe
     boolean existsByCaseTypeIdAndFieldName(Long caseTypeId, String fieldName);
 
     /**
-     * Count active fields for a case type
-     */
-    long countByCaseTypeIdAndIsActiveTrue(Long caseTypeId);
-
-    /**
      * Find fields by case type and group, ordered by display order
      */
     @Query("SELECT f FROM FormFieldDefinition f WHERE f.caseTypeId = :caseTypeId AND f.fieldGroup = :fieldGroup AND f.isActive = true ORDER BY f.displayOrder ASC")

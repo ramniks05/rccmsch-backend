@@ -61,15 +61,17 @@ public class JwtService {
      * Generate JWT token for post-based authentication
      * @param userid the UserID (ROLE@LGD format)
      * @param roleCode the role code
+     * @param roleId the role_master id (acting role)
      * @param unitId the unit ID
      * @param unitLevel the unit level
      * @param userId the user (person) ID
      * @return JWT token string
      */
-    public String generatePostBasedToken(String userid, String roleCode, Long unitId, String unitLevel, Long userId) {
+    public String generatePostBasedToken(String userid, String roleCode, Long roleId, Long unitId, String unitLevel, Long userId) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userid", userid);
         claims.put("roleCode", roleCode);
+        claims.put("roleId", roleId != null ? roleId : 0L);
         claims.put("unitId", unitId);
         claims.put("unitLevel", unitLevel);
         claims.put("userId", userId);

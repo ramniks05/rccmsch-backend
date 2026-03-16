@@ -39,10 +39,17 @@ public class PostingDTO {
     private String unitCode;
     private String unitLgdCode;
     
+    /** Role ID (FK to role_master) */
+    private Long roleId;
+
     @NotNull(message = "Role code is required")
     private String roleCode;
-    
+
+    /** Role name from role_master */
     private String roleName;
+
+    /** Execution role from role_master (e.g. "Presiding Officer", "Dealing Assistant") */
+    private String executionRole;
     
     @NotNull(message = "Officer ID is required")
     private Long officerId;

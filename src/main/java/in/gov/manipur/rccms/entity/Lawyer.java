@@ -29,7 +29,8 @@ import java.time.LocalDateTime;
        indexes = {
            @Index(name = "idx_lawyer_email", columnList = "email"),
            @Index(name = "idx_lawyer_mobile", columnList = "mobile_number"),
-           @Index(name = "idx_lawyer_aadhar", columnList = "aadhar_number")
+           @Index(name = "idx_lawyer_aadhar", columnList = "aadhar_number"),
+           @Index(name = "idx_lawyer_role", columnList = "role_id")
        })
 @EntityListeners(AuditingEntityListener.class)
 @Getter
@@ -69,6 +70,13 @@ public class Lawyer {
 
     @Column(name = "registration_data", columnDefinition = "TEXT")
     private String registrationData; // JSON string for dynamic registration fields
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "role_id", nullable = false, foreignKey = @ForeignKey(name = "fk_lawyer_role"))
+    private RoleMaster role; // LAWYER from role_master
+
+    @Column(name = "role_id", insertable = false, updatable = false)
+    private Long roleId;
 
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = false; // Set to true after mobile verification

@@ -28,12 +28,20 @@ public interface CaseWorkflowInstanceRepository extends JpaRepository<CaseWorkfl
     List<CaseWorkflowInstance> findByAssignedToUnitId(Long unitId);
     
     List<CaseWorkflowInstance> findByAssignedToRole(String roleCode);
+
+    List<CaseWorkflowInstance> findByAssignedToRoleId(Long roleId);
     
     @Query("SELECT cwi FROM CaseWorkflowInstance cwi WHERE cwi.assignedToOfficerId = :officerId " +
            "AND cwi.assignedToRole = :roleCode ORDER BY cwi.updatedAt DESC")
     List<CaseWorkflowInstance> findByAssignedOfficerAndRole(
             @Param("officerId") Long officerId, 
             @Param("roleCode") String roleCode);
+
+    @Query("SELECT cwi FROM CaseWorkflowInstance cwi WHERE cwi.assignedToOfficerId = :officerId " +
+           "AND cwi.assignedToRoleId = :roleId ORDER BY cwi.updatedAt DESC")
+    List<CaseWorkflowInstance> findByAssignedOfficerAndRoleId(
+            @Param("officerId") Long officerId,
+            @Param("roleId") Long roleId);
     
     @Query("SELECT cwi FROM CaseWorkflowInstance cwi WHERE cwi.assignedToUnitId = :unitId " +
            "AND cwi.currentStateId = :stateId")

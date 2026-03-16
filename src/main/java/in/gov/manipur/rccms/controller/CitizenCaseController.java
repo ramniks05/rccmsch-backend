@@ -248,6 +248,36 @@ public class CitizenCaseController {
     }
 
     /**
+     * Get notice draft document for applicant
+     * GET /api/citizen/cases/{caseId}/documents/NOTICE_DRAFT
+     */
+    @Operation(
+            summary = "Get Notice Draft Document (Citizen)",
+            description = "Get latest notice draft document for a case."
+    )
+    @GetMapping("/{caseId}/documents/NOTICE_DRAFT")
+    public ResponseEntity<ApiResponse<CaseDocumentDTO>> getNoticeDraftDocument(
+            @PathVariable Long caseId,
+            HttpServletRequest request) {
+        return getDocumentForCitizen(caseId, ModuleType.NOTICE_DRAFT, request);
+    }
+
+    /**
+     * Get all notice draft documents for applicant
+     * GET /api/citizen/cases/{caseId}/documents/NOTICE_DRAFT/all
+     */
+    @Operation(
+            summary = "Get All Notice Draft Documents (Citizen)",
+            description = "Get all notice draft documents for a case."
+    )
+    @GetMapping("/{caseId}/documents/NOTICE_DRAFT/all")
+    public ResponseEntity<ApiResponse<List<CaseDocumentDTO>>> getAllNoticeDraftDocuments(
+            @PathVariable Long caseId,
+            HttpServletRequest request) {
+        return getAllDocumentsForCitizen(caseId, ModuleType.NOTICE_DRAFT, request);
+    }
+
+    /**
      * Get ordersheet document for applicant
      * GET /api/citizen/cases/{caseId}/documents/ORDERSHEET
      */

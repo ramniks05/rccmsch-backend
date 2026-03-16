@@ -21,12 +21,12 @@ public interface WorkflowTransitionRepository extends JpaRepository<WorkflowTran
     
     Optional<WorkflowTransition> findByWorkflowIdAndTransitionCode(Long workflowId, String transitionCode);
     
-    @Query("SELECT wt FROM WorkflowTransition wt WHERE wt.fromStateId = :fromStateId AND wt.isActive = true")
-    List<WorkflowTransition> findAvailableTransitionsFromState(@Param("fromStateId") Long fromStateId);
-    
     @Query("SELECT wt FROM WorkflowTransition wt WHERE wt.workflowId = :workflowId AND wt.fromStateId = :fromStateId AND wt.isActive = true")
     List<WorkflowTransition> findTransitionsFromState(@Param("workflowId") Long workflowId, @Param("fromStateId") Long fromStateId);
     
     List<WorkflowTransition> findByWorkflowId(Long workflowId);
+
+    /** Find transitions that lead TO this state (e.g. for "application submitted" into initial state). */
+    List<WorkflowTransition> findByWorkflowIdAndToStateIdAndIsActiveTrue(Long workflowId, Long toStateId);
 }
 

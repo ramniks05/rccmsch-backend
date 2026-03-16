@@ -367,18 +367,17 @@ public class CaseController {
             }
         }
         
-        // Role code is required
-        if (roleCode == null) {
-            log.warn("Role code not found in token for case: {}", caseId);
+        Long roleId = currentUserService.getCurrentRoleId(request);
+        if (roleCode == null && roleId == null) {
+            log.warn("Role not found in token for case: {}", caseId);
             return ResponseEntity.ok(ApiResponse.success(
-                "No actions available at this time. Please check back later or contact the court for case updates.", 
+                "No actions available at this time. Please check back later or contact the court for case updates.",
                 new ArrayList<>()
             ));
         }
-        
         try {
             List<WorkflowTransitionDTO> transitions = workflowEngineService
-                    .getAvailableTransitions(caseId, officerId, roleCode, unitId);
+                    .getAvailableTransitions(caseId, officerId, roleId, roleCode, unitId);
             
             if (transitions.isEmpty()) {
                 return ResponseEntity.ok(ApiResponse.success(
@@ -413,26 +412,36 @@ public class CaseController {
             @Valid @RequestBody ExecuteTransitionDTO dto,
             HttpServletRequest request) {
         Long officerId = currentUserService.getCurrentOfficerId(request);
+        Long roleId = currentUserService.getCurrentRoleId(request);
         String roleCode = currentUserService.getCurrentRoleCode(request);
         Long unitId = currentUserService.getCurrentUnitId(request);
-        
-        // For citizens, officerId and unitId can be null - get from case
-        if (roleCode == null) {
+        if (roleCode == null && roleId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error("User information not found"));
         }
-        
-        // If citizen, get unitId from case
         if ("CITIZEN".equals(roleCode) && unitId == null) {
             Case caseEntity = caseRepository.findById(caseId)
                     .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
             unitId = caseEntity.getUnitId();
         }
-        
-        log.info("Execute transition request: caseId={}, transitionCode={}, roleCode={}, officerId={}, assignedOfficerId={}", 
-                caseId, dto.getTransitionCode(), roleCode, officerId, dto.getAssignedOfficerId());
-
-        workflowEngineService.executeTransition(caseId, dto.getTransitionCode(), officerId, roleCode, unitId, 
+        // For officers: if unitId missing from token, derive from current posting
+        if (unitId == null && officerId != null) {
+            var posting = currentUserService.getCurrentPosting(request);
+            if (posting != null) {
+                if (posting.getCourt() != null && posting.getCourt().getUnit() != null) {
+                    unitId = posting.getCourt().getUnit().getUnitId();
+                } else if (posting.getUnit() != null) {
+                    unitId = posting.getUnit().getUnitId();
+                }
+            }
+        }
+        if (unitId == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("Unit ID is required to perform this transition. Please ensure your posting has a unit assigned."));
+        }
+        log.info("[TRANSITION_PERM] Execute request: caseId={}, transitionCode={}, roleId={}, roleCode={}, officerId={}, unitId={}, assignedOfficerId={}",
+                caseId, dto.getTransitionCode(), roleId, roleCode, officerId, unitId, dto.getAssignedOfficerId());
+        workflowEngineService.executeTransition(caseId, dto.getTransitionCode(), officerId, roleId, roleCode, unitId,
                 dto.getComments(), dto.getAssignedOfficerId());
 
         Map<String, Object> response = Map.of(
@@ -455,16 +464,28 @@ public class CaseController {
             @PathVariable String transitionCode,
             HttpServletRequest request) {
         Long officerId = currentUserService.getCurrentOfficerId(request);
+        Long roleId = currentUserService.getCurrentRoleId(request);
         String roleCode = currentUserService.getCurrentRoleCode(request);
         Long unitId = currentUserService.getCurrentUnitId(request);
-        
-        if (officerId == null || roleCode == null || unitId == null) {
+        if (roleId == null && roleCode == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(ApiResponse.error("User information not found"));
         }
-        
+        if (unitId == null && "CITIZEN".equals(roleCode)) {
+            unitId = caseRepository.findById(caseId).map(Case::getUnitId).orElse(null);
+        }
+        if (unitId == null && officerId != null) {
+            var posting = currentUserService.getCurrentPosting(request);
+            if (posting != null) {
+                if (posting.getCourt() != null && posting.getCourt().getUnit() != null) {
+                    unitId = posting.getCourt().getUnit().getUnitId();
+                } else if (posting.getUnit() != null) {
+                    unitId = posting.getUnit().getUnitId();
+                }
+            }
+        }
         TransitionChecklistDTO checklist = workflowEngineService
-                .getTransitionChecklist(caseId, transitionCode, officerId, roleCode, unitId);
+                .getTransitionChecklist(caseId, transitionCode, officerId, roleId, roleCode, unitId);
         return ResponseEntity.ok(ApiResponse.success("Checklist retrieved successfully", checklist));
     }
 

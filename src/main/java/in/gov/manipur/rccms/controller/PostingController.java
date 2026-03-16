@@ -46,6 +46,19 @@ public class PostingController {
     }
 
     /**
+     * Get all active postings
+     * GET /api/admin/postings/active
+     */
+    @Operation(summary = "Get Active Postings", 
+               description = "Get all current (active) postings (court-based and unit-based)")
+    @GetMapping("/active")
+    public ResponseEntity<ApiResponse<List<PostingDTO>>> getActivePostings() {
+        log.info("Get active postings request");
+        List<PostingDTO> postings = postingService.getAllActivePostings();
+        return ResponseEntity.ok(ApiResponse.success("Active postings retrieved successfully", postings));
+    }
+
+    /**
      * Get field officers (unit-based postings) available to a court
      * GET /api/admin/postings/field-officers/court/{courtId}?roleCode={roleCode}
      */

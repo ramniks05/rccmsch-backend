@@ -25,5 +25,10 @@ public interface WorkflowStateRepository extends JpaRepository<WorkflowState, Lo
     
     @Query("SELECT ws FROM WorkflowState ws WHERE ws.workflowId = :workflowId ORDER BY ws.stateOrder ASC")
     List<WorkflowState> findStatesByWorkflowOrdered(@Param("workflowId") Long workflowId);
+
+    @Query("SELECT DISTINCT ws.stateCode FROM WorkflowState ws ORDER BY ws.stateCode")
+    List<String> findDistinctStateCodes();
+
+    List<WorkflowState> findAllByOrderByStateCodeAsc();
 }
 

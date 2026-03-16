@@ -51,7 +51,14 @@ public class CaseWorkflowInstance {
     private Long currentStateId;
 
     @Column(name = "assigned_to_role", length = 50)
-    private String assignedToRole; // Current role responsible
+    private String assignedToRole; // denormalized role code for display
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_to_role_id", foreignKey = @ForeignKey(name = "fk_instance_assigned_role"))
+    private RoleMaster assignedToRoleRef;
+
+    @Column(name = "assigned_to_role_id", insertable = false, updatable = false)
+    private Long assignedToRoleId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_to_unit_id", foreignKey = @ForeignKey(name = "fk_instance_unit"))

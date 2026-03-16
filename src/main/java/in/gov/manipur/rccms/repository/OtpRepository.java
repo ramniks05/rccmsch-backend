@@ -30,16 +30,6 @@ public interface OtpRepository extends JpaRepository<Otp, Long> {
             @Param("now") LocalDateTime now);
 
     /**
-     * Count OTP requests in last 15 minutes for rate limiting
-     */
-    @Query("SELECT COUNT(o) FROM Otp o WHERE o.mobileNumber = :mobileNumber " +
-           "AND o.citizenType = :citizenType AND o.createdAt > :since")
-    long countRecentOtpRequests(
-            @Param("mobileNumber") String mobileNumber,
-            @Param("citizenType") Otp.CitizenType citizenType,
-            @Param("since") LocalDateTime since);
-
-    /**
      * Mark OTP as used
      */
     @Modifying

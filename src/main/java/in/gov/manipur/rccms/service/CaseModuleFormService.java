@@ -77,6 +77,53 @@ public class CaseModuleFormService {
                 .build();
     }
 
+    /**
+     * Convenience helper: get module form schema + latest data for a case,
+     * resolving moduleType from a module form group id (field definition id used in permission-forms).
+     */
+    @Transactional(readOnly = true)
+    public ModuleFormWithDataDTO getModuleFormDataByFormId(Long caseId, Long formId) {
+        if (caseId == null) {
+            throw new IllegalArgumentException("Case ID cannot be null");
+        }
+        if (formId == null) {
+            throw new IllegalArgumentException("Form ID cannot be null");
+        }
+
+        CaseModuleFormFieldDefinition fieldDef = fieldRepository.findById(formId)
+                .orElseThrow(() -> new RuntimeException("Module form definition not found: " + formId));
+
+        ModuleType moduleType = fieldDef.getModuleType();
+
+        Case caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
+
+        ModuleFormSchemaDTO schema = getFormSchema(
+                caseEntity.getCaseNatureId(), caseEntity.getCaseTypeId(), moduleType);
+
+        Optional<ModuleFormSubmissionDTO> submission = getLatestSubmission(caseId, moduleType);
+
+        Map<String, Object> formData = null;
+        boolean hasExistingData = false;
+
+        if (submission.isPresent() && submission.get().getFormData() != null) {
+            try {
+                formData = objectMapper.readValue(submission.get().getFormData(),
+                        new TypeReference<Map<String, Object>>() {});
+                hasExistingData = true;
+            } catch (Exception e) {
+                log.error("Error parsing form data for case {} module {} (formId {}): {}",
+                        caseId, moduleType, formId, e.getMessage());
+            }
+        }
+
+        return ModuleFormWithDataDTO.builder()
+                .schema(schema)
+                .formData(formData)
+                .hasExistingData(hasExistingData)
+                .build();
+    }
+
     @Transactional(readOnly = true)
     public List<ModuleFormFieldDTO> getAllFields(Long caseNatureId, Long caseTypeId, ModuleType moduleType) {
         if (caseNatureId == null) {

@@ -75,9 +75,12 @@ public class PostBasedAuthService {
             }
         }
         
-        // Eagerly fetch role
-        RoleMaster role = roleMasterRepository.findByRoleCode(posting.getRoleCode())
-                .orElseThrow(() -> new RuntimeException("Role not found for role code: " + posting.getRoleCode()));
+        // Role from posting (role_id is FK to role_master)
+        RoleMaster role = posting.getRole();
+        if (role == null) {
+            role = roleMasterRepository.findByRoleCode(posting.getRoleCode())
+                    .orElseThrow(() -> new RuntimeException("Role not found for role code: " + posting.getRoleCode()));
+        }
 
         // Get officer (person)
         Officer officer = posting.getOfficer();
@@ -105,11 +108,13 @@ public class PostBasedAuthService {
             throw new InvalidCredentialsException("Password reset required. Please reset your password.");
         }
 
-        // Generate JWT token with posting information
+        // Generate JWT token with posting information (include roleId for workflow)
+        Long roleId = role.getId();
         String accessToken = jwtService.generatePostBasedToken(
                 posting.getPostingUserid(),
                 posting.getRoleCode(),
-                unit.getUnitId(), // Unit derived from court
+                roleId,
+                unit.getUnitId(),
                 unit.getUnitLevel().name(),
                 officer.getId()
         );

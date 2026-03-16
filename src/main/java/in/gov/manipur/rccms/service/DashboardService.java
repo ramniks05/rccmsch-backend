@@ -1,6 +1,5 @@
 package in.gov.manipur.rccms.service;
 
-import in.gov.manipur.rccms.Constants.Constant.Constant;
 import in.gov.manipur.rccms.Projection.CalendarHearingProjection;
 import in.gov.manipur.rccms.Projection.CauseListProjection;
 import in.gov.manipur.rccms.Projection.OfficerCaseStatsProjection;
@@ -12,13 +11,12 @@ import in.gov.manipur.rccms.repository.CaseWorkflowInstanceRepository;
 import in.gov.manipur.rccms.repository.CourtRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.Month;
 import java.time.YearMonth;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -32,8 +30,10 @@ import java.util.stream.Collectors;
 @Slf4j
 public class DashboardService {
 
-    private static final String HEARING_SCHEDULED_STATUS = "CASE_NUMBER_HEARING_DATE_GENERATED";
     private static final int NEXT_DAYS = 10;
+
+    @Value("${app.dashboard.hearing-scheduled-statuses:CASE_NUMBER_HEARING_DATE_GENERATED,HEARING_SCHEDULED}")
+    private String hearingScheduledStatusesConfig;
 
     private final CaseRepository caseRepository;
     private final CaseWorkflowInstanceRepository workflowInstanceRepository;
@@ -46,9 +46,28 @@ public class DashboardService {
         long totalCases = caseRepository.countByIsActiveTrue();
         long pendingCases = workflowInstanceRepository.countByCurrentState_IsFinalStateFalseAndCaseEntity_IsActiveTrue();
         long disposedCases = workflowInstanceRepository.countByCurrentState_IsFinalStateTrueAndCaseEntity_IsActiveTrue();
-        long hearingScheduledCount = caseRepository.countByStatusAndIsActiveTrue(HEARING_SCHEDULED_STATUS);
+        List<String> hearingScheduledStatuses = parseStatusList(hearingScheduledStatusesConfig);
+        long hearingScheduledCount = hearingScheduledStatuses.isEmpty()
+                ? 0
+                : caseRepository.countByStatusInAndIsActiveTrue(hearingScheduledStatuses);
         long totalCourts = courtRepository.count();
-        return new CaseSummaryDTO(totalCases, pendingCases, disposedCases, hearingScheduledCount,totalCourts);
+        return new CaseSummaryDTO(totalCases, pendingCases, disposedCases, hearingScheduledCount, totalCourts);
+    }
+
+    /**
+     * Returns state codes that count as "Hearing scheduled" on dashboard.
+     * Used by workflow config API so admin UI can show: "Use one of these state_code values, or add yours to config."
+     */
+    public List<String> getHearingScheduledStatusCodes() {
+        return parseStatusList(hearingScheduledStatusesConfig);
+    }
+
+    private static List<String> parseStatusList(String config) {
+        if (config == null || config.isBlank()) return List.of();
+        return Arrays.stream(config.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
     }
 
     /**

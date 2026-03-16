@@ -31,10 +31,6 @@ public class RoleMaster {
     @Column(name = "role_name", nullable = false, length = 100)
     private String roleName;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "unit_level", length = 20)
-    private AdminUnit.UnitLevel unitLevel; // Which unit level this role belongs to (null for DEALING_ASSISTANT which can be at any level)
-
     @Column(name = "description", length = 500)
     private String description;
 
@@ -46,17 +42,6 @@ public class RoleMaster {
         createdAt = LocalDateTime.now();
     }
 
-    /**
-     * Role Code Enum (for validation)
-     */
-    public enum RoleCode {
-        SUPER_ADMIN,
-        STATE_ADMIN,
-        DISTRICT_OFFICER,
-        SUB_DIVISION_OFFICER,
-        CIRCLE_OFFICER,
-        CIRCLE_MANDOL,
-        DEALING_ASSISTANT
-    }
+  
 }
 

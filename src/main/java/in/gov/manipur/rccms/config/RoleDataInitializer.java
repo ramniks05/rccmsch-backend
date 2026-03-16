@@ -1,6 +1,5 @@
 package in.gov.manipur.rccms.config;
 
-import in.gov.manipur.rccms.entity.AdminUnit;
 import in.gov.manipur.rccms.entity.RoleMaster;
 import in.gov.manipur.rccms.repository.RoleMasterRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,36 +31,38 @@ public class RoleDataInitializer implements CommandLineRunner {
     }
 
     /**
-     * Initialize only default SUPER_ADMIN role
-     * Other roles should be configured via admin APIs
+     * Initialize roles required for citizen, lawyer, officer (all reference role_master).
+     * Citizen/Lawyer registration and officer postings use these role codes.
      */
     private void initializeRoles() {
-        // Only initialize SUPER_ADMIN - default admin role required for system access
-        if (!roleMasterRepository.existsByRoleCode("SUPER_ADMIN")) {
-            RoleMaster superAdmin = createRole(
-                "SUPER_ADMIN",
-                "Super Administrator",
-                AdminUnit.UnitLevel.STATE,
-                "System administrator with full access - Default admin role"
-            );
-            roleMasterRepository.save(superAdmin);
-            log.info("Inserted default admin role: SUPER_ADMIN - Super Administrator");
-        } else {
-            log.debug("SUPER_ADMIN role already exists, skipping");
+        createRoleIfNotExists("SUPER_ADMIN", "Super Administrator", "System administrator with full access");
+        createRoleIfNotExists("CITIZEN", "Citizen", "Citizen/applicant in the system");
+        createRoleIfNotExists("RESPONDENT", "Respondent", "Respondent in cases");
+        createRoleIfNotExists("OPERATOR", "Operator", "Operator role");
+        createRoleIfNotExists("LAWYER", "Lawyer", "Advocate/lawyer");
+        createRoleIfNotExists("PRESIDING_OFFICER", "Presiding Officer", "Presiding officer (e.g. Tehsildar)");
+        createRoleIfNotExists("DEALING_ASSISTANT", "Dealing Assistant", "Dealing assistant/reader");
+        createRoleIfNotExists("FIELD_OFFICER", "Field Officer", "Field officer");
+        log.info("Role Master initialization completed");
+    }
+
+    private void createRoleIfNotExists(String code, String name, String description) {
+        if (roleMasterRepository.existsByRoleCode(code)) {
+            log.debug("Role {} already exists, skipping", code);
+            return;
         }
-        
-        log.info("Role Master initialization completed - Only SUPER_ADMIN initialized");
-        log.info("Other roles should be configured via admin APIs for Chandigarh");
+        RoleMaster role = createRole(code, name, description);
+        roleMasterRepository.save(role);
+        log.info("Inserted role: {} - {}", code, name);
     }
 
     /**
      * Create a RoleMaster entity
      */
-    private RoleMaster createRole(String code, String name, AdminUnit.UnitLevel unitLevel, String description) {
+    private RoleMaster createRole(String code, String name, String description) {
         RoleMaster role = new RoleMaster();
         role.setRoleCode(code);
         role.setRoleName(name);
-        role.setUnitLevel(unitLevel);
         role.setDescription(description);
         role.setCreatedAt(LocalDateTime.now());
         return role;

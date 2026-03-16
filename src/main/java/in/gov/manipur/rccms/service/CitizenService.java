@@ -6,8 +6,10 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.gov.manipur.rccms.entity.Citizen;
 import in.gov.manipur.rccms.entity.RegistrationFormField;
+import in.gov.manipur.rccms.entity.RoleMaster;
 import in.gov.manipur.rccms.exception.DuplicateUserException;
 import in.gov.manipur.rccms.repository.CitizenRepository;
+import in.gov.manipur.rccms.repository.RoleMasterRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class CitizenService {
 
     private final CitizenRepository citizenRepository;
+    private final RoleMasterRepository roleMasterRepository;
     private final PasswordEncoder passwordEncoder;
     private final OtpService otpService;
     private final RegistrationFormService registrationFormService;
@@ -56,7 +59,6 @@ public class CitizenService {
                 throw new IllegalArgumentException("Invalid registration data format");
             }
         }
-
 
         Citizen savedData = citizenRepository.save(citizen);
         return new CitizenProfileUpdateDTO(savedData,objectMapper);
@@ -106,13 +108,18 @@ public class CitizenService {
             throw new DuplicateUserException("Mobile number already registered");
         }
 
+        // Resolve role from role_master (no hardcoded role)
+        String roleCode = roleCodeForCitizenType(citizenType);
+        RoleMaster role = roleMasterRepository.findByRoleCode(roleCode)
+                .orElseThrow(() -> new IllegalStateException("Role not found in role_master: " + roleCode + ". Ensure RoleDataInitializer has seeded CITIZEN, RESPONDENT, OPERATOR, LAWYER."));
+
         // Create new Citizen entity
         Citizen citizen = new Citizen();
         citizen.setFirstName(dto.getFirstName().trim());
         citizen.setLastName(dto.getLastName().trim());
         citizen.setEmail(dto.getEmail().trim().toLowerCase());
         citizen.setMobileNumber(dto.getMobileNumber().trim());
-        citizen.setCitizenType(citizenType);
+        citizen.setRole(role);
         citizen.setIsActive(false); // Will be set to true after mobile verification
         citizen.setIsEmailVerified(false);
         citizen.setIsMobileVerified(false);
@@ -235,6 +242,14 @@ public class CitizenService {
         citizenRepository.save(citizen);
         
         log.info("Mobile number verified and account activated for citizen ID: {}", citizen.getId());
+    }
+
+    /**
+     * Map CitizenType to role_master.role_code
+     */
+    private static String roleCodeForCitizenType(Citizen.CitizenType citizenType) {
+        if (citizenType == null) return "CITIZEN";
+        return citizenType.name();
     }
 
     /**

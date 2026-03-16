@@ -35,11 +35,6 @@ public interface OfficerRepository extends JpaRepository<Officer, Long> {
     boolean existsByEmail(String email);
 
     /**
-     * Find all active officers
-     */
-    List<Officer> findByIsActiveTrueOrderByFullNameAsc();
-
-    /**
      * Find all officers ordered by name
      */
     List<Officer> findAllByOrderByFullNameAsc();

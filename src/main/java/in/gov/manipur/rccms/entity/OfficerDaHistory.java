@@ -62,8 +62,17 @@ public class OfficerDaHistory {
     @Column(name = "unit_id", insertable = false, updatable = false)
     private Long unitId;
 
+    /** Role code stored as string (denormalized from role_master.role_code). */
     @Column(name = "role_code", nullable = false, length = 50)
-    private String roleCode; // References role_master.role_code
+    private String roleCode;
+
+    /** RoleMaster reference: role_id FK to role_master. Persisted together with role_code. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "role_id", nullable = false, foreignKey = @ForeignKey(name = "fk_posting_role"))
+    private RoleMaster role;
+
+    @Column(name = "role_id", insertable = false, updatable = false)
+    private Long roleId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "officer_id", nullable = false, foreignKey = @ForeignKey(name = "fk_posting_officer"))
