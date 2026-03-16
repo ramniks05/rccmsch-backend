@@ -1541,10 +1541,24 @@ public class WorkflowEngineService {
                         }
 
                         String documentNamesLabel = getDocumentNamesLabel(templateIds);
+
+                        // Derive module type from first template (if all templates share same module type).
+                        String documentModuleType = null;
+                        try {
+                            List<CaseDocumentTemplate> templates = caseDocumentTemplateRepository.findAllById(templateIds);
+                            if (!templates.isEmpty() && templates.get(0).getModuleType() != null) {
+                                documentModuleType = templates.get(0).getModuleType().name();
+                            }
+                        } catch (Exception e) {
+                            log.debug("Could not resolve document module type for templateIds {}: {}", templateIds, e.getMessage());
+                        }
+
                         String label = "Document(s) [" + documentNamesLabel + "] " + stageLabel + " must exist";
                         conditions.add(ConditionStatusDTO.builder()
                                 .label(label)
                                 .type("DOCUMENT_CONDITION")
+                                .moduleType(documentModuleType)
+                                .documentTemplateIds(templateIds)
                                 .required(true)
                                 .passed(passed)
                                 .message(passed ? label + " ✓" : label + " required")
@@ -1580,6 +1594,7 @@ public class WorkflowEngineService {
                                 .label(label)
                                 .type("FORM_CONDITION")
                                 .moduleType(moduleType.name())
+                                .formId(formId)
                                 .required(true)
                                 .passed(passed)
                                 .message(passed ? label + " ✓" : label + " must be submitted")
