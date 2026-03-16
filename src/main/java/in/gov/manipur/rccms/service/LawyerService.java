@@ -6,8 +6,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import in.gov.manipur.rccms.entity.Citizen;
 import in.gov.manipur.rccms.entity.Lawyer;
 import in.gov.manipur.rccms.entity.RegistrationFormField;
+import in.gov.manipur.rccms.entity.RoleMaster;
 import in.gov.manipur.rccms.exception.DuplicateUserException;
 import in.gov.manipur.rccms.repository.LawyerRepository;
+import in.gov.manipur.rccms.repository.RoleMasterRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class LawyerService {
 
     private final LawyerRepository lawyerRepository;
+    private final RoleMasterRepository roleMasterRepository;
     private final PasswordEncoder passwordEncoder;
     private final OtpService otpService;
     private final RegistrationFormService registrationFormService;
@@ -64,7 +67,11 @@ public class LawyerService {
             throw new DuplicateUserException("Mobile number already registered");
         }
 
+        RoleMaster lawyerRole = roleMasterRepository.findByRoleCode("LAWYER")
+                .orElseThrow(() -> new IllegalStateException("Role not found in role_master: LAWYER. Ensure RoleDataInitializer has seeded LAWYER."));
+
         Lawyer lawyer = new Lawyer();
+        lawyer.setRole(lawyerRole);
         lawyer.setFirstName(dto.getFirstName().trim());
         lawyer.setLastName(dto.getLastName().trim());
         lawyer.setEmail(dto.getEmail().trim().toLowerCase());

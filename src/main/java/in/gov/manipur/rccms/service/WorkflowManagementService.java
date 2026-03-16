@@ -1,11 +1,11 @@
 package in.gov.manipur.rccms.service;
 
+import in.gov.manipur.rccms.constant.WorkflowDataKey;
 import in.gov.manipur.rccms.dto.*;
 import in.gov.manipur.rccms.entity.*;
 import in.gov.manipur.rccms.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -36,7 +37,6 @@ public class WorkflowManagementService {
     private final CaseWorkflowInstanceRepository instanceRepository;
     private final CaseNatureRepository caseNatureRepository;
     private final RoleMasterRepository roleMasterRepository;
-    @Autowired
     private final ObjectMapper objectMapper;
 
     // ==================== Workflow Definition CRUD ====================
@@ -348,35 +348,36 @@ public class WorkflowManagementService {
     // ==================== Workflow Permission CRUD ====================
 
     /**
-     * Create workflow permission
+     * Create workflow permission. Resolves role from roleId (preferred) or roleCode and saves role_id + role_code.
      */
     public WorkflowPermission createPermission(Long transitionId, CreatePermissionDTO dto) {
-        log.info("Creating permission: transitionId={}, roleCode={}", transitionId, dto.getRoleCode());
+        log.info("Creating permission: transitionId={}, roleId={}, roleCode={}", transitionId, dto.getRoleId(), dto.getRoleCode());
 
         WorkflowTransition transition = transitionRepository.findById(transitionId)
                 .orElseThrow(() -> new RuntimeException("Transition not found: " + transitionId));
 
-        // Validate role exists
-        if (!roleMasterRepository.existsByRoleCode(dto.getRoleCode())) {
-            throw new RuntimeException("Role not found: " + dto.getRoleCode());
+        RoleMaster role = resolveRoleFromDto(dto);
+        if (role == null) {
+            throw new RuntimeException("Role not found: provide roleId or roleCode");
         }
+        String roleCode = role.getRoleCode();
 
-        // Check if permission already exists
         if (permissionRepository.existsByTransitionIdAndRoleCodeAndUnitLevelAndIsActiveTrue(
-                transitionId, dto.getRoleCode(), dto.getUnitLevel())) {
+                transitionId, roleCode, dto.getUnitLevel())) {
             throw new RuntimeException("Permission already exists for transition: " + transitionId +
-                    ", role: " + dto.getRoleCode() + ", unitLevel: " + dto.getUnitLevel());
+                    ", role: " + roleCode + ", unitLevel: " + dto.getUnitLevel());
         }
 
         WorkflowPermission permission = new WorkflowPermission();
         permission.setTransition(transition);
-        permission.setTransitionId(transitionId);
-        permission.setRoleCode(dto.getRoleCode());
+        permission.setRole(role);
+        permission.setRoleCode(roleCode);
         permission.setUnitLevel(dto.getUnitLevel());
         permission.setCanInitiate(dto.getCanInitiate() != null ? dto.getCanInitiate() : false);
         permission.setCanApprove(dto.getCanApprove() != null ? dto.getCanApprove() : false);
         permission.setHierarchyRule(dto.getHierarchyRule());
-        permission.setConditions(dto.getConditions());
+        validateWorkflowDataFieldsInConditions(dto.getConditions());
+        permission.setConditions(mergeConditionsWithPermissionOptions(dto, dto.getConditions()));
         permission.setIsActive(dto.getIsActive() != null ? dto.getIsActive() : true);
         permission.setCreatedAt(LocalDateTime.now());
 
@@ -384,32 +385,29 @@ public class WorkflowManagementService {
     }
 
     /**
-     * Update workflow permission
+     * Update workflow permission. Updates role_id and role_code from roleId (preferred) or roleCode.
      */
     public WorkflowPermission updatePermission(Long permissionId, CreatePermissionDTO dto) {
-        log.info("Updating permission: id={}", permissionId);
+        log.info("Updating permission: id={}, roleId={}, roleCode={}", permissionId, dto.getRoleId(), dto.getRoleCode());
 
         WorkflowPermission permission = permissionRepository.findById(permissionId)
                 .orElseThrow(() -> new RuntimeException("Permission not found: " + permissionId));
 
-        // Validate role exists
-        if (dto.getRoleCode() != null && !roleMasterRepository.existsByRoleCode(dto.getRoleCode())) {
-            throw new RuntimeException("Role not found: " + dto.getRoleCode());
-        }
-
-        // Check if updating would create duplicate
-        if ((dto.getRoleCode() != null && !permission.getRoleCode().equals(dto.getRoleCode())) ||
-            (dto.getUnitLevel() != null && !dto.getUnitLevel().equals(permission.getUnitLevel()))) {
-            if (permissionRepository.existsByTransitionIdAndRoleCodeAndUnitLevelAndIsActiveTrue(
-                    permission.getTransitionId(), 
-                    dto.getRoleCode() != null ? dto.getRoleCode() : permission.getRoleCode(),
-                    dto.getUnitLevel() != null ? dto.getUnitLevel() : permission.getUnitLevel())) {
-                throw new RuntimeException("Permission already exists for this combination");
+        if (dto.getRoleId() != null || (dto.getRoleCode() != null && !dto.getRoleCode().isBlank())) {
+            RoleMaster role = resolveRoleFromDto(dto);
+            if (role == null) {
+                throw new RuntimeException("Role not found: provide roleId or roleCode");
             }
-        }
-
-        if (dto.getRoleCode() != null) {
-            permission.setRoleCode(dto.getRoleCode());
+            String roleCode = role.getRoleCode();
+            if (!roleCode.equals(permission.getRoleCode()) || (dto.getUnitLevel() != null && !dto.getUnitLevel().equals(permission.getUnitLevel()))) {
+                AdminUnit.UnitLevel newUnitLevel = dto.getUnitLevel() != null ? dto.getUnitLevel() : permission.getUnitLevel();
+                if (permissionRepository.existsByTransitionIdAndRoleCodeAndUnitLevelAndIsActiveTrueAndIdNot(
+                        permission.getTransitionId(), roleCode, newUnitLevel, permission.getId())) {
+                    throw new RuntimeException("Permission already exists for this combination");
+                }
+            }
+            permission.setRole(role);
+            permission.setRoleCode(roleCode);
         }
         if (dto.getUnitLevel() != null) {
             permission.setUnitLevel(dto.getUnitLevel());
@@ -424,13 +422,55 @@ public class WorkflowManagementService {
             permission.setHierarchyRule(dto.getHierarchyRule());
         }
         if (dto.getConditions() != null) {
-            permission.setConditions(dto.getConditions());
+            validateWorkflowDataFieldsInConditions(dto.getConditions());
         }
+        String baseConditions = dto.getConditions() != null ? dto.getConditions() : permission.getConditions();
+        permission.setConditions(mergeConditionsWithPermissionOptions(dto, baseConditions));
         if (dto.getIsActive() != null) {
             permission.setIsActive(dto.getIsActive());
         }
 
         return permissionRepository.save(permission);
+    }
+
+    /** Resolve RoleMaster from dto: by roleId if set, else by roleCode. */
+    private RoleMaster resolveRoleFromDto(CreatePermissionDTO dto) {
+        if (dto.getRoleId() != null) {
+            return roleMasterRepository.findById(dto.getRoleId()).orElse(null);
+        }
+        if (dto.getRoleCode() != null && !dto.getRoleCode().isBlank()) {
+            return roleMasterRepository.findByRoleCode(dto.getRoleCode().trim()).orElse(null);
+        }
+        return null;
+    }
+
+    /**
+     * Validates that workflowDataFieldsRequired in conditions JSON only contains keys from
+     * WorkflowDataKey (single source of truth). Use these same keys when writing workflow_data.
+     */
+    private void validateWorkflowDataFieldsInConditions(String conditionsJson) {
+        if (conditionsJson == null || conditionsJson.isBlank()) {
+            return;
+        }
+        try {
+            Map<String, Object> conditions = objectMapper.readValue(conditionsJson, new TypeReference<Map<String, Object>>() {});
+            Object req = conditions.get("workflowDataFieldsRequired");
+            if (req == null) return;
+            List<String> required = req instanceof List<?> list
+                    ? list.stream().filter(Objects::nonNull).map(Object::toString).collect(Collectors.toList())
+                    : List.of(req.toString());
+            List<String> invalid = required.stream().filter(k -> !WorkflowDataKey.isValid(k)).collect(Collectors.toList());
+            if (!invalid.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "workflowDataFieldsRequired contains invalid keys: " + invalid + ". "
+                                + "Use only keys from workflow data key reference. Valid keys: " + WorkflowDataKey.validKeys());
+            }
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            // JSON parse errors are not about key validity; let them surface as-is when saving
+            log.debug("Could not parse conditions for workflowDataFieldsRequired validation: {}", e.getMessage());
+        }
     }
 
     /**
@@ -483,7 +523,96 @@ public class WorkflowManagementService {
         if (permission.getTransition() != null) {
             dto.setTransitionCode(permission.getTransition().getTransitionCode());
         }
+        parseConditionsIntoPermissionOptions(permission.getConditions(), dto);
         return dto;
+    }
+
+    /** Merge allowedFormIds, allowedDocumentIds, allowDocumentDraft, allowDocumentSaveAndSign into conditions JSON. */
+    private String mergeConditionsWithPermissionOptions(CreatePermissionDTO dto, String baseConditionsJson) {
+        Map<String, Object> map = new HashMap<>();
+        if (baseConditionsJson != null && !baseConditionsJson.trim().isEmpty()) {
+            try {
+                map = objectMapper.readValue(baseConditionsJson, new TypeReference<Map<String, Object>>() {});
+                if (map == null) map = new HashMap<>();
+            } catch (Exception e) {
+                log.warn("Could not parse conditions JSON, using empty base: {}", e.getMessage());
+            }
+        }
+        // When lists are explicitly provided as empty (e.g. []), interpret that as
+        // "no restriction" and remove the key from conditions.
+        // Forms: if parameter is absent/null or empty, interpret as \"no form selected\"
+        if (dto.getAllowedFormIds() == null || dto.getAllowedFormIds().isEmpty()) {
+            map.remove("allowedFormIds");
+        } else {
+            map.put("allowedFormIds", dto.getAllowedFormIds());
+        }
+        if (dto.getAllowedDocumentIds() != null) {
+            if (dto.getAllowedDocumentIds().isEmpty()) {
+                map.remove("allowedDocumentIds");
+            } else {
+                map.put("allowedDocumentIds", dto.getAllowedDocumentIds());
+            }
+        }
+        if (dto.getAllowDocumentDraft() != null) map.put("allowDocumentDraft", dto.getAllowDocumentDraft());
+        if (dto.getAllowDocumentSaveAndSign() != null) map.put("allowDocumentSaveAndSign", dto.getAllowDocumentSaveAndSign());
+        if (dto.getAllowedDocumentStages() != null) {
+            if (dto.getAllowedDocumentStages().isEmpty()) {
+                map.remove("allowedDocumentStages");
+            } else {
+                map.put("allowedDocumentStages", dto.getAllowedDocumentStages());
+            }
+        }
+        try {
+            return objectMapper.writeValueAsString(map);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to serialize conditions", e);
+        }
+    }
+
+    /** Populate DTO with allowedFormIds, allowedDocumentIds, allowDocumentDraft, allowDocumentSaveAndSign from conditions JSON. */
+    private void parseConditionsIntoPermissionOptions(String conditionsJson, WorkflowPermissionDTO dto) {
+        if (conditionsJson == null || conditionsJson.trim().isEmpty()) return;
+        try {
+            Map<String, Object> map = objectMapper.readValue(conditionsJson, new TypeReference<Map<String, Object>>() {});
+            if (map.containsKey("allowedFormIds")) dto.setAllowedFormIds(toLongList(map.get("allowedFormIds")));
+            if (map.containsKey("allowedDocumentIds")) dto.setAllowedDocumentIds(toLongList(map.get("allowedDocumentIds")));
+            if (map.containsKey("allowDocumentDraft")) dto.setAllowDocumentDraft(toBoolean(map.get("allowDocumentDraft")));
+            if (map.containsKey("allowDocumentSaveAndSign")) dto.setAllowDocumentSaveAndSign(toBoolean(map.get("allowDocumentSaveAndSign")));
+            if (map.containsKey("allowedDocumentStages")) dto.setAllowedDocumentStages(toAllowedDocumentStages(map.get("allowedDocumentStages")));
+        } catch (Exception e) {
+            log.debug("Could not parse permission options from conditions: {}", e.getMessage());
+        }
+    }
+
+    private static List<Long> toLongList(Object value) {
+        if (value == null) return null;
+        if (value instanceof List<?> list) {
+            return list.stream()
+                    .map(o -> o instanceof Number n ? n.longValue() : null)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+        }
+        return null;
+    }
+
+    private static Boolean toBoolean(Object value) {
+        if (value == null) return null;
+        if (value instanceof Boolean b) return b;
+        if (value instanceof String s) return Boolean.parseBoolean(s);
+        return null;
+    }
+
+    private List<AllowedDocumentStageEntryDTO> toAllowedDocumentStages(Object value) {
+        if (value == null) return null;
+        if (value instanceof List<?> list && !list.isEmpty()) {
+            try {
+                return objectMapper.convertValue(value, new TypeReference<List<AllowedDocumentStageEntryDTO>>() {});
+            } catch (Exception e) {
+                log.debug("Could not convert allowedDocumentStages: {}", e.getMessage());
+                return null;
+            }
+        }
+        return null;
     }
 
     /**

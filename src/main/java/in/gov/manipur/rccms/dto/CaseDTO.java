@@ -41,6 +41,7 @@ public class CaseDTO {
     private String priority;
     private LocalDate applicationDate;
     private LocalDate resolvedDate;
+    private LocalDate nextHearingDate;
     private String remarks;
     private Boolean isActive;
     private LocalDateTime createdAt;
@@ -55,8 +56,14 @@ public class CaseDTO {
     private Long assignedToOfficerId;
     private String assignedToOfficerName;
     private String assignedToRole;
+    private Long assignedToRoleId;
     private Long assignedToUnitId;
     private String assignedToUnitName;
+
+    /** Roles that can perform the next transition(s). Display e.g. "Pending with: Dealing Hand, Presiding Officer". */
+    private List<String> pendingWithRoleNames;
+    /** Comma-separated role names for display (e.g. "Dealing Hand, Presiding Officer"). */
+    private String pendingWithRolesDisplay;
 
     /** Form/case-specific data as JSON (e.g. applicant_name, respondent_name, area details). */
     private String caseData;

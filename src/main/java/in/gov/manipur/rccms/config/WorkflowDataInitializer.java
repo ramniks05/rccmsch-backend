@@ -10,6 +10,8 @@ import in.gov.manipur.rccms.repository.WorkflowDefinitionRepository;
 import in.gov.manipur.rccms.repository.WorkflowStateRepository;
 import in.gov.manipur.rccms.repository.WorkflowTransitionRepository;
 import in.gov.manipur.rccms.repository.WorkflowPermissionRepository;
+import in.gov.manipur.rccms.repository.RoleMasterRepository;
+import in.gov.manipur.rccms.entity.RoleMaster;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -18,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -36,6 +39,7 @@ public class WorkflowDataInitializer implements CommandLineRunner {
     private final WorkflowTransitionRepository transitionRepository;
     private final WorkflowPermissionRepository permissionRepository;
     private final CaseNatureRepository caseNatureRepository;
+    private final RoleMasterRepository roleMasterRepository;
 
     @Override
     @Transactional
@@ -55,11 +59,45 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             initializeAcquisitionRFCTLARRWorkflow();
             initializeAcquisitionDirectPurchaseWorkflow();
 
+            ensureApplicationSubmittedTransitions();
+
             log.info("========================================");
             log.info("Workflow Data initialization completed!");
             log.info("========================================");
         } catch (Exception e) {
             log.error("Error initializing workflow data: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Ensure each workflow has an APPLICATION_SUBMITTED transition into the initial state
+     * so that case submission can be recorded in history without an extra submit step.
+     */
+    private void ensureApplicationSubmittedTransitions() {
+        for (WorkflowDefinition workflow : workflowDefinitionRepository.findAll()) {
+            workflowStateRepository.findByWorkflowIdAndIsInitialStateTrue(workflow.getId())
+                    .ifPresent(initialState -> {
+                        List<WorkflowTransition> intoInitial = transitionRepository
+                                .findByWorkflowIdAndToStateIdAndIsActiveTrue(workflow.getId(), initialState.getId());
+                        if (!intoInitial.isEmpty()) return;
+                        if (transitionRepository.findByWorkflowIdAndTransitionCode(workflow.getId(), "APPLICATION_SUBMITTED").isPresent())
+                            return;
+                        WorkflowTransition t = new WorkflowTransition();
+                        t.setWorkflow(workflow);
+                        t.setWorkflowId(workflow.getId());
+                        t.setFromState(initialState);
+                        t.setFromStateId(initialState.getId());
+                        t.setToState(initialState);
+                        t.setToStateId(initialState.getId());
+                        t.setTransitionCode("APPLICATION_SUBMITTED");
+                        t.setTransitionName("Application Submitted");
+                        t.setIsActive(true);
+                        t.setRequiresComment(false);
+                        t.setDescription("Case submitted by applicant; no extra submit step.");
+                        t.setCreatedAt(LocalDateTime.now());
+                        transitionRepository.save(t);
+                        log.debug("Created APPLICATION_SUBMITTED transition for workflow {}", workflow.getWorkflowCode());
+                    });
         }
     }
 
@@ -660,9 +698,16 @@ public class WorkflowDataInitializer implements CommandLineRunner {
             transitionId, roleCode, unitLevel);
         
         if (!exists) {
+            WorkflowTransition transition = transitionRepository.findById(transitionId).orElse(null);
+            RoleMaster role = roleMasterRepository.findByRoleCode(roleCode).orElse(null);
+            if (transition == null) {
+                log.warn("Transition not found for id: {}, skipping permission create", transitionId);
+                return;
+            }
             WorkflowPermission permission = new WorkflowPermission();
-            permission.setTransitionId(transitionId);
+            permission.setTransition(transition);
             permission.setRoleCode(roleCode);
+            if (role != null) permission.setRole(role);
             permission.setUnitLevel(unitLevel);
             permission.setCanInitiate(canInitiate);
             permission.setCanApprove(canApprove);

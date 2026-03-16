@@ -106,6 +106,27 @@ public class CaseModuleFormController {
     }
 
     /**
+     * Get module form schema + data by numeric form id (from /permission-forms).
+     * Example: GET /api/cases/{caseId}/module-forms/by-form/{formId} where formId is permission form id (e.g. 7).
+     */
+    @GetMapping("/{caseId}/module-forms/by-form/{formId}")
+    public ResponseEntity<ApiResponse<ModuleFormWithDataDTO>> getModuleFormDataByFormId(
+            @PathVariable Long caseId,
+            @PathVariable Long formId) {
+        if (caseId == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("Case ID cannot be null"));
+        }
+        if (formId == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("Form ID cannot be null"));
+        }
+
+        ModuleFormWithDataDTO response = moduleFormService.getModuleFormDataByFormId(caseId, formId);
+        return ResponseEntity.ok(ApiResponse.success("Module form schema and data retrieved by form id", response));
+    }
+
+    /**
      * Submit module form - handles both JSON and multipart/form-data
      * For FIELD_REPORT with files, use multipart/form-data
      * For other forms or FIELD_REPORT without files, use JSON

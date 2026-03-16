@@ -1,8 +1,10 @@
 package in.gov.manipur.rccms.config;
 
 import in.gov.manipur.rccms.entity.AdminUnit;
+import in.gov.manipur.rccms.entity.RoleMaster;
 import in.gov.manipur.rccms.entity.WorkflowPermission;
 import in.gov.manipur.rccms.entity.WorkflowTransition;
+import in.gov.manipur.rccms.repository.RoleMasterRepository;
 import in.gov.manipur.rccms.repository.WorkflowPermissionRepository;
 import in.gov.manipur.rccms.repository.WorkflowTransitionRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +31,7 @@ public class ReaderPermissionInitializer implements CommandLineRunner {
 
     private final WorkflowTransitionRepository transitionRepository;
     private final WorkflowPermissionRepository permissionRepository;
+    private final RoleMasterRepository roleMasterRepository;
 
     @Override
     @Transactional
@@ -58,10 +61,11 @@ public class ReaderPermissionInitializer implements CommandLineRunner {
                         transition.getId(), "READER", AdminUnit.UnitLevel.DISTRICT);
 
                 if (!exists) {
-                    // Add READER permission for case registration
+                    RoleMaster readerRole = roleMasterRepository.findByRoleCode("READER").orElse(null);
                     WorkflowPermission permission = new WorkflowPermission();
-                    permission.setTransitionId(transition.getId());
+                    permission.setTransition(transition);
                     permission.setRoleCode("READER");
+                    if (readerRole != null) permission.setRole(readerRole);
                     permission.setUnitLevel(AdminUnit.UnitLevel.DISTRICT);
                     permission.setCanInitiate(true);
                     permission.setCanApprove(false);

@@ -95,6 +95,9 @@ public class Case {
     @Column(name = "hearing_date")
     private LocalDate hearingDate; // Set when hearing is scheduled (from HEARING form)
 
+    @Column(name = "next_hearing_date")
+    private LocalDate nextHearingDate; // Next hearing date (updated when hearing form is submitted)
+
     @Column(name = "remarks", columnDefinition = "TEXT")
     private String remarks;
 

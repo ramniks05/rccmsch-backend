@@ -41,6 +41,8 @@ public interface OfficerDaHistoryRepository extends JpaRepository<OfficerDaHisto
      */
     Optional<OfficerDaHistory> findByCourtIdAndRoleCodeAndIsCurrentTrue(Long courtId, String roleCode);
 
+    Optional<OfficerDaHistory> findByCourtIdAndRoleIdAndIsCurrentTrue(Long courtId, Long roleId);
+
     /**
      * Find all active postings by court
      */
@@ -60,11 +62,6 @@ public interface OfficerDaHistoryRepository extends JpaRepository<OfficerDaHisto
      * Find all postings by court
      */
     List<OfficerDaHistory> findByCourtIdOrderByFromDateDesc(Long courtId);
-
-    /**
-     * Find all postings by role code
-     */
-    List<OfficerDaHistory> findByRoleCodeAndIsCurrentTrueOrderByFromDateDesc(String roleCode);
 
     /**
      * Check if active posting exists for court and role
@@ -94,9 +91,12 @@ public interface OfficerDaHistoryRepository extends JpaRepository<OfficerDaHisto
     List<OfficerDaHistory> findByUnitIdAndIsCurrentTrue(Long unitId);
 
     /**
-     * Find active unit-based posting by unit and role
+     * Find active unit-based postings by unit and role.
+     * Multiple officers may share the same role in a unit, so return a list.
      */
-    Optional<OfficerDaHistory> findByUnitIdAndRoleCodeAndIsCurrentTrue(Long unitId, String roleCode);
+    List<OfficerDaHistory> findByUnitIdAndRoleCodeAndIsCurrentTrue(Long unitId, String roleCode);
+
+    List<OfficerDaHistory> findByUnitIdAndRoleIdAndIsCurrentTrue(Long unitId, Long roleId);
 
     /**
      * Find active postings by unit and role (for closing existing postings)

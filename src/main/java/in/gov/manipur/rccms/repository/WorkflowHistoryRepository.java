@@ -13,13 +13,7 @@ import java.util.List;
  */
 @Repository
 public interface WorkflowHistoryRepository extends JpaRepository<WorkflowHistory, Long> {
-    
-    List<WorkflowHistory> findByCaseIdOrderByPerformedAtDesc(Long caseId);
-    
-    List<WorkflowHistory> findByInstanceIdOrderByPerformedAtDesc(Long instanceId);
-    
-    List<WorkflowHistory> findByPerformedByOfficerIdOrderByPerformedAtDesc(Long officerId);
-    
+
     @Query("SELECT wh FROM WorkflowHistory wh " +
            "LEFT JOIN FETCH wh.transition " +
            "LEFT JOIN FETCH wh.fromState " +
@@ -28,9 +22,6 @@ public interface WorkflowHistoryRepository extends JpaRepository<WorkflowHistory
            "LEFT JOIN FETCH wh.performedAtUnit " +
            "WHERE wh.caseId = :caseId ORDER BY wh.performedAt DESC")
     List<WorkflowHistory> findCaseHistory(@Param("caseId") Long caseId);
-    
-    @Query("SELECT wh FROM WorkflowHistory wh WHERE wh.transitionId = :transitionId ORDER BY wh.performedAt DESC")
-    List<WorkflowHistory> findByTransition(@Param("transitionId") Long transitionId);
 
     /** Count history entries with metadata containing the given substring (e.g. NOTICE_ACCEPTED) for this case */
     @Query("SELECT COUNT(wh) FROM WorkflowHistory wh WHERE wh.caseId = :caseId AND wh.metadata LIKE CONCAT('%', :substring, '%')")

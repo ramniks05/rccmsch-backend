@@ -2,6 +2,7 @@ package in.gov.manipur.rccms.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import in.gov.manipur.rccms.constant.WorkflowDataKey;
 import in.gov.manipur.rccms.dto.ConditionStatusDTO;
 import in.gov.manipur.rccms.dto.ModuleFormSchemaDTO;
 import in.gov.manipur.rccms.dto.TransitionChecklistDTO;
@@ -15,8 +16,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -43,49 +47,60 @@ public class WorkflowEngineService {
     private final AdminUnitRepository adminUnitRepository;
     private final OfficerRepository officerRepository;
     private final OfficerDaHistoryRepository postingRepository;
+    private final RoleMasterRepository roleMasterRepository;
+    private final CaseDocumentRepository caseDocumentRepository;
+    private final CaseDocumentTemplateRepository caseDocumentTemplateRepository;
     private final CaseModuleFormSubmissionRepository moduleFormSubmissionRepository;
-    private final CaseDocumentRepository documentRepository;
+    private final CaseModuleFormFieldRepository caseModuleFormFieldRepository;
     private final CaseModuleFormService caseModuleFormService;
     private final ObjectMapper objectMapper;
 
     /**
-     * Check if user can perform a transition
+     * Check if user can perform a transition. Uses role_id (role_master) when present, else role_code.
      */
     @Transactional(readOnly = true)
-    public boolean canPerformTransition(Long caseId, String transitionCode, Long officerId, String roleCode, Long unitId) {
-        log.debug("Checking permission for transition: caseId={}, transitionCode={}, officerId={}, roleCode={}, unitId={}",
-                caseId, transitionCode, officerId, roleCode, unitId);
+    public boolean canPerformTransition(Long caseId, String transitionCode, Long officerId, Long roleId, String roleCode, Long unitId) {
+        log.info("[TRANSITION_PERM] canPerformTransition: caseId={}, transitionCode={}, officerId={}, roleId={}, roleCode={}, unitId={}",
+                caseId, transitionCode, officerId, roleId, roleCode, unitId);
 
-        // Get workflow instance
         CaseWorkflowInstance instance = instanceRepository.findByCaseId(caseId)
                 .orElseThrow(() -> new RuntimeException("Workflow instance not found for case: " + caseId));
 
-        // Get current state
         WorkflowState currentState = instance.getCurrentState();
         if (currentState == null) {
             throw new RuntimeException("Current state not found for case: " + caseId);
         }
 
-        // Get transition
-        WorkflowTransition transition = transitionRepository
-                .findByWorkflowIdAndTransitionCode(instance.getWorkflowId(), transitionCode)
-                .orElseThrow(() -> new RuntimeException("Transition not found: " + transitionCode));
+        // Find transition(s) from current state with the given code (avoid non-unique results)
+        List<WorkflowTransition> candidateTransitions = transitionRepository
+                .findTransitionsFromState(instance.getWorkflowId(), currentState.getId())
+                .stream()
+                .filter(t -> transitionCode.equals(t.getTransitionCode()))
+                .toList();
+        if (candidateTransitions.isEmpty()) {
+            log.warn("[TRANSITION_PERM] FAIL: transition {} not found from current state {}", transitionCode, currentState.getStateCode());
+            return false;
+        }
+        if (candidateTransitions.size() > 1) {
+            log.warn("[TRANSITION_PERM] Multiple transitions found for workflowId={}, fromStateId={}, transitionCode={}. Using first.",
+                    instance.getWorkflowId(), currentState.getId(), transitionCode);
+        }
+        WorkflowTransition transition = candidateTransitions.get(0);
 
-        // Validate transition is from current state
         if (!transition.getFromStateId().equals(currentState.getId())) {
-            log.warn("Transition {} is not valid from current state {}", transitionCode, currentState.getStateCode());
+            log.warn("[TRANSITION_PERM] FAIL: transition {} is not valid from current state {} (fromStateId={}, currentStateId={})",
+                    transitionCode, currentState.getStateCode(), transition.getFromStateId(), currentState.getId());
             return false;
         }
 
-        // Check if transition is active
         if (!transition.getIsActive()) {
-            log.warn("Transition {} is not active", transitionCode);
+            log.warn("[TRANSITION_PERM] FAIL: transition {} is not active", transitionCode);
             return false;
         }
 
-        // Get unit level
         Long unitIdValue = unitId;
         if (unitIdValue == null) {
+            log.warn("[TRANSITION_PERM] FAIL: unitId is null (required for permission check)");
             return false;
         }
         AdminUnit unit = adminUnitRepository.findById(unitIdValue)
@@ -94,31 +109,54 @@ public class WorkflowEngineService {
         Case caseEntity = caseRepository.findById(caseId)
                 .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
 
-        // Check permissions
-        List<WorkflowPermission> permissions = permissionRepository
-                .findPermissionsForTransitionAndRole(transition.getId(), roleCode, unit.getUnitLevel());
-
-        if (permissions.isEmpty()) {
-            // Try without unit level constraint
-            permissions = permissionRepository
-                    .findPermissionsForTransitionAndRoleAnyLevel(transition.getId(), roleCode);
+        // Check permissions: prefer role_id when set in DB, always fallback to role_code (workflow_permission may have only role_code)
+        List<WorkflowPermission> permissions = new ArrayList<>();
+        if (roleId != null && roleId != 0L) {
+            permissions = permissionRepository.findPermissionsForTransitionAndRoleId(transition.getId(), roleId, unit.getUnitLevel());
+            log.info("[TRANSITION_PERM] By roleId: transitionId={}, roleId={}, unitLevel={} -> {} permission(s)",
+                    transition.getId(), roleId, unit.getUnitLevel(), permissions.size());
+            if (permissions.isEmpty()) {
+                permissions = permissionRepository.findPermissionsForTransitionAndRoleIdAnyLevel(transition.getId(), roleId);
+                log.info("[TRANSITION_PERM] By roleId (any level): -> {} permission(s)", permissions.size());
+            }
+        }
+        // Fallback to role_code lookup (required when workflow_permission.role_id is not yet populated)
+        String roleCodeToUse = roleCode;
+        if ((roleCodeToUse == null || roleCodeToUse.isBlank()) && roleId != null && roleId != 0L) {
+            roleCodeToUse = roleMasterRepository.findById(roleId).map(r -> r.getRoleCode()).orElse(null);
+            log.info("[TRANSITION_PERM] Resolved roleCode from roleId {} -> {}", roleId, roleCodeToUse);
+        }
+        if (permissions.isEmpty() && roleCodeToUse != null && !roleCodeToUse.isBlank()) {
+            permissions = permissionRepository.findPermissionsForTransitionAndRole(transition.getId(), roleCodeToUse, unit.getUnitLevel());
+            log.info("[TRANSITION_PERM] By roleCode: transitionId={}, roleCode={}, unitLevel={} -> {} permission(s)",
+                    transition.getId(), roleCodeToUse, unit.getUnitLevel(), permissions.size());
+            if (permissions.isEmpty()) {
+                permissions = permissionRepository.findPermissionsForTransitionAndRoleAnyLevel(transition.getId(), roleCodeToUse);
+                log.info("[TRANSITION_PERM] By roleCode (any level): -> {} permission(s)", permissions.size());
+            }
         }
 
         if (permissions.isEmpty()) {
-            log.warn("No permissions found for transition: {}, role: {}, unitLevel: {}", 
-                    transitionCode, roleCode, unit.getUnitLevel());
+            log.warn("[TRANSITION_PERM] FAIL: No permissions found for transition: {}, roleId: {}, roleCode: {}, unitLevel: {}",
+                    transitionCode, roleId, roleCodeToUse, unit.getUnitLevel());
             return false;
         }
 
-        // Check hierarchy rules
+        // Check hierarchy rules and conditions
         for (WorkflowPermission permission : permissions) {
-            if (permission.getCanInitiate() &&
-                    checkHierarchyRule(permission, unitId, instance) &&
-                    checkConditions(permission, instance, caseEntity)) {
+            boolean canInitiate = Boolean.TRUE.equals(permission.getCanInitiate());
+            boolean hierarchyOk = checkHierarchyRule(permission, unitId, instance);
+            boolean conditionsOk = checkConditions(permission, instance, caseEntity);
+            log.info("[TRANSITION_PERM] Permission id={}, roleCode={}, canInitiate={}, hierarchyRule={}, hierarchyOk={}, conditionsOk={}, instance.assignedToUnitId={}",
+                    permission.getId(), permission.getRoleCode(), canInitiate, permission.getHierarchyRule(), hierarchyOk, conditionsOk, instance.getAssignedToUnitId());
+            if (canInitiate && hierarchyOk && conditionsOk) {
+                log.info("[TRANSITION_PERM] OK: permission passed for transition {}", transitionCode);
                 return true;
             }
         }
 
+        log.warn("[TRANSITION_PERM] FAIL: No permission passed (canInitiate + hierarchy + conditions). transition={}, permissionsCount={}",
+                transitionCode, permissions.size());
         return false;
     }
 
@@ -126,13 +164,12 @@ public class WorkflowEngineService {
      * Execute workflow transition
      * @param assignedOfficerId Optional officer ID for manual assignment (used for REQUEST_FIELD_REPORT)
      */
-    public CaseWorkflowInstance executeTransition(Long caseId, String transitionCode, Long officerId, 
-                                                   String roleCode, Long unitId, String comments, Long assignedOfficerId) {
-        log.info("Executing transition: caseId={}, transitionCode={}, officerId={}, roleCode={}, unitId={}, assignedOfficerId={}",
-                caseId, transitionCode, officerId, roleCode, unitId, assignedOfficerId);
+    public CaseWorkflowInstance executeTransition(Long caseId, String transitionCode, Long officerId,
+                                                   Long roleId, String roleCode, Long unitId, String comments, Long assignedOfficerId) {
+        log.info("Executing transition: caseId={}, transitionCode={}, officerId={}, roleId={}, roleCode={}, unitId={}, assignedOfficerId={}",
+                caseId, transitionCode, officerId, roleId, roleCode, unitId, assignedOfficerId);
 
-        // Validate permission
-        if (!canPerformTransition(caseId, transitionCode, officerId, roleCode, unitId)) {
+        if (!canPerformTransition(caseId, transitionCode, officerId, roleId, roleCode, unitId)) {
             throw new InvalidCredentialsException("You do not have permission to perform this transition");
         }
 
@@ -140,13 +177,28 @@ public class WorkflowEngineService {
         CaseWorkflowInstance instance = instanceRepository.findByCaseId(caseId)
                 .orElseThrow(() -> new RuntimeException("Workflow instance not found for case: " + caseId));
 
-        // Get transition
-        WorkflowTransition transition = transitionRepository
-                .findByWorkflowIdAndTransitionCode(instance.getWorkflowId(), transitionCode)
-                .orElseThrow(() -> new RuntimeException("Transition not found: " + transitionCode));
-
-        // Get from and to states
+        // Get from state
         WorkflowState fromState = instance.getCurrentState();
+        if (fromState == null) {
+            throw new RuntimeException("Current state not found for case: " + caseId);
+        }
+
+        // Get transition: filter transitions FROM current state by code to avoid non-unique results
+        List<WorkflowTransition> candidateTransitions = transitionRepository
+                .findTransitionsFromState(instance.getWorkflowId(), fromState.getId())
+                .stream()
+                .filter(t -> transitionCode.equals(t.getTransitionCode()))
+                .toList();
+        if (candidateTransitions.isEmpty()) {
+            throw new RuntimeException("Transition not found from current state for code: " + transitionCode);
+        }
+        if (candidateTransitions.size() > 1) {
+            log.warn("Multiple transitions found for workflowId={}, fromStateId={}, transitionCode={}. Using first.",
+                    instance.getWorkflowId(), fromState.getId(), transitionCode);
+        }
+        WorkflowTransition transition = candidateTransitions.get(0);
+
+        // Get to state
         WorkflowState toState = transition.getToState();
 
         if (toState == null) {
@@ -159,8 +211,7 @@ public class WorkflowEngineService {
         if (officerIdValue != null) {
             officer = officerRepository.findById(officerIdValue)
                     .orElseThrow(() -> new RuntimeException("Officer not found: " + officerIdValue));
-        } else if (!"CITIZEN".equals(roleCode)) {
-            // Non-citizen roles require officerId
+        } else if (roleCode == null || !"CITIZEN".equals(roleCode)) {
             throw new RuntimeException("Officer ID is required for role: " + roleCode);
         }
 
@@ -276,19 +327,24 @@ public class WorkflowEngineService {
         instance.setAssignedToOfficer(assignedOfficer);
         instance.setAssignedToOfficerId(assignedOfficerId);
         instance.setAssignedToRole(posting.getRoleCode());
+        if (posting.getRole() != null) {
+            instance.setAssignedToRoleRef(posting.getRole());
+            instance.setAssignedToRoleId(posting.getRoleId());
+        } else {
+            instance.setAssignedToRoleId(posting.getRoleId());
+        }
         instance.setAssignedToUnitId(posting.getUnitId());
-        
-        log.info("Case {} manually assigned to field officer {} (role: {}, unit: {})", 
-                instance.getCaseId(), assignedOfficerId, posting.getRoleCode(), posting.getUnitId());
+        log.info("Case {} manually assigned to field officer {} (roleId: {}, roleCode: {}, unit: {})",
+                instance.getCaseId(), assignedOfficerId, posting.getRoleId(), posting.getRoleCode(), posting.getUnitId());
     }
 
     /**
      * Get available transitions for current user
      */
     @Transactional(readOnly = true)
-    public List<WorkflowTransitionDTO> getAvailableTransitions(Long caseId, Long officerId, String roleCode, Long unitId) {
-        log.debug("Getting available transitions for caseId={}, officerId={}, roleCode={}, unitId={}",
-                caseId, officerId, roleCode, unitId);
+    public List<WorkflowTransitionDTO> getAvailableTransitions(Long caseId, Long officerId, Long roleId, String roleCode, Long unitId) {
+        log.debug("Getting available transitions for caseId={}, officerId={}, roleId={}, roleCode={}, unitId={}",
+                caseId, officerId, roleId, roleCode, unitId);
 
         // Get workflow instance
         CaseWorkflowInstance instance = null;
@@ -360,26 +416,25 @@ public class WorkflowEngineService {
             log.debug("Checking transition: {} for role: {}, unitLevel: {}", 
                     transition.getTransitionCode(), roleCode, unit.getUnitLevel());
 
-            // Check permissions
-            // For citizens, try any level first (since they don't have a unit level)
             List<WorkflowPermission> permissions = new ArrayList<>();
-            if ("CITIZEN".equals(roleCode)) {
-                permissions = permissionRepository
-                        .findPermissionsForTransitionAndRoleAnyLevel(transition.getId(), roleCode);
-            } else {
-                permissions = permissionRepository
-                        .findPermissionsForTransitionAndRole(transition.getId(), roleCode, unit.getUnitLevel());
-                
+            if (roleId != null && roleId != 0L) {
+                permissions = permissionRepository.findPermissionsForTransitionAndRoleId(transition.getId(), roleId, unit.getUnitLevel());
                 if (permissions.isEmpty()) {
-                    log.debug("No permissions found with unit level match, trying any level for transition: {}", 
-                            transition.getTransitionCode());
-                    permissions = permissionRepository
-                            .findPermissionsForTransitionAndRoleAnyLevel(transition.getId(), roleCode);
+                    permissions = permissionRepository.findPermissionsForTransitionAndRoleIdAnyLevel(transition.getId(), roleId);
                 }
             }
-
-            log.debug("Found {} permission(s) for transition: {}, role: {}", 
-                    permissions.size(), transition.getTransitionCode(), roleCode);
+            if (permissions.isEmpty() && roleCode != null) {
+                if ("CITIZEN".equals(roleCode)) {
+                    permissions = permissionRepository.findPermissionsForTransitionAndRoleAnyLevel(transition.getId(), roleCode);
+                } else {
+                    permissions = permissionRepository.findPermissionsForTransitionAndRole(transition.getId(), roleCode, unit.getUnitLevel());
+                    if (permissions.isEmpty()) {
+                        permissions = permissionRepository.findPermissionsForTransitionAndRoleAnyLevel(transition.getId(), roleCode);
+                    }
+                }
+            }
+            log.debug("Found {} permission(s) for transition: {}, roleId: {}, roleCode: {}",
+                    permissions.size(), transition.getTransitionCode(), roleId, roleCode);
 
             for (WorkflowPermission permission : permissions) {
                 log.debug("Checking permission - canInitiate: {}, hierarchyRule: {}, unitLevel: {}", 
@@ -398,8 +453,8 @@ public class WorkflowEngineService {
                     ModuleFormSchemaDTO formSchema = null;
                     
                     try {
-                        checklist = getTransitionChecklist(caseId, transition.getTransitionCode(), 
-                                officerId, roleCode, unitId);
+                        checklist = getTransitionChecklist(caseId, transition.getTransitionCode(),
+                                officerId, roleId, roleCode, unitId);
                         
                         // Extract module type from checklist conditions to determine if form is needed
                         String moduleTypeStr = extractModuleTypeFromChecklist(checklist);
@@ -525,6 +580,106 @@ public class WorkflowEngineService {
         } catch (Exception e) {
             log.error("Failed to update workflow data flag {}: {}", key, e.getMessage());
         }
+    }
+
+    /**
+     * Record "Application submitted" in workflow history when a case is created.
+     * No extra submit step: case submission automatically executes the initial-state entry.
+     * Uses a transition that leads TO the initial state (e.g. APPLICATION_SUBMITTED self-loop).
+     * If none exists, creates the APPLICATION_SUBMITTED self-loop transition for this workflow so history is always recorded.
+     */
+    @Transactional
+    public void recordApplicationSubmitted(CaseWorkflowInstance instance, WorkflowState initialState, Long applicantId) {
+        if (instance == null || initialState == null) return;
+        List<WorkflowTransition> intoInitial = transitionRepository
+                .findByWorkflowIdAndToStateIdAndIsActiveTrue(instance.getWorkflowId(), initialState.getId());
+
+        WorkflowTransition transition;
+        if (intoInitial.isEmpty()) {
+            // No transition into initial state (e.g. workflow created via admin without seed). Create APPLICATION_SUBMITTED self-loop so history is always recorded.
+            Optional<WorkflowTransition> existingSelfLoop = transitionRepository
+                    .findByWorkflowIdAndTransitionCode(instance.getWorkflowId(), "APPLICATION_SUBMITTED")
+                    .filter(t -> initialState.getId().equals(t.getFromStateId()) && initialState.getId().equals(t.getToStateId()));
+            transition = existingSelfLoop.orElseGet(() -> {
+                WorkflowTransition t = new WorkflowTransition();
+                t.setWorkflow(instance.getWorkflow());
+                t.setWorkflowId(instance.getWorkflowId());
+                t.setFromState(initialState);
+                t.setFromStateId(initialState.getId());
+                t.setToState(initialState);
+                t.setToStateId(initialState.getId());
+                t.setTransitionCode("APPLICATION_SUBMITTED");
+                t.setTransitionName("Application Submitted");
+                t.setIsActive(true);
+                t.setRequiresComment(false);
+                t.setDescription("Case submitted by applicant; no extra submit step.");
+                t.setCreatedAt(LocalDateTime.now());
+                return transitionRepository.save(t);
+            });
+        } else {
+            transition = intoInitial.stream()
+                    .filter(t -> "APPLICATION_SUBMITTED".equals(t.getTransitionCode()) || "CASE_SUBMITTED".equals(t.getTransitionCode())
+                            || "SUBMIT_APPLICATION".equals(t.getTransitionCode()))
+                    .findFirst()
+                    .orElse(intoInitial.get(0));
+        }
+
+        WorkflowHistory history = new WorkflowHistory();
+        history.setInstance(instance);
+        history.setCaseId(instance.getCaseId());
+        history.setFromState(transition.getFromState());
+        history.setFromStateId(transition.getFromStateId());
+        history.setToState(initialState);
+        history.setToStateId(initialState.getId());
+        history.setTransition(transition);
+        history.setTransitionId(transition.getId());
+        history.setPerformedByOfficer(null);
+        history.setPerformedByOfficerId(applicantId);
+        history.setPerformedByRole("CITIZEN");
+        history.setPerformedAtUnit(null);
+        history.setPerformedAtUnitId(null);
+        history.setComments("Application submitted");
+        historyRepository.save(history);
+        log.info("Application submitted recorded for case {} (initial state: {})", instance.getCaseId(), initialState.getStateCode());
+    }
+
+    /**
+     * Get role names that can perform the next transition(s) from current state.
+     * Used to show "Pending with: Dealing Hand, Presiding Officer" on case info.
+     */
+    @Transactional(readOnly = true)
+    public List<String> getNextTransitionPendingWithRoles(Long caseId) {
+        if (caseId == null) return List.of();
+        CaseWorkflowInstance instance = instanceRepository.findByCaseId(caseId).orElse(null);
+        if (instance == null) return List.of();
+        WorkflowState currentState = instance.getCurrentState();
+        if (currentState == null) return List.of();
+        List<WorkflowTransition> transitions = transitionRepository
+                .findTransitionsFromState(instance.getWorkflowId(), currentState.getId());
+        Set<String> roleNames = new LinkedHashSet<>();
+        for (WorkflowTransition transition : transitions) {
+            if (!Boolean.TRUE.equals(transition.getIsActive())) continue;
+            List<WorkflowPermission> permissions = permissionRepository.findByTransitionIdAndIsActiveTrue(transition.getId());
+            for (WorkflowPermission p : permissions) {
+                if (!Boolean.TRUE.equals(p.getCanInitiate())) continue;
+                String name = null;
+                if (p.getRole() != null) {
+                    name = p.getRole().getRoleName();
+                }
+                if (name == null || name.isBlank()) {
+                    name = formatRoleCodeForDisplay(p.getRoleCode());
+                }
+                if (name != null && !name.isBlank()) roleNames.add(name);
+            }
+        }
+        return new ArrayList<>(roleNames);
+    }
+
+    private static String formatRoleCodeForDisplay(String roleCode) {
+        if (roleCode == null || roleCode.isBlank()) return null;
+        return Arrays.stream(roleCode.split("_"))
+                .map(word -> word.isEmpty() ? "" : word.substring(0, 1).toUpperCase() + word.substring(1).toLowerCase())
+                .collect(Collectors.joining(" "));
     }
 
     /**
@@ -671,12 +826,14 @@ public class WorkflowEngineService {
 
         try {
             Map<String, Object> conditions = objectMapper.readValue(conditionsJson, new TypeReference<Map<String, Object>>() {});
+            log.info("[TRANSITION_PERM] checkConditions: permissionId={}, conditionKeys={}", permission.getId(), conditions.keySet());
 
             // caseTypeCodesAllowed
             if (conditions.containsKey("caseTypeCodesAllowed")) {
                 List<String> allowed = castToStringList(conditions.get("caseTypeCodesAllowed"));
                 String caseTypeCode = caseEntity.getCaseType() != null ? caseEntity.getCaseType().getTypeCode() : null;
                 if (caseTypeCode == null || !allowed.contains(caseTypeCode)) {
+                    log.warn("[TRANSITION_PERM] Condition FAIL: caseTypeCodesAllowed - caseTypeCode={}, allowed={}", caseTypeCode, allowed);
                     return false;
                 }
             }
@@ -686,6 +843,7 @@ public class WorkflowEngineService {
                 List<String> allowed = castToStringList(conditions.get("casePriorityIn"));
                 String priority = caseEntity.getPriority();
                 if (priority == null || !allowed.contains(priority)) {
+                    log.warn("[TRANSITION_PERM] Condition FAIL: casePriorityIn - priority={}, allowed={}", priority, allowed);
                     return false;
                 }
             }
@@ -694,6 +852,7 @@ public class WorkflowEngineService {
             if (conditions.containsKey("caseDataFieldsRequired")) {
                 List<String> requiredFields = castToStringList(conditions.get("caseDataFieldsRequired"));
                 if (!hasRequiredFields(caseData, requiredFields)) {
+                    log.warn("[TRANSITION_PERM] Condition FAIL: caseDataFieldsRequired - required={}, caseDataKeys={}", requiredFields, caseData != null ? caseData.keySet() : "null");
                     return false;
                 }
             }
@@ -701,6 +860,7 @@ public class WorkflowEngineService {
             if (conditions.containsKey("caseDataFieldEquals")) {
                 Map<String, Object> fieldEquals = castToMap(conditions.get("caseDataFieldEquals"));
                 if (!matchesFieldEquals(caseData, fieldEquals)) {
+                    log.warn("[TRANSITION_PERM] Condition FAIL: caseDataFieldEquals - expected={}, caseData={}", fieldEquals, caseData);
                     return false;
                 }
             }
@@ -709,7 +869,36 @@ public class WorkflowEngineService {
             if (conditions.containsKey("workflowDataFieldsRequired")) {
                 List<String> requiredFields = castToStringList(conditions.get("workflowDataFieldsRequired"));
                 if (!hasRequiredFields(workflowData, requiredFields)) {
+                    log.warn("[TRANSITION_PERM] Condition FAIL: workflowDataFieldsRequired - required={}, workflowDataKeys={}", requiredFields, workflowData != null ? workflowData.keySet() : "null");
                     return false;
+                }
+            }
+
+            // Document conditions based on allowedDocumentIds and stage flags (allowDocumentDraft / allowDocumentSaveAndSign)
+            if (conditions.containsKey("allowedDocumentIds")) {
+                List<Long> templateIds = toLongList(conditions.get("allowedDocumentIds"));
+                if (templateIds != null && !templateIds.isEmpty()) {
+                    Boolean requireDraft = toBoolean(conditions.get("allowDocumentDraft"));
+                    Boolean requireSigned = toBoolean(conditions.get("allowDocumentSaveAndSign"));
+
+                    List<DocumentStatus> requiredStatuses = new ArrayList<>();
+                    if (Boolean.TRUE.equals(requireDraft)) {
+                        requiredStatuses.add(DocumentStatus.DRAFT);
+                    }
+                    if (Boolean.TRUE.equals(requireSigned)) {
+                        requiredStatuses.add(DocumentStatus.FINAL);
+                        requiredStatuses.add(DocumentStatus.SIGNED);
+                    }
+
+                    if (!requiredStatuses.isEmpty()) {
+                        boolean exists = caseDocumentRepository.existsByCaseIdAndTemplateIdInAndStatusIn(
+                                caseEntity.getId(), templateIds, requiredStatuses);
+                        if (!exists) {
+                            log.warn("[TRANSITION_PERM] Condition FAIL: document condition - caseId={}, templateIds={}, requiredStatuses={}",
+                                    caseEntity.getId(), templateIds, requiredStatuses);
+                            return false;
+                        }
+                    }
                 }
             }
 
@@ -829,12 +1018,10 @@ public class WorkflowEngineService {
         log.debug("  [DEBUG] Workflow instance - WorkflowId: {}, CaseId: {}", 
                 instance.getWorkflowId(), instance.getCaseId());
         
-        List<String> rolesForState = getRolesForState(instance.getWorkflowId(), state.getId());
-        
-        log.debug("Step 2: Found {} role(s) for state {}: {}", 
-                rolesForState.size(), state.getStateCode(), rolesForState);
-        
-        if (rolesForState.isEmpty()) {
+        List<Long> roleIdsForState = getRoleIdsForState(instance.getWorkflowId(), state.getId());
+        log.debug("Step 2: Found {} role(s) for state {}: {}", roleIdsForState.size(), state.getStateCode(), roleIdsForState);
+
+        if (roleIdsForState.isEmpty()) {
             log.warn("No roles found with permissions for state {} (ID: {}). Case {} will remain unassigned.", 
                     state.getStateCode(), state.getId(), instance.getCaseId());
             log.debug("=== AUTO-ASSIGNMENT DEBUG END (NO ROLES) ===");
@@ -878,105 +1065,89 @@ public class WorkflowEngineService {
             }
         }
 
-        // Try to find officer for each role (in order)
-        log.debug("Step 4: Searching for officers with roles: {}...", rolesForState);
-        for (String roleCode : rolesForState) {
+        log.debug("Step 4: Searching for officers with roleIds: {}...", roleIdsForState);
+        for (Long roleId : roleIdsForState) {
+            RoleMaster role = roleMasterRepository.findById(roleId).orElse(null);
+            if (role == null) continue;
+            String roleCode = role.getRoleCode();
             boolean isUnitBasedRole = unitBasedRoles.contains(roleCode);
-            
+
             if (isUnitBasedRole) {
-                // ========== UNIT-BASED ROLE (PATWARI, KANUNGO, etc.) ==========
-                log.debug("  Checking unit-based role: {} in unit {}...", roleCode, caseUnitId);
-                
                 if (caseUnitId == null) {
-                    log.warn("Case {} has no unit assigned. Cannot assign unit-based role {}.", 
-                            instance.getCaseId(), roleCode);
+                    log.warn("Case {} has no unit assigned. Cannot assign unit-based role {}.", instance.getCaseId(), roleCode);
                     continue;
                 }
-                
-                // Try exact unit match first
-                Optional<OfficerDaHistory> unitPosting = postingRepository
-                        .findByUnitIdAndRoleCodeAndIsCurrentTrue(caseUnitId, roleCode);
-                
-                if (unitPosting.isPresent()) {
-                    // Assign case to this unit-based officer
-                    instance.setAssignedToOfficer(unitPosting.get().getOfficer());
-                    instance.setAssignedToOfficerId(unitPosting.get().getOfficerId());
+                List<OfficerDaHistory> unitPostings = postingRepository.findByUnitIdAndRoleIdAndIsCurrentTrue(caseUnitId, roleId);
+                if (!unitPostings.isEmpty()) {
+                    OfficerDaHistory p = unitPostings.get(0);
+                    instance.setAssignedToOfficer(p.getOfficer());
+                    instance.setAssignedToOfficerId(p.getOfficerId());
                     instance.setAssignedToRole(roleCode);
+                    instance.setAssignedToRoleId(roleId);
+                    instance.setAssignedToRoleRef(role);
                     instance.setAssignedToUnitId(caseUnitId);
-                    log.info("Case {} auto-assigned to unit-based officer {} (role: {}) based on state {}. " +
-                             "Unit: {}, Officer ID: {}", 
-                            instance.getCaseId(), unitPosting.get().getOfficerId(), roleCode, state.getStateCode(),
-                            caseUnitId, unitPosting.get().getOfficerId());
+                    log.info("Case {} auto-assigned to unit-based officer {} (roleId: {}, roleCode: {}) based on state {}. Unit: {}, Officer ID: {}",
+                            instance.getCaseId(), p.getOfficerId(), roleId, roleCode, state.getStateCode(), caseUnitId, p.getOfficerId());
                     log.debug("=== AUTO-ASSIGNMENT DEBUG END (SUCCESS - UNIT_BASED) ===");
-                    return; // Successfully assigned
-                } else {
-                    // Try to find in parent/child units (unit hierarchy)
-                    if (caseUnit != null && caseUnit.getParentUnitId() != null) {
-                        Optional<OfficerDaHistory> parentUnitPosting = postingRepository
-                                .findByUnitIdAndRoleCodeAndIsCurrentTrue(caseUnit.getParentUnitId(), roleCode);
-                        if (parentUnitPosting.isPresent()) {
-                            instance.setAssignedToOfficer(parentUnitPosting.get().getOfficer());
-                            instance.setAssignedToOfficerId(parentUnitPosting.get().getOfficerId());
-                            instance.setAssignedToRole(roleCode);
-                            instance.setAssignedToUnitId(caseUnit.getParentUnitId());
-                            log.info("Case {} auto-assigned to unit-based officer {} (role: {}) in parent unit {} based on state {}. " +
-                                     "Officer ID: {}", 
-                                    instance.getCaseId(), parentUnitPosting.get().getOfficerId(), roleCode, 
-                                    caseUnit.getParentUnitId(), state.getStateCode(),
-                                    parentUnitPosting.get().getOfficerId());
-                            log.debug("=== AUTO-ASSIGNMENT DEBUG END (SUCCESS - UNIT_BASED PARENT) ===");
-                            return;
-                        }
-                    }
-                    
-                    log.warn("No unit-based officer found for role {} in unit {} (case {}).", 
-                            roleCode, caseUnitId, instance.getCaseId());
+                    return;
                 }
+                if (caseUnit != null && caseUnit.getParentUnitId() != null) {
+                    List<OfficerDaHistory> parentUnitPostings = postingRepository.findByUnitIdAndRoleIdAndIsCurrentTrue(caseUnit.getParentUnitId(), roleId);
+                    if (!parentUnitPostings.isEmpty()) {
+                        OfficerDaHistory p = parentUnitPostings.get(0);
+                        instance.setAssignedToOfficer(p.getOfficer());
+                        instance.setAssignedToOfficerId(p.getOfficerId());
+                        instance.setAssignedToRole(roleCode);
+                        instance.setAssignedToRoleId(roleId);
+                        instance.setAssignedToRoleRef(role);
+                        instance.setAssignedToUnitId(caseUnit.getParentUnitId());
+                        log.info("Case {} auto-assigned to unit-based officer {} (roleId: {}, roleCode: {}) in parent unit {} based on state {}. Officer ID: {}",
+                                instance.getCaseId(), p.getOfficerId(), roleId, roleCode, caseUnit.getParentUnitId(), state.getStateCode(), p.getOfficerId());
+                        log.debug("=== AUTO-ASSIGNMENT DEBUG END (SUCCESS - UNIT_BASED PARENT) ===");
+                        return;
+                    }
+                }
+                log.warn("No unit-based officer found for roleId {} (roleCode: {}) in unit {} (case {}).", roleId, roleCode, caseUnitId, instance.getCaseId());
             } else {
-                // ========== COURT-BASED ROLE (TEHSILDAR, READER, etc.) ==========
                 if (caseEntity.getCourtId() == null) {
-                    log.warn("Cannot assign court-based role {} to case {} - case has no court assigned.", 
-                            roleCode, instance.getCaseId());
+                    log.warn("Cannot assign court-based role {} to case {} - case has no court assigned.", roleCode, instance.getCaseId());
                     continue;
                 }
-                
-                log.debug("  Checking court-based role: {} at court {}...", roleCode, caseEntity.getCourtId());
-                Optional<OfficerDaHistory> posting = postingRepository
-                        .findByCourtIdAndRoleCodeAndIsCurrentTrue(caseEntity.getCourtId(), roleCode);
-                
+                Optional<OfficerDaHistory> posting = postingRepository.findByCourtIdAndRoleIdAndIsCurrentTrue(caseEntity.getCourtId(), roleId);
                 if (posting.isPresent()) {
-                    // Assign case to this court-based officer
-                    instance.setAssignedToOfficer(posting.get().getOfficer());
-                    instance.setAssignedToOfficerId(posting.get().getOfficerId());
+                    OfficerDaHistory p = posting.get();
+                    instance.setAssignedToOfficer(p.getOfficer());
+                    instance.setAssignedToOfficerId(p.getOfficerId());
                     instance.setAssignedToRole(roleCode);
-                    log.info("Case {} auto-assigned to court-based officer {} (role: {}) based on state {}. " +
-                             "Court: {}, Officer ID: {}", 
-                            instance.getCaseId(), posting.get().getOfficerId(), roleCode, state.getStateCode(),
-                            caseEntity.getCourtId(), posting.get().getOfficerId());
+                    instance.setAssignedToRoleId(roleId);
+                    instance.setAssignedToRoleRef(role);
+                    log.info("Case {} auto-assigned to court-based officer {} (roleId: {}, roleCode: {}) based on state {}. Court: {}, Officer ID: {}",
+                            instance.getCaseId(), p.getOfficerId(), roleId, roleCode, state.getStateCode(), caseEntity.getCourtId(), p.getOfficerId());
                     log.debug("=== AUTO-ASSIGNMENT DEBUG END (SUCCESS - COURT_BASED) ===");
-                    return; // Successfully assigned
-                } else {
-                    log.warn("No court-based officer found for role {} at court {} (case {}). " +
-                            "Available roles at this court: {}", 
-                            roleCode, caseEntity.getCourtId(), instance.getCaseId(),
-                            allCourtPostings.stream().map(OfficerDaHistory::getRoleCode).distinct().toList());
+                    return;
                 }
+                log.warn("No court-based officer found for roleId {} (roleCode: {}) at court {} (case {}). Available roles: {}",
+                        roleId, roleCode, caseEntity.getCourtId(), instance.getCaseId(),
+                        allCourtPostings.stream().map(OfficerDaHistory::getRoleCode).distinct().toList());
             }
         }
 
-        // No officer found - set expected role but leave unassigned
-        if (!rolesForState.isEmpty()) {
-            String expectedRole = rolesForState.get(0);
-            instance.setAssignedToRole(expectedRole); // Set first expected role
-            
-            boolean isUnitBasedRole = unitBasedRoles.contains(expectedRole);
+        if (!roleIdsForState.isEmpty()) {
+            Long expectedRoleId = roleIdsForState.get(0);
+            instance.setAssignedToRoleId(expectedRoleId);
+            RoleMaster expectedRole = roleMasterRepository.findById(expectedRoleId).orElse(null);
+            if (expectedRole != null) {
+                instance.setAssignedToRoleRef(expectedRole);
+                instance.setAssignedToRole(expectedRole.getRoleCode());
+            }
+            String expectedCode = expectedRole != null ? expectedRole.getRoleCode() : null;
+            boolean isUnitBasedRole = expectedCode != null && unitBasedRoles.contains(expectedCode);
             if (isUnitBasedRole) {
-                log.warn("Case {} cannot be auto-assigned. Expected unit-based role: {} but no officer posted to unit {} with this role.", 
-                        instance.getCaseId(), expectedRole, caseUnitId);
+                log.warn("Case {} cannot be auto-assigned. Expected unit-based roleId: {} (roleCode: {}) but no officer posted to unit {} with this role.",
+                        instance.getCaseId(), expectedRoleId, expectedCode, caseUnitId);
             } else {
-                log.warn("Case {} cannot be auto-assigned. Expected court-based role: {} but no officer posted to court {} with this role. " +
-                        "Available roles at court: {}", 
-                        instance.getCaseId(), expectedRole, caseEntity.getCourtId(),
+                log.warn("Case {} cannot be auto-assigned. Expected court-based roleId: {} (roleCode: {}) but no officer posted to court {} with this role. Available roles at court: {}",
+                        instance.getCaseId(), expectedRoleId, expectedCode, caseEntity.getCourtId(),
                         allCourtPostings.stream().map(OfficerDaHistory::getRoleCode).distinct().toList());
             }
         }
@@ -984,18 +1155,15 @@ public class WorkflowEngineService {
     }
 
     /**
-     * Get roles that have permissions to perform transitions from a state
+     * Get role IDs (role_master) that have permissions to perform transitions from a state
      */
-    private List<String> getRolesForState(Long workflowId, Long stateId) {
-        List<String> roles = new ArrayList<>();
-        
-        // Validate inputs
+    private List<Long> getRoleIdsForState(Long workflowId, Long stateId) {
+        List<Long> roleIds = new ArrayList<>();
         if (workflowId == null || stateId == null) {
-            log.warn("  [getRolesForState] Invalid parameters - Workflow ID: {}, State ID: {}", workflowId, stateId);
-            return roles;
+            log.warn("  [getRoleIdsForState] Invalid parameters - Workflow ID: {}, State ID: {}", workflowId, stateId);
+            return roleIds;
         }
-        
-        log.debug("  [getRolesForState] Workflow ID: {}, State ID: {}", workflowId, stateId);
+        log.debug("  [getRoleIdsForState] Workflow ID: {}, State ID: {}", workflowId, stateId);
         
         // DEBUG: Check all transitions in the workflow to see what exists
         List<WorkflowTransition> allWorkflowTransitions = transitionRepository.findByWorkflowId(workflowId);
@@ -1032,51 +1200,25 @@ public class WorkflowEngineService {
                 log.warn("  [getRolesForState] ⚠️ AND no transitions found FROM state ID {} in ANY workflow! " +
                         "This is why no roles are found! Create transitions FROM this state.", stateId);
             }
-            return roles;
+            return roleIds;
         }
-        
-        // For each transition, get roles with permissions
         for (WorkflowTransition transition : transitions) {
-            log.debug("  [getRolesForState] Checking transition: {} (ID: {}), Active: {}", 
-                    transition.getTransitionCode(), transition.getId(), transition.getIsActive());
-            
-            if (!transition.getIsActive()) {
-                log.debug("  [getRolesForState] Skipping inactive transition: {}", transition.getTransitionCode());
-                continue;
-            }
-            
-            List<WorkflowPermission> permissions = permissionRepository
-                    .findByTransitionIdAndIsActiveTrue(transition.getId());
-            
-            log.debug("  [getRolesForState] Transition {} has {} permission(s)", 
-                    transition.getTransitionCode(), permissions.size());
-            
-            if (permissions.isEmpty()) {
-                log.warn("  [getRolesForState] Transition {} (ID: {}) has NO PERMISSIONS! " +
-                        "Create permissions for this transition.", transition.getTransitionCode(), transition.getId());
-            }
-            
+            if (!transition.getIsActive()) continue;
+            List<WorkflowPermission> permissions = permissionRepository.findByTransitionIdAndIsActiveTrue(transition.getId());
             for (WorkflowPermission permission : permissions) {
-                log.debug("  [getRolesForState] Permission - Role: {}, CanInitiate: {}, IsActive: {}", 
-                        permission.getRoleCode(), permission.getCanInitiate(), permission.getIsActive());
-                
-                if (permission.getCanInitiate() && !roles.contains(permission.getRoleCode())) {
-                    roles.add(permission.getRoleCode());
-                    log.debug("  [getRolesForState] Added role: {} to roles list", permission.getRoleCode());
-                } else {
-                    if (!permission.getCanInitiate()) {
-                        log.debug("  [getRolesForState] Skipping role {} - canInitiate is FALSE", 
-                                permission.getRoleCode());
-                    } else {
-                        log.debug("  [getRolesForState] Skipping role {} - already in list", 
-                                permission.getRoleCode());
-                    }
+                if (!permission.getCanInitiate()) continue;
+                Long rid = permission.getRoleId();
+                if (rid == null && permission.getRoleCode() != null) {
+                    rid = roleMasterRepository.findByRoleCode(permission.getRoleCode()).map(RoleMaster::getId).orElse(null);
+                }
+                if (rid != null && !roleIds.contains(rid)) {
+                    roleIds.add(rid);
+                    log.debug("  [getRoleIdsForState] Added roleId: {} (roleCode: {})", rid, permission.getRoleCode());
                 }
             }
         }
-        
-        log.debug("  [getRolesForState] Final roles list: {}", roles);
-        return roles;
+        log.debug("  [getRoleIdsForState] Final roleIds list: {}", roleIds);
+        return roleIds;
     }
 
     /**
@@ -1084,18 +1226,34 @@ public class WorkflowEngineService {
      * Shows which conditions are met and which are blocking
      */
     @Transactional(readOnly = true)
-    public TransitionChecklistDTO getTransitionChecklist(Long caseId, String transitionCode, Long officerId, String roleCode, Long unitId) {
-        log.debug("Getting checklist for transition: caseId={}, transitionCode={}, officerId={}, roleCode={}, unitId={}",
-                caseId, transitionCode, officerId, roleCode, unitId);
+    public TransitionChecklistDTO getTransitionChecklist(Long caseId, String transitionCode, Long officerId, Long roleId, String roleCode, Long unitId) {
+        log.debug("Getting checklist for transition: caseId={}, transitionCode={}, officerId={}, roleId={}, roleCode={}, unitId={}",
+                caseId, transitionCode, officerId, roleId, roleCode, unitId);
 
         // Get workflow instance
         CaseWorkflowInstance instance = instanceRepository.findByCaseId(caseId)
                 .orElseThrow(() -> new RuntimeException("Workflow instance not found for case: " + caseId));
 
-        // Get transition
-        WorkflowTransition transition = transitionRepository
-                .findByWorkflowIdAndTransitionCode(instance.getWorkflowId(), transitionCode)
-                .orElseThrow(() -> new RuntimeException("Transition not found: " + transitionCode));
+        // Get current state
+        WorkflowState currentState = instance.getCurrentState();
+        if (currentState == null) {
+            throw new RuntimeException("Current state not found for case: " + caseId);
+        }
+
+        // Get transition: filter transitions FROM current state by code to avoid non-unique results
+        List<WorkflowTransition> candidateTransitions = transitionRepository
+                .findTransitionsFromState(instance.getWorkflowId(), currentState.getId())
+                .stream()
+                .filter(t -> transitionCode.equals(t.getTransitionCode()))
+                .toList();
+        if (candidateTransitions.isEmpty()) {
+            throw new RuntimeException("Transition not found from current state for code: " + transitionCode);
+        }
+        if (candidateTransitions.size() > 1) {
+            log.warn("Multiple transitions found for checklist: workflowId={}, fromStateId={}, transitionCode={}. Using first.",
+                    instance.getWorkflowId(), currentState.getId(), transitionCode);
+        }
+        WorkflowTransition transition = candidateTransitions.get(0);
 
         // Get case
         Case caseEntity = caseRepository.findById(caseId)
@@ -1109,15 +1267,18 @@ public class WorkflowEngineService {
                     .orElse(null);
         }
 
-        // Get permissions for this transition and role
         List<WorkflowPermission> permissions = new ArrayList<>();
-        if (unit != null) {
-            permissions = permissionRepository
-                    .findPermissionsForTransitionAndRole(transition.getId(), roleCode, unit.getUnitLevel());
+        if (roleId != null && roleId != 0L && unit != null) {
+            permissions = permissionRepository.findPermissionsForTransitionAndRoleId(transition.getId(), roleId, unit.getUnitLevel());
+            if (permissions.isEmpty()) {
+                permissions = permissionRepository.findPermissionsForTransitionAndRoleIdAnyLevel(transition.getId(), roleId);
+            }
         }
-        if (permissions.isEmpty()) {
-            permissions = permissionRepository
-                    .findPermissionsForTransitionAndRoleAnyLevel(transition.getId(), roleCode);
+        if (permissions.isEmpty() && roleCode != null && unit != null) {
+            permissions = permissionRepository.findPermissionsForTransitionAndRole(transition.getId(), roleCode, unit.getUnitLevel());
+        }
+        if (permissions.isEmpty() && roleCode != null) {
+            permissions = permissionRepository.findPermissionsForTransitionAndRoleAnyLevel(transition.getId(), roleCode);
         }
 
         // Build checklist from all permissions' conditions
@@ -1154,14 +1315,16 @@ public class WorkflowEngineService {
             }
         }
 
-        // Remove duplicates (same condition from multiple permissions)
+        // Remove duplicates (same condition from multiple permissions).
+        // Include label in key so multiple document/form conditions (different template ids or form ids) are not merged.
         Map<String, ConditionStatusDTO> uniqueConditions = new HashMap<>();
         for (ConditionStatusDTO condition : allConditions) {
-            String key = condition.getType() + "_" + 
-                    (condition.getFlagName() != null ? condition.getFlagName() : "") +
-                    (condition.getModuleType() != null ? condition.getModuleType() : "") +
-                    (condition.getFieldName() != null ? condition.getFieldName() : "");
-            if (!uniqueConditions.containsKey(key) || !condition.getPassed()) {
+            String key = condition.getType() + "_"
+                    + (condition.getFlagName() != null ? condition.getFlagName() : "")
+                    + "_" + (condition.getModuleType() != null ? condition.getModuleType() : "")
+                    + "_" + (condition.getFieldName() != null ? condition.getFieldName() : "")
+                    + "_" + (condition.getLabel() != null ? condition.getLabel() : "");
+            if (!uniqueConditions.containsKey(key) || !Boolean.TRUE.equals(condition.getPassed())) {
                 uniqueConditions.put(key, condition);
             }
         }
@@ -1173,13 +1336,65 @@ public class WorkflowEngineService {
                 .distinct()
                 .collect(Collectors.toList());
 
+        // Include permission document/form options from first matching permission so UI can show what is required
+        List<Long> allowedFormIds = null;
+        List<Long> allowedDocumentIds = null;
+        Boolean allowDocumentDraft = null;
+        Boolean allowDocumentSaveAndSign = null;
+        for (WorkflowPermission permission : permissions) {
+            if (Boolean.TRUE.equals(permission.getCanInitiate()) && Boolean.TRUE.equals(permission.getIsActive())
+                    && checkHierarchyRule(permission, unitId, instance)) {
+                Map<String, Object> opts = extractPermissionOptionsFromConditions(permission.getConditions());
+                if (opts != null) {
+                    if (opts.containsKey("allowedFormIds")) allowedFormIds = toLongList(opts.get("allowedFormIds"));
+                    if (opts.containsKey("allowedDocumentIds")) allowedDocumentIds = toLongList(opts.get("allowedDocumentIds"));
+                    if (opts.containsKey("allowDocumentDraft")) allowDocumentDraft = toBoolean(opts.get("allowDocumentDraft"));
+                    if (opts.containsKey("allowDocumentSaveAndSign")) allowDocumentSaveAndSign = toBoolean(opts.get("allowDocumentSaveAndSign"));
+                }
+                break;
+            }
+        }
+
         return TransitionChecklistDTO.builder()
                 .transitionCode(transition.getTransitionCode())
                 .transitionName(transition.getTransitionName())
                 .canExecute(canExecute)
                 .conditions(finalConditions)
                 .blockingReasons(blockingReasons)
+                .allowedFormIds(allowedFormIds)
+                .allowedDocumentIds(allowedDocumentIds)
+                .allowDocumentDraft(allowDocumentDraft)
+                .allowDocumentSaveAndSign(allowDocumentSaveAndSign)
                 .build();
+    }
+
+    /** Extract allowedFormIds, allowedDocumentIds, allowDocumentDraft, allowDocumentSaveAndSign from permission conditions JSON. */
+    private Map<String, Object> extractPermissionOptionsFromConditions(String conditionsJson) {
+        if (conditionsJson == null || conditionsJson.trim().isEmpty()) return null;
+        try {
+            return objectMapper.readValue(conditionsJson, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            log.debug("Could not parse permission conditions: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private static List<Long> toLongList(Object value) {
+        if (value == null) return null;
+        if (value instanceof List<?> list) {
+            return list.stream()
+                    .map(o -> o instanceof Number n ? n.longValue() : null)
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+        }
+        return null;
+    }
+
+    private static Boolean toBoolean(Object value) {
+        if (value == null) return null;
+        if (value instanceof Boolean b) return b;
+        if (value instanceof String s) return Boolean.parseBoolean(s);
+        return null;
     }
 
     /**
@@ -1295,6 +1510,84 @@ public class WorkflowEngineService {
                 }
             }
 
+            // Document conditions based on allowedDocumentIds and stage flags (allowDocumentDraft / allowDocumentSaveAndSign)
+            if (conditionsMap.containsKey("allowedDocumentIds")) {
+                List<Long> templateIds = toLongList(conditionsMap.get("allowedDocumentIds"));
+                if (templateIds != null && !templateIds.isEmpty()) {
+                    Boolean requireDraft = toBoolean(conditionsMap.get("allowDocumentDraft"));
+                    Boolean requireSigned = toBoolean(conditionsMap.get("allowDocumentSaveAndSign"));
+
+                    List<DocumentStatus> requiredStatuses = new ArrayList<>();
+                    if (Boolean.TRUE.equals(requireDraft)) {
+                        requiredStatuses.add(DocumentStatus.DRAFT);
+                    }
+                    if (Boolean.TRUE.equals(requireSigned)) {
+                        // Save & Sign should treat FINAL or SIGNED as acceptable
+                        requiredStatuses.add(DocumentStatus.FINAL);
+                        requiredStatuses.add(DocumentStatus.SIGNED);
+                    }
+
+                    if (!requiredStatuses.isEmpty()) {
+                        boolean passed = caseDocumentRepository.existsByCaseIdAndTemplateIdInAndStatusIn(
+                                caseEntity.getId(), templateIds, requiredStatuses);
+
+                        String stageLabel;
+                        if (Boolean.TRUE.equals(requireDraft) && Boolean.TRUE.equals(requireSigned)) {
+                            stageLabel = "Draft or Signed";
+                        } else if (Boolean.TRUE.equals(requireDraft)) {
+                            stageLabel = "Draft";
+                        } else {
+                            stageLabel = "Signed";
+                        }
+
+                        String documentNamesLabel = getDocumentNamesLabel(templateIds);
+                        String label = "Document(s) [" + documentNamesLabel + "] " + stageLabel + " must exist";
+                        conditions.add(ConditionStatusDTO.builder()
+                                .label(label)
+                                .type("DOCUMENT_CONDITION")
+                                .required(true)
+                                .passed(passed)
+                                .message(passed ? label + " ✓" : label + " required")
+                                .build());
+                    }
+                }
+            }
+
+            // Form conditions from allowedFormIds (permission-forms list): each required form must be submitted
+            if (conditionsMap.containsKey("allowedFormIds")) {
+                List<Long> formIds = toLongList(conditionsMap.get("allowedFormIds"));
+                if (formIds != null && !formIds.isEmpty()) {
+                    Long caseNatureId = caseEntity.getCaseNatureId();
+                    Long caseTypeId = caseEntity.getCaseTypeId();
+                    for (Long formId : formIds) {
+                        Optional<CaseModuleFormFieldDefinition> fieldOpt = caseModuleFormFieldRepository.findById(formId);
+                        if (fieldOpt.isEmpty()) {
+                            log.debug("Form id {} not found in case_module_form_fields, skipping form condition", formId);
+                            continue;
+                        }
+                        CaseModuleFormFieldDefinition field = fieldOpt.get();
+                        if (!field.getCaseNatureId().equals(caseNatureId)) {
+                            continue;
+                        }
+                        if (field.getCaseTypeId() != null && !field.getCaseTypeId().equals(caseTypeId)) {
+                            continue;
+                        }
+                        ModuleType moduleType = field.getModuleType();
+                        String flag = moduleType.name() + "_SUBMITTED";
+                        boolean passed = workflowData.containsKey(flag) && Boolean.TRUE.equals(workflowData.get(flag));
+                        String label = "Form [" + moduleType.name() + "] must be submitted";
+                        conditions.add(ConditionStatusDTO.builder()
+                                .label(label)
+                                .type("FORM_CONDITION")
+                                .moduleType(moduleType.name())
+                                .required(true)
+                                .passed(passed)
+                                .message(passed ? label + " ✓" : label + " must be submitted")
+                                .build());
+                    }
+                }
+            }
+
         } catch (Exception e) {
             log.error("Error evaluating conditions: {}", e.getMessage(), e);
         }
@@ -1319,22 +1612,10 @@ public class WorkflowEngineService {
     }
 
     /**
-     * Get display label for workflow flag
+     * Get display label for workflow flag (single source: WorkflowDataKey).
      */
     private String getFlagDisplayLabel(String flagName) {
-        Map<String, String> labels = new HashMap<>();
-        labels.put("HEARING_SUBMITTED", "Hearing form submitted");
-        labels.put("NOTICE_SUBMITTED", "Notice form submitted");
-        labels.put("NOTICE_DRAFT_CREATED", "Draft notice created");
-        labels.put("NOTICE_READY", "Notice document ready");
-        labels.put("NOTICE_SIGNED", "Notice document signed");
-        labels.put("ORDERSHEET_DRAFT_CREATED", "Draft ordersheet created");
-        labels.put("ORDERSHEET_READY", "Ordersheet document ready");
-        labels.put("ORDERSHEET_SIGNED", "Ordersheet document signed");
-        labels.put("JUDGEMENT_DRAFT_CREATED", "Draft judgement created");
-        labels.put("JUDGEMENT_READY", "Judgement document ready");
-        labels.put("JUDGEMENT_SIGNED", "Judgement document signed");
-        return labels.getOrDefault(flagName, flagName.replace("_", " "));
+        return WorkflowDataKey.getDisplayLabel(flagName);
     }
 
     /**
@@ -1354,16 +1635,32 @@ public class WorkflowEngineService {
     }
 
     /**
+     * Resolve document template IDs to names for checklist labels.
+     * Preserves order of templateIds; uses "ID &lt;id&gt;" when template not found.
+     */
+    private String getDocumentNamesLabel(List<Long> templateIds) {
+        if (templateIds == null || templateIds.isEmpty()) {
+            return "";
+        }
+        List<CaseDocumentTemplate> templates = caseDocumentTemplateRepository.findAllById(templateIds);
+        Map<Long, String> idToName = templates.stream()
+                .collect(Collectors.toMap(CaseDocumentTemplate::getId, t -> t.getTemplateName() != null ? t.getTemplateName() : ("ID " + t.getId()), (a, b) -> a));
+        return templateIds.stream()
+                .map(id -> idToName.getOrDefault(id, "ID " + id))
+                .collect(Collectors.joining(", "));
+    }
+
+    /**
      * Extract module type from workflow flag name
-     * Examples: HEARING_SUBMITTED -> HEARING, NOTICE_READY -> NOTICE
+     * Examples: HEARING_SUBMITTED -> HEARING, NOTICE_SIGNED -> NOTICE
      */
     private String extractModuleTypeFromFlag(String flagName) {
         if (flagName == null || flagName.isEmpty()) {
             return null;
         }
         
-        // Check for known module types in flag names
-        String[] moduleTypes = {"HEARING", "NOTICE", "ORDERSHEET", "JUDGEMENT", "ATTENDANCE", "FIELD_REPORT"};
+        // Check for known module types in flag names (NOTICE_DRAFT before NOTICE so NOTICE_DRAFT_* matches correctly)
+        String[] moduleTypes = {"HEARING", "NOTICE_DRAFT", "NOTICE", "ORDERSHEET", "JUDGEMENT", "ATTENDANCE", "FIELD_REPORT"};
         
         for (String moduleType : moduleTypes) {
             if (flagName.startsWith(moduleType + "_")) {

@@ -12,6 +12,9 @@ import java.util.Optional;
 @Repository
 public interface CaseDocumentTemplateRepository extends JpaRepository<CaseDocumentTemplate, Long> {
 
+    /** All active templates for permission-documents list (admin-created). */
+    List<CaseDocumentTemplate> findByIsActiveTrueOrderByTemplateNameAsc();
+
     @Query("SELECT t FROM CaseDocumentTemplate t " +
             "WHERE t.caseNatureId = :caseNatureId AND t.caseTypeId IS NULL AND t.moduleType = :moduleType AND t.isActive = true " +
             "ORDER BY t.version DESC")

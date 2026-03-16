@@ -67,9 +67,18 @@ public class PostingService {
             throw new IllegalArgumentException("Either courtId (court-based posting) or unitId (unit-based posting) must be provided");
         }
 
-        // Validate role exists
-        RoleMaster role = roleRepository.findByRoleCode(dto.getRoleCode())
-                .orElseThrow(() -> new RuntimeException("Role not found with code: " + dto.getRoleCode()));
+        // Resolve role from role_master: prefer roleId when present, else use roleCode
+        if (dto.getRoleId() == null && (dto.getRoleCode() == null || dto.getRoleCode().isBlank())) {
+            throw new IllegalArgumentException("Either roleId or roleCode is required (role from role_master)");
+        }
+        RoleMaster role;
+        if (dto.getRoleId() != null) {
+            role = roleRepository.findById(dto.getRoleId())
+                    .orElseThrow(() -> new RuntimeException("Role not found with ID: " + dto.getRoleId()));
+        } else {
+            role = roleRepository.findByRoleCode(dto.getRoleCode().trim())
+                    .orElseThrow(() -> new RuntimeException("Role not found with code: " + dto.getRoleCode()));
+        }
 
         // Validate officer exists
         Officer officer = officerRepository.findById(dto.getOfficerId())
@@ -95,19 +104,8 @@ public class PostingService {
                 throw new RuntimeException("Court does not have an associated unit");
             }
 
-            // Validate court level matches role level (warning only, allow flexibility)
-            if (role.getUnitLevel() != null && court.getCourtLevel() != null) {
-                String courtLevelName = court.getCourtLevel().name();
-                String roleLevelName = role.getUnitLevel().name();
-                
-                if (!courtLevelName.equals(roleLevelName)) {
-                    log.warn("Court level {} does not match role level {} for role {}. Allowing with warning.", 
-                            courtLevelName, roleLevelName, role.getRoleCode());
-                }
-            }
-
             // Close existing active posting for same COURT + ROLE
-            closeExistingActivePostingByCourt(dto.getCourtId(), dto.getRoleCode());
+            closeExistingActivePostingByCourt(dto.getCourtId(), role.getRoleCode());
 
             // Generate UserID: ROLE_CODE@COURT_CODE
             userid = generateCourtBasedUserid(role.getRoleCode(), court.getCourtCode());
@@ -121,14 +119,8 @@ public class PostingService {
             unit = adminUnitRepository.findById(dto.getUnitId())
                     .orElseThrow(() -> new RuntimeException("Admin unit not found with ID: " + dto.getUnitId()));
 
-            // Validate role level matches unit level (warning only, allow flexibility)
-            if (role.getUnitLevel() != null && !role.getUnitLevel().equals(unit.getUnitLevel())) {
-                log.warn("Role level {} does not match unit level {} for role {}. Allowing with warning.", 
-                        role.getUnitLevel(), unit.getUnitLevel(), role.getRoleCode());
-            }
-
             // Close existing active posting for same UNIT + ROLE
-            closeExistingActivePostingByUnit(dto.getUnitId(), dto.getRoleCode());
+            closeExistingActivePostingByUnit(dto.getUnitId(), role.getRoleCode());
 
             // Generate UserID: ROLE_CODE@UNIT_LGD_CODE
             userid = generateUnitBasedUserid(role.getRoleCode(), unit.getLgdCode());
@@ -143,11 +135,12 @@ public class PostingService {
                     });
         }
 
-        // Create new posting
+        // Save assign posting: roleId -> role_id (RoleMaster reference), role_code -> role_code (string)
         OfficerDaHistory posting = new OfficerDaHistory();
         posting.setCourt(court); // NULL for unit-based
         posting.setUnit(unit);
-        posting.setRoleCode(role.getRoleCode());
+        posting.setRole(role);              // role_id saved as RoleMaster reference (e.g. 13)
+        posting.setRoleCode(role.getRoleCode()); // role_code saved as string (e.g. "PATWARI")
         posting.setOfficer(officer);
         posting.setPostingUserid(userid);
         posting.setFromDate(LocalDate.now());
@@ -359,6 +352,23 @@ public class PostingService {
                 .collect(Collectors.toList());
     }
 
+    /** Role codes excluded from "manage postings" (citizen, lawyer, respondent, super admin are not officer postings). */
+    private static final java.util.Set<String> NON_OFFICER_ROLE_CODES = java.util.Set.of(
+            "CITIZEN", "LAWYER", "RESPONDENT", "SUPER_ADMIN"
+    );
+
+    /**
+     * Get active postings for manage screen: excludes CITIZEN, LAWYER, RESPONDENT, SUPER_ADMIN.
+     */
+    @Transactional(readOnly = true)
+    public List<PostingDTO> getActivePostingsForManage() {
+        List<OfficerDaHistory> postings = postingRepository.findByIsCurrentTrueOrderByFromDateDesc();
+        return postings.stream()
+                .filter(p -> p.getRoleCode() != null && !NON_OFFICER_ROLE_CODES.contains(p.getRoleCode().trim().toUpperCase()))
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
     /**
      * Convert Entity to DTO
      * Handles both court-based and unit-based postings
@@ -397,7 +407,12 @@ public class PostingService {
             }
         }
         
+        dto.setRoleId(posting.getRole() != null ? posting.getRole().getId() : posting.getRoleId());
         dto.setRoleCode(posting.getRoleCode());
+        if (posting.getRole() != null) {
+            dto.setRoleName(posting.getRole().getRoleName());
+            dto.setExecutionRole(posting.getRole().getRoleName());
+        }
         dto.setOfficerId(posting.getOfficerId());
         if (posting.getOfficer() != null) {
             dto.setOfficerName(posting.getOfficer().getFullName());

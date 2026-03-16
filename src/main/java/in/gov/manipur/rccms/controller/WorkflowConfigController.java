@@ -1,14 +1,19 @@
 package in.gov.manipur.rccms.controller;
 
+import in.gov.manipur.rccms.constant.ReportingStateLabel;
+import in.gov.manipur.rccms.constant.WorkflowDataKey;
 import in.gov.manipur.rccms.dto.*;
 import in.gov.manipur.rccms.entity.WorkflowDefinition;
 import in.gov.manipur.rccms.entity.WorkflowState;
 import in.gov.manipur.rccms.entity.WorkflowTransition;
 import in.gov.manipur.rccms.entity.WorkflowPermission;
+import in.gov.manipur.rccms.repository.CaseDocumentTemplateRepository;
+import in.gov.manipur.rccms.repository.CaseModuleFormFieldRepository;
 import in.gov.manipur.rccms.repository.WorkflowDefinitionRepository;
 import in.gov.manipur.rccms.repository.WorkflowStateRepository;
 import in.gov.manipur.rccms.repository.WorkflowTransitionRepository;
 import in.gov.manipur.rccms.repository.WorkflowPermissionRepository;
+import in.gov.manipur.rccms.service.DashboardService;
 import in.gov.manipur.rccms.service.WorkflowManagementService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,7 +25,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -41,6 +50,9 @@ public class WorkflowConfigController {
     private final WorkflowTransitionRepository transitionRepository;
     private final WorkflowPermissionRepository permissionRepository;
     private final WorkflowManagementService workflowManagementService;
+    private final CaseModuleFormFieldRepository caseModuleFormFieldRepository;
+    private final CaseDocumentTemplateRepository documentTemplateRepository;
+    private final DashboardService dashboardService;
 
     // ==================== Workflow Definition APIs ====================
 
@@ -283,6 +295,102 @@ public class WorkflowConfigController {
                 .map(workflowManagementService::convertToPermissionDTO)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(ApiResponse.success("Permissions retrieved successfully", permissionDTOs));
+    }
+
+    /**
+     * Get status/state_code lists and hints for workflow configuration.
+     * GET /api/admin/workflow/status-hints
+     * UI can let user choose from existing state codes or type a new one. Includes hearingScheduledStateCodes and hint for final state.
+     */
+    @Operation(summary = "Get Status Hints for Workflow States", description = "Returns lists for state_code: choose from existing (stateCodesForChoice / stateCodesWithLabels) or type new. Includes hearingScheduledStateCodes and hints.")
+    @GetMapping("/status-hints")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getStatusHints() {
+        List<String> allCodes = workflowStateRepository.findDistinctStateCodes();
+        List<WorkflowState> allStates = workflowStateRepository.findAllByOrderByStateCodeAsc();
+        Map<String, String> codeToName = new LinkedHashMap<>();
+        for (WorkflowState ws : allStates) {
+            if (ws.getStateCode() != null && !codeToName.containsKey(ws.getStateCode())) {
+                codeToName.put(ws.getStateCode(), ws.getStateName() != null ? ws.getStateName() : ws.getStateCode());
+            }
+        }
+        List<Map<String, String>> stateCodesWithLabels = new ArrayList<>();
+        for (Map.Entry<String, String> e : codeToName.entrySet()) {
+            stateCodesWithLabels.add(Map.of("stateCode", e.getKey(), "stateName", e.getValue()));
+        }
+
+        List<String> hearingScheduled = dashboardService.getHearingScheduledStatusCodes();
+        Map<String, Object> result = new HashMap<>();
+        result.put("stateCodesForChoice", allCodes);
+        result.put("stateCodesWithLabels", stateCodesWithLabels);
+        result.put("reportingStatesWithLabels", ReportingStateLabel.allReportingStatesWithLabels());
+        result.put("reportingStatesList", ReportingStateLabel.allReportingStatesAsList());
+        result.put("hearingScheduledStateCodes", hearingScheduled);
+        result.put("hints", Map.of(
+                "stateCode", "Choose from reporting states list (reportingStatesWithLabels) or from existing state codes in your system (stateCodesWithLabels), or type a new code. E.g. INITIATE_CASE = Case Filled, PENDING = Pending, HEARING_SCHEDULED = Hearing Scheduled, DISPOSED = Disposed.",
+                "hearingScheduled", "If this state means 'Hearing scheduled', use one of the codes in hearingScheduledStateCodes so it counts on Dashboard. Or type a new code and add it to app.dashboard.hearing-scheduled-statuses in application.yml.",
+                "finalState", "Set is_final_state = true for states that mean case closed/disposed. Those cases count as Disposed in reports. No fixed state_code required."
+        ));
+        return ResponseEntity.ok(ApiResponse.success("State code lists: choose from existing or type new", result));
+    }
+
+    /**
+     * Get valid workflow data keys (single source of truth for workflowDataFieldsRequired).
+     * GET /api/admin/workflow/data-keys
+     * Use these keys when setting permission conditions so they match keys written to workflow_data.
+     */
+    @Operation(summary = "Get Workflow Data Keys", description = "Get valid keys for workflowDataFieldsRequired in permission conditions. Use only these keys when saving permissions.")
+    @GetMapping("/data-keys")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getWorkflowDataKeys() {
+        Map<String, Object> result = new HashMap<>();
+        result.put("keys", List.copyOf(WorkflowDataKey.validKeys()));
+        result.put("keysWithLabels", WorkflowDataKey.keysWithLabels());
+        result.put("keysWithBinding", WorkflowDataKey.keysWithBinding());
+        return ResponseEntity.ok(ApiResponse.success("Valid workflow data keys (use these in workflowDataFieldsRequired)", result));
+    }
+
+    /**
+     * Get admin-created forms for Add/Edit Permission dialog (Forms section).
+     * GET /api/admin/workflow/permission-forms
+     * Returns only forms created by admin under any module (from case_module_form_fields), one per (caseNature, caseType, moduleType).
+     */
+    @Operation(summary = "Get Permission Forms", description = "List admin-created module forms (from database) for permission checkboxes.")
+    @GetMapping("/permission-forms")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getPermissionForms() {
+        List<Map<String, Object>> data = caseModuleFormFieldRepository.findDistinctModuleFormGroups().stream()
+                .map(p -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("id", p.getId());
+                    String typeName = p.getTypeName() != null ? p.getTypeName() : "All";
+                    item.put("name", p.getNatureName() + " - " + typeName + " - " + p.getModuleType());
+                    item.put("code", p.getCaseNatureId() + "_" + (p.getCaseTypeId() != null ? p.getCaseTypeId() : "0") + "_" + p.getModuleType());
+                    return item;
+                })
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.success("Admin-created forms (module forms from database)", data));
+    }
+
+    /**
+     * Get admin-created document templates for Add/Edit Permission dialog (Documents section).
+     * GET /api/admin/workflow/permission-documents
+     * Returns active document templates with id, name, moduleType and status/stages (Draft, Save & Sign) so the user can choose what permission to allow per document.
+     */
+    @Operation(summary = "Get Permission Documents", description = "List admin-created document templates with stages (Draft, Save & Sign) for permission checkboxes.")
+    @GetMapping("/permission-documents")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getPermissionDocuments() {
+        List<String> stages = List.of("DRAFT", "SAVE_AND_SIGN");
+        List<String> stageLabels = List.of("Draft", "Save & Sign");
+        List<Map<String, Object>> data = documentTemplateRepository.findByIsActiveTrueOrderByTemplateNameAsc().stream()
+                .map(t -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("id", t.getId());
+                    item.put("name", t.getTemplateName());
+                    item.put("moduleType", t.getModuleType() != null ? t.getModuleType().name() : null);
+                    item.put("stages", stages);
+                    item.put("stageLabels", stageLabels);
+                    return item;
+                })
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.success("Admin-created document templates with Draft / Save & Sign stages", data));
     }
 
     /**

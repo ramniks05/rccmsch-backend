@@ -35,7 +35,14 @@ public class PostingAssignmentDTO {
      */
     private Long unitId;
 
-    @NotNull(message = "Role code is required")
+    /**
+     * Role from role_master (id). Resolved by roleId when present, else by roleCode.
+     */
+    private Long roleId;
+
+    /**
+     * Role code (from role_master). Used when roleId is not provided.
+     */
     private String roleCode;
 
     @NotNull(message = "Officer ID is required")

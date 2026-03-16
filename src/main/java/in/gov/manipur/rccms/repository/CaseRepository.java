@@ -27,22 +27,14 @@ public interface CaseRepository extends JpaRepository<Case, Long> {
 
     List<Case> findByUnitIdOrderByApplicationDateDesc(Long unitId);
 
-    List<Case> findByCaseTypeIdOrderByApplicationDateDesc(Long caseTypeId);
-
     List<Case> findByStatusOrderByApplicationDateDesc(String status);
-
-    @Query("SELECT c FROM Case c WHERE c.unitId = :unitId AND c.status = :status ORDER BY c.applicationDate DESC")
-    List<Case> findByUnitIdAndStatus(@Param("unitId") Long unitId, @Param("status") String status);
-
-    @Query("SELECT c FROM Case c WHERE c.applicationDate BETWEEN :startDate AND :endDate ORDER BY c.applicationDate DESC")
-    List<Case> findByApplicationDateBetween(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
 
     @Query("SELECT c FROM Case c WHERE c.applicantId = :applicantId AND c.isActive = true ORDER BY c.applicationDate DESC")
     List<Case> findActiveCasesByApplicant(@Param("applicantId") Long applicantId);
 
     long countByIsActiveTrue();
 
-    long countByStatusAndIsActiveTrue(String status);
+    long countByStatusInAndIsActiveTrue(java.util.List<String> statuses);
 
     @Query("SELECT c FROM Case c WHERE c.hearingDate = :date AND c.isActive = true ORDER BY c.courtId, c.caseNumber")
     List<Case> findByHearingDateAndIsActiveTrue(@Param("date") LocalDate date);
@@ -73,13 +65,15 @@ public interface CaseRepository extends JpaRepository<Case, Long> {
                 o.full_name AS name,
                 ohd.role_code AS designation,
                 au.unit_name AS district,
-                COUNT(DISTINCT c.id) FILTER (WHERE c.status != 'DISPOSED') AS pending,
-                COUNT(DISTINCT c.id) FILTER (WHERE c.status = 'DISPOSED') AS disposed,
+                COUNT(DISTINCT CASE WHEN ws.is_final_state = false THEN c.id END) AS pending,
+                COUNT(DISTINCT CASE WHEN ws.is_final_state = true THEN c.id END) AS disposed,
                 COUNT(DISTINCT c.id) AS totalCases
             FROM workflow_history wh
             JOIN cases c ON c.id = wh.case_id
+            JOIN case_workflow_instance cwi ON cwi.case_id = c.id
+            JOIN workflow_state ws ON ws.id = cwi.current_state_id
             JOIN officers o ON o.id = wh.performed_by_officer_id
-            JOIN officer_da_history ohd ON ohd.officer_id=o.id
+            JOIN officer_da_history ohd ON ohd.officer_id = o.id
             LEFT JOIN admin_unit au ON au.unit_id = wh.performed_at_unit_id
             WHERE c.is_active = true
             GROUP BY o.id, o.full_name, ohd.role_code, au.unit_name

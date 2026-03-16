@@ -29,7 +29,8 @@ import java.time.LocalDateTime;
        indexes = {
            @Index(name = "idx_email", columnList = "email"),
            @Index(name = "idx_mobile", columnList = "mobile_number"),
-           @Index(name = "idx_aadhar", columnList = "aadhar_number")
+           @Index(name = "idx_aadhar", columnList = "aadhar_number"),
+           @Index(name = "idx_citizen_role", columnList = "role_id")
        })
 @EntityListeners(AuditingEntityListener.class)
 @Getter
@@ -70,9 +71,12 @@ public class Citizen {
     @Column(name = "registration_data", columnDefinition = "TEXT")
     private String registrationData; // JSON string for dynamic registration fields
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "citizen_type", nullable = false, length = 20)
-    private CitizenType citizenType;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "role_id", nullable = false, foreignKey = @ForeignKey(name = "fk_citizen_role"))
+    private RoleMaster role; // CITIZEN, RESPONDENT, OPERATOR from role_master
+
+    @Column(name = "role_id", insertable = false, updatable = false)
+    private Long roleId;
 
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = false; // Set to true after mobile verification
@@ -92,10 +96,25 @@ public class Citizen {
     private LocalDateTime updatedAt;
 
     /**
-     * Citizen Type Enum
+     * Citizen Type Enum (matches role_master.role_code for citizen-facing types).
+     * Used in API/OTP; source of truth is role (RoleMaster).
      */
     public enum CitizenType {
-        CITIZEN, OPERATOR, LAWYER
+        CITIZEN, OPERATOR, RESPONDENT, LAWYER
+    }
+
+    /**
+     * Derive citizen type from role_master (no stored citizen_type column).
+     */
+    public CitizenType getCitizenType() {
+        if (role == null) return CitizenType.CITIZEN;
+        String code = role.getRoleCode();
+        if (code == null) return CitizenType.CITIZEN;
+        try {
+            return CitizenType.valueOf(code);
+        } catch (IllegalArgumentException e) {
+            return CitizenType.CITIZEN;
+        }
     }
 
     @PrePersist

@@ -49,6 +49,10 @@ app:
     username: ${ADMIN_USERNAME:admin} # Default admin username
     password: ${ADMIN_PASSWORD:admin@123} # Default admin password (change in production)
 
+  # Dashboard: state codes that count as "hearing scheduled" (comma-separated). Add your workflow state codes when you create new workflows.
+  dashboard:
+    hearing-scheduled-statuses: ${DASHBOARD_HEARING_SCHEDULED_STATUSES:CASE_NUMBER_HEARING_DATE_GENERATED,HEARING_SCHEDULED}
+
   # External APIs (e.g. CHD Revenue) - token-based auth for form data sources
   external-apis:
     # Set to false when the external server uses a cert not in Java truststore (e.g. self-signed). Use only in dev/internal.

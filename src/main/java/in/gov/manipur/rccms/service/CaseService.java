@@ -53,6 +53,7 @@ public class CaseService {
     private final OfficerDaHistoryRepository postingRepository;
     private final OfficerRepository officerRepository;
     private final RoleMasterRepository roleMasterRepository;
+    private final WorkflowEngineService workflowEngineService;
 
     /**
      * Create a new case
@@ -326,8 +327,14 @@ public class CaseService {
         instance.setAssignedToUnit(caseEntity.getUnit());
         instance.setAssignedToUnitId(caseEntity.getUnitId());
         
-        // Initially assign to CITIZEN - auto-assignment will happen after citizen executes INITIATE_CASE
-        instance.setAssignedToRole("CITIZEN");
+        roleMasterRepository.findByRoleCode("CITIZEN").ifPresent(citizenRole -> {
+            instance.setAssignedToRoleId(citizenRole.getId());
+            instance.setAssignedToRoleRef(citizenRole);
+            instance.setAssignedToRole("CITIZEN");
+        });
+        if (instance.getAssignedToRole() == null) {
+            instance.setAssignedToRole("CITIZEN");
+        }
         instance.setAssignedToOfficer(null);
         instance.setAssignedToOfficerId(null);
 
@@ -336,6 +343,9 @@ public class CaseService {
         // Update case status
         caseEntity.setStatus(initialState.getStateCode());
         caseRepository.save(caseEntity);
+
+        // Record "Application submitted" in history so no extra submit step is needed
+        workflowEngineService.recordApplicationSubmitted(instance, initialState, caseEntity.getApplicantId());
 
         log.info("Workflow instance initialized for case: {}, workflow: {}, initial state: {}", 
                 caseEntity.getCaseNumber(), workflowCode, initialState.getStateCode());
@@ -617,14 +627,13 @@ public class CaseService {
                         "No officer found posted to court " + caseEntity.getCourtId() + 
                         " with role " + roleCode));
 
-        // Assign case to officer
         instance.setAssignedToOfficer(posting.getOfficer());
         instance.setAssignedToOfficerId(posting.getOfficerId());
         instance.setAssignedToRole(roleCode);
+        instance.setAssignedToRoleId(posting.getRoleId());
+        if (posting.getRole() != null) instance.setAssignedToRoleRef(posting.getRole());
         workflowInstanceRepository.save(instance);
-
-        log.info("Case {} assigned to officer {} (role: {})", 
-                caseId, posting.getOfficerId(), roleCode);
+        log.info("Case {} assigned to officer {} (role: {})", caseId, posting.getOfficerId(), roleCode);
 
         return convertToDTO(caseEntity);
     }
@@ -659,14 +668,13 @@ public class CaseService {
                     caseId, instance.getAssignedToOfficerId());
         }
 
-        // Assign case to officer
         instance.setAssignedToOfficer(officer);
         instance.setAssignedToOfficerId(officerId);
         instance.setAssignedToRole(roleCode);
+        instance.setAssignedToRoleId(role.getId());
+        instance.setAssignedToRoleRef(role);
         workflowInstanceRepository.save(instance);
-
-        log.info("Case {} manually assigned to officer {} (role: {})", 
-                caseId, officerId, roleCode);
+        log.info("Case {} manually assigned to officer {} (role: {})", caseId, officerId, roleCode);
 
         return convertToDTO(caseEntity);
     }
@@ -699,9 +707,12 @@ public class CaseService {
                         .findByCourtIdAndRoleCodeAndIsCurrentTrue(caseEntity.getCourtId(), defaultRoleCode);
 
                 if (posting.isPresent()) {
-                    instance.setAssignedToOfficer(posting.get().getOfficer());
-                    instance.setAssignedToOfficerId(posting.get().getOfficerId());
+                    OfficerDaHistory p = posting.get();
+                    instance.setAssignedToOfficer(p.getOfficer());
+                    instance.setAssignedToOfficerId(p.getOfficerId());
                     instance.setAssignedToRole(defaultRoleCode);
+                    instance.setAssignedToRoleId(p.getRoleId());
+                    if (p.getRole() != null) instance.setAssignedToRoleRef(p.getRole());
                     workflowInstanceRepository.save(instance);
                     assignedCount++;
                     log.debug("Auto-assigned case {} to officer {}", 
@@ -818,6 +829,7 @@ public class CaseService {
         dto.setPriority(caseEntity.getPriority());
         dto.setApplicationDate(caseEntity.getApplicationDate());
         dto.setResolvedDate(caseEntity.getResolvedDate());
+        dto.setNextHearingDate(caseEntity.getNextHearingDate());
         dto.setRemarks(caseEntity.getRemarks());
         dto.setIsActive(caseEntity.getIsActive());
         dto.setCreatedAt(caseEntity.getCreatedAt());
@@ -835,16 +847,22 @@ public class CaseService {
             if (instance.getCurrentState() != null) {
                 dto.setCurrentStateCode(instance.getCurrentState().getStateCode());
                 dto.setCurrentStateName(instance.getCurrentState().getStateName());
+                dto.setStatusName(instance.getCurrentState().getStateName());
             }
             dto.setAssignedToOfficerId(instance.getAssignedToOfficerId());
             if (instance.getAssignedToOfficer() != null) {
                 dto.setAssignedToOfficerName(instance.getAssignedToOfficer().getFullName());
             }
             dto.setAssignedToRole(instance.getAssignedToRole());
+            dto.setAssignedToRoleId(instance.getAssignedToRoleId());
             dto.setAssignedToUnitId(instance.getAssignedToUnitId());
             if (instance.getAssignedToUnit() != null) {
                 dto.setAssignedToUnitName(instance.getAssignedToUnit().getUnitName());
             }
+            // Next transition pending with which role(s) - e.g. "Pending with: Dealing Hand, Presiding Officer"
+            List<String> pendingWith = workflowEngineService.getNextTransitionPendingWithRoles(caseEntityId);
+            dto.setPendingWithRoleNames(pendingWith);
+            dto.setPendingWithRolesDisplay(pendingWith.isEmpty() ? null : String.join(", ", pendingWith));
             });
         }
 
@@ -861,66 +879,52 @@ public class CaseService {
             return;
         }
 
-        // Find roles that have permissions for transitions FROM this state
-        List<String> rolesForState = getRolesForState(instance.getWorkflowId(), state.getId());
-        
-        if (rolesForState.isEmpty()) {
-            log.warn("No roles found with permissions for state {}. Case {} will remain unassigned.", 
-                    state.getStateCode(), caseEntity.getId());
+        List<Long> roleIdsForState = getRoleIdsForState(instance.getWorkflowId(), state.getId());
+        if (roleIdsForState.isEmpty()) {
+            log.warn("No roles found with permissions for state {}. Case {} will remain unassigned.", state.getStateCode(), caseEntity.getId());
             return;
         }
-
-        // Try to find officer for each role (in order)
-        for (String roleCode : rolesForState) {
-            Optional<OfficerDaHistory> posting = postingRepository
-                    .findByCourtIdAndRoleCodeAndIsCurrentTrue(caseEntity.getCourtId(), roleCode);
-            
+        for (Long roleId : roleIdsForState) {
+            Optional<OfficerDaHistory> posting = postingRepository.findByCourtIdAndRoleIdAndIsCurrentTrue(caseEntity.getCourtId(), roleId);
             if (posting.isPresent()) {
-                // Assign case to this officer
-                instance.setAssignedToOfficer(posting.get().getOfficer());
-                instance.setAssignedToOfficerId(posting.get().getOfficerId());
-                instance.setAssignedToRole(roleCode);
-                log.info("Case {} auto-assigned to officer {} (role: {}) based on initial state {}", 
-                        caseEntity.getId(), posting.get().getOfficerId(), roleCode, state.getStateCode());
-                return; // Successfully assigned
+                OfficerDaHistory p = posting.get();
+                instance.setAssignedToOfficer(p.getOfficer());
+                instance.setAssignedToOfficerId(p.getOfficerId());
+                instance.setAssignedToRole(p.getRoleCode());
+                instance.setAssignedToRoleId(roleId);
+                if (p.getRole() != null) instance.setAssignedToRoleRef(p.getRole());
+                log.info("Case {} auto-assigned to officer {} (roleId: {}, roleCode: {}) based on initial state {}",
+                        caseEntity.getId(), p.getOfficerId(), roleId, p.getRoleCode(), state.getStateCode());
+                return;
             }
         }
-
-        // No officer found - set expected role but leave unassigned
-        if (!rolesForState.isEmpty()) {
-            instance.setAssignedToRole(rolesForState.get(0)); // Set first expected role
-            log.warn("Case {} cannot be auto-assigned. Expected role: {} but no officer posted to court {} with this role.", 
-                    caseEntity.getId(), rolesForState.get(0), caseEntity.getCourtId());
+        if (!roleIdsForState.isEmpty()) {
+            Long expectedRoleId = roleIdsForState.get(0);
+            instance.setAssignedToRoleId(expectedRoleId);
+            roleMasterRepository.findById(expectedRoleId).ifPresent(r -> {
+                instance.setAssignedToRoleRef(r);
+                instance.setAssignedToRole(r.getRoleCode());
+            });
+            log.warn("Case {} cannot be auto-assigned. Expected roleId: {} but no officer posted to court {} with this role.",
+                    caseEntity.getId(), expectedRoleId, caseEntity.getCourtId());
         }
     }
 
-    /**
-     * Get roles that have permissions to perform transitions from a state
-     */
-    private List<String> getRolesForState(Long workflowId, Long stateId) {
-        List<String> roles = new ArrayList<>();
-        
-        // Get all transitions FROM this state
-        List<WorkflowTransition> transitions = transitionRepository
-                .findTransitionsFromState(workflowId, stateId);
-        
-        // For each transition, get roles with permissions
+    private List<Long> getRoleIdsForState(Long workflowId, Long stateId) {
+        List<Long> roleIds = new ArrayList<>();
+        List<WorkflowTransition> transitions = transitionRepository.findTransitionsFromState(workflowId, stateId);
         for (WorkflowTransition transition : transitions) {
-            if (!transition.getIsActive()) {
-                continue;
-            }
-            
-            List<WorkflowPermission> permissions = permissionRepository
-                    .findByTransitionIdAndIsActiveTrue(transition.getId());
-            
-            for (WorkflowPermission permission : permissions) {
-                if (permission.getCanInitiate() && !roles.contains(permission.getRoleCode())) {
-                    roles.add(permission.getRoleCode());
+            if (!transition.getIsActive()) continue;
+            for (WorkflowPermission permission : permissionRepository.findByTransitionIdAndIsActiveTrue(transition.getId())) {
+                if (!permission.getCanInitiate()) continue;
+                Long rid = permission.getRoleId();
+                if (rid == null && permission.getRoleCode() != null) {
+                    rid = roleMasterRepository.findByRoleCode(permission.getRoleCode()).map(RoleMaster::getId).orElse(null);
                 }
+                if (rid != null && !roleIds.contains(rid)) roleIds.add(rid);
             }
         }
-        
-        return roles;
+        return roleIds;
     }
 
     /**

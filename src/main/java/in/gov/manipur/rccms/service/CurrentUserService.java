@@ -2,8 +2,10 @@ package in.gov.manipur.rccms.service;
 
 import in.gov.manipur.rccms.entity.Officer;
 import in.gov.manipur.rccms.entity.OfficerDaHistory;
+import in.gov.manipur.rccms.entity.RoleMaster;
 import in.gov.manipur.rccms.repository.OfficerDaHistoryRepository;
 import in.gov.manipur.rccms.repository.OfficerRepository;
+import in.gov.manipur.rccms.repository.RoleMasterRepository;
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +25,7 @@ public class CurrentUserService {
     private final JwtService jwtService;
     private final OfficerRepository officerRepository;
     private final OfficerDaHistoryRepository postingRepository;
+    private final RoleMasterRepository roleMasterRepository;
 
     /**
      * Extract JWT token from request
@@ -54,6 +57,33 @@ public class CurrentUserService {
             }
         } catch (Exception e) {
             log.error("Error extracting officer ID from token: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Get current role ID (role_master id) from JWT or resolve from role code.
+     * Used by workflow for permission checks (acting role is role_id).
+     */
+    public Long getCurrentRoleId(HttpServletRequest request) {
+        try {
+            String token = extractTokenFromRequest(request);
+            if (token != null) {
+                Claims claims = jwtService.extractAllClaims(token);
+                String authType = claims.get("authType", String.class);
+                if ("POST_BASED".equals(authType)) {
+                    Long roleId = claims.get("roleId", Long.class);
+                    if (roleId != null && roleId != 0L) return roleId;
+                }
+                String roleCode = getCurrentRoleCode(request);
+                if (roleCode != null) {
+                    return roleMasterRepository.findByRoleCode(roleCode)
+                            .map(RoleMaster::getId)
+                            .orElse(null);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error extracting role ID from token: {}", e.getMessage());
         }
         return null;
     }

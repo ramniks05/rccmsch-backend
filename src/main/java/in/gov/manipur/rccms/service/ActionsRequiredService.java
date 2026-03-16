@@ -97,7 +97,7 @@ public class ActionsRequiredService {
             Case c = inst.getCaseEntity();
             if (c == null || !Boolean.TRUE.equals(c.getIsActive())) continue;
             List<WorkflowTransitionDTO> transitions = workflowEngineService.getAvailableTransitions(
-                    c.getId(), officerId, roleCode, unitId);
+                    c.getId(), officerId, null, roleCode, unitId);
             if (transitions.isEmpty()) continue;
             List<TransitionSummaryDTO> summaries = transitions.stream()
                     .map(t -> TransitionSummaryDTO.builder()
@@ -137,7 +137,7 @@ public class ActionsRequiredService {
             Case c = inst.getCaseEntity();
             if (c == null || !Boolean.TRUE.equals(c.getIsActive())) continue;
             List<WorkflowTransitionDTO> transitions = workflowEngineService.getAvailableTransitions(
-                    c.getId(), officerId, roleCode, unitId);
+                    c.getId(), officerId, null, roleCode, unitId);
             for (WorkflowTransitionDTO t : transitions) {
                 if (t.getTransitionCode() != null && seenCodes.add(t.getTransitionCode())) {
                     result.add(TransitionSummaryDTO.builder()
@@ -172,7 +172,7 @@ public class ActionsRequiredService {
             Case c = inst.getCaseEntity();
             if (c == null || !Boolean.TRUE.equals(c.getIsActive())) continue;
             List<WorkflowTransitionDTO> transitions = workflowEngineService.getAvailableTransitions(
-                    c.getId(), officerId, roleCode, unitId);
+                    c.getId(), officerId, null, roleCode, unitId);
             boolean hasTransition = transitions.stream()
                     .anyMatch(t -> transitionCode.equals(t.getTransitionCode()));
             if (hasTransition) {

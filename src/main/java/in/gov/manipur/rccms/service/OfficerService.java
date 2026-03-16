@@ -107,37 +107,11 @@ public class OfficerService {
     }
 
     /**
-     * Get officer by mobile number
-     */
-    @Transactional(readOnly = true)
-    public OfficerDTO getOfficerByMobile(String mobileNo) {
-        if (mobileNo == null || mobileNo.trim().isEmpty()) {
-            throw new IllegalArgumentException("Mobile number cannot be null or empty");
-        }
-
-        Officer officer = officerRepository.findByMobileNo(mobileNo.trim())
-                .orElseThrow(() -> new RuntimeException("Officer not found with mobile number: " + mobileNo));
-
-        return convertToDTO(officer);
-    }
-
-    /**
      * Get all officers
      */
     @Transactional(readOnly = true)
     public List<OfficerDTO> getAllOfficers() {
         List<Officer> officers = officerRepository.findAllByOrderByFullNameAsc();
-        return officers.stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Get all active officers
-     */
-    @Transactional(readOnly = true)
-    public List<OfficerDTO> getActiveOfficers() {
-        List<Officer> officers = officerRepository.findByIsActiveTrueOrderByFullNameAsc();
         return officers.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());

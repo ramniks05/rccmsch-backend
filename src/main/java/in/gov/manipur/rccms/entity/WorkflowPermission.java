@@ -33,8 +33,16 @@ public class WorkflowPermission {
     @Column(name = "transition_id", insertable = false, updatable = false)
     private Long transitionId;
 
+    /** Role from role_master (acting role for permission check). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "role_id", foreignKey = @ForeignKey(name = "fk_permission_role"))
+    private RoleMaster role;
+
+    @Column(name = "role_id", insertable = false, updatable = false)
+    private Long roleId;
+
     @Column(name = "role_code", nullable = false, length = 50)
-    private String roleCode; // e.g., "DEALING_ASSISTANT", "CIRCLE_OFFICER"
+    private String roleCode; // denormalized from role_master
 
     @Enumerated(EnumType.STRING)
     @Column(name = "unit_level", length = 20)

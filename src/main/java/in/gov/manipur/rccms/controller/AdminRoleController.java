@@ -46,7 +46,6 @@ public class AdminRoleController {
                         role.getId(),
                         role.getRoleCode(),
                         role.getRoleName(),
-                        role.getUnitLevel(),
                         role.getDescription()
                 ))
                 .collect(Collectors.toList());
