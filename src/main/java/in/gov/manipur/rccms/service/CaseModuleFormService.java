@@ -158,8 +158,20 @@ public class CaseModuleFormService {
                     .orElseThrow(() -> new RuntimeException("Case type not found: " + caseTypeId));
         }
 
+        // Validate and normalize module type - FIELD_REPORT is deprecated, use SUBMIT_FIELD_REPORT
+        ModuleType moduleType = dto.getModuleType();
+        if (moduleType == null) {
+            throw new IllegalArgumentException("Module type cannot be null");
+        }
+        
+        // Log warning if somehow FIELD_REPORT is being used (shouldn't happen with enum, but just in case)
+        if (moduleType.name().equals("FIELD_REPORT")) {
+            log.warn("FIELD_REPORT module type detected in createField - this is deprecated. Mapping to SUBMIT_FIELD_REPORT. DTO: {}", dto);
+            moduleType = ModuleType.SUBMIT_FIELD_REPORT;
+        }
+
         if (fieldRepository.existsByCaseNatureIdAndCaseTypeIdAndModuleTypeAndFieldName(
-                caseNatureId, caseTypeId, dto.getModuleType(), dto.getFieldName())) {
+                caseNatureId, caseTypeId, moduleType, dto.getFieldName())) {
             throw new RuntimeException("Field name already exists for this case nature and module type");
         }
 
@@ -168,7 +180,7 @@ public class CaseModuleFormService {
         field.setCaseNatureId(caseNature.getId());
         field.setCaseType(caseType);
         field.setCaseTypeId(caseTypeId);
-        field.setModuleType(dto.getModuleType());
+        field.setModuleType(moduleType);
         field.setFieldName(dto.getFieldName());
         field.setFieldLabel(dto.getFieldLabel());
         field.setFieldType(dto.getFieldType());
@@ -178,6 +190,7 @@ public class CaseModuleFormService {
         field.setIsActive(dto.getIsActive() != null ? dto.getIsActive() : true);
         field.setDefaultValue(dto.getDefaultValue());
         field.setFieldOptions(dto.getFieldOptions());
+        field.setItemSchema(dto.getItemSchema());
         field.setPlaceholder(dto.getPlaceholder());
         field.setHelpText(dto.getHelpText());
         field.setDataSource(dto.getDataSource());
@@ -198,6 +211,23 @@ public class CaseModuleFormService {
         CaseModuleFormFieldDefinition field = fieldRepository.findById(fieldId)
                 .orElseThrow(() -> new RuntimeException("Module form field not found: " + fieldId));
 
+        // Validate and normalize module type - FIELD_REPORT is deprecated, use SUBMIT_FIELD_REPORT
+        ModuleType moduleType = dto.getModuleType();
+        if (moduleType != null) {
+            // Log warning if somehow FIELD_REPORT is being used (shouldn't happen with enum, but just in case)
+            if (moduleType.name().equals("FIELD_REPORT")) {
+                log.warn("FIELD_REPORT module type detected in updateField for fieldId {} - this is deprecated. Mapping to SUBMIT_FIELD_REPORT. DTO: {}", fieldId, dto);
+                moduleType = ModuleType.SUBMIT_FIELD_REPORT;
+            }
+            field.setModuleType(moduleType);
+        } else {
+            // If moduleType is not provided in update, check if existing value is FIELD_REPORT and normalize it
+            if (field.getModuleType() != null && field.getModuleType().name().equals("FIELD_REPORT")) {
+                log.warn("Existing field {} has deprecated FIELD_REPORT module type. Auto-updating to SUBMIT_FIELD_REPORT.", fieldId);
+                field.setModuleType(ModuleType.SUBMIT_FIELD_REPORT);
+            }
+        }
+
         Long caseTypeId = dto.getCaseTypeId();
         if (caseTypeId != null) {
             CaseType caseType = caseTypeRepository.findById(caseTypeId)
@@ -217,6 +247,7 @@ public class CaseModuleFormService {
         field.setIsActive(dto.getIsActive() != null ? dto.getIsActive() : field.getIsActive());
         field.setDefaultValue(dto.getDefaultValue());
         field.setFieldOptions(dto.getFieldOptions());
+        field.setItemSchema(dto.getItemSchema());
         field.setPlaceholder(dto.getPlaceholder());
         field.setHelpText(dto.getHelpText());
         field.setDataSource(dto.getDataSource());
@@ -736,6 +767,7 @@ public class CaseModuleFormService {
         dto.setIsActive(field.getIsActive());
         dto.setDefaultValue(field.getDefaultValue());
         dto.setFieldOptions(field.getFieldOptions());
+        dto.setItemSchema(field.getItemSchema());
         dto.setPlaceholder(field.getPlaceholder());
         dto.setHelpText(field.getHelpText());
         dto.setDataSource(field.getDataSource());

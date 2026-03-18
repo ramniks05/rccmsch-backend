@@ -184,12 +184,23 @@ public class ActionsRequiredService {
 
     /**
      * Full case detail on demand: case info, workflow history, and documents summary.
+     * Only document-capable module types (NOTICE, ORDERSHEET, JUDGEMENT) are queried.
+     * Other workflow modules like ATTENDANCE, REQUEST_FIELD_REPORT, or SUBMIT_FIELD_REPORT
+     * may legitimately have no documents and are not treated as errors.
      */
     public CaseDetailDTO getCaseDetail(Long caseId) {
         CaseDTO caseInfo = caseService.getCaseById(caseId);
         List<WorkflowHistoryDTO> history = workflowEngineService.getWorkflowHistoryDTOs(caseId);
         List<CaseDocumentSummaryDTO> documents = new ArrayList<>();
-        for (ModuleType mt : ModuleType.values()) {
+
+        // Only query modules that support documents, to avoid invalid module type errors.
+        List<ModuleType> documentModules = List.of(
+                ModuleType.NOTICE,
+                ModuleType.ORDERSHEET,
+                ModuleType.JUDGEMENT
+        );
+
+        for (ModuleType mt : documentModules) {
             try {
                 var doc = documentService.getLatestDocument(caseId, mt);
                 if (doc != null) {

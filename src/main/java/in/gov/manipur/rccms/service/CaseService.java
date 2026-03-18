@@ -20,6 +20,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +55,7 @@ public class CaseService {
     private final OfficerRepository officerRepository;
     private final RoleMasterRepository roleMasterRepository;
     private final WorkflowEngineService workflowEngineService;
+    private final CaseModuleFormSubmissionRepository moduleFormSubmissionRepository;
 
     /**
      * Create a new case
@@ -985,11 +987,86 @@ public class CaseService {
                     .build());
         }
 
+        HearingRef hearingRef = resolveLatestHearingRef(caseEntity);
+
         return CasePartiesDTO.builder()
                 .caseId(caseId)
                 .caseNumber(caseEntity.getCaseNumber())
                 .parties(parties)
+                .latestHearingDate(hearingRef.date())
+                .latestHearingSubmissionId(hearingRef.submissionId())
                 .build();
+    }
+
+    /**
+     * Resolve latest hearing date for attendance flow.
+     * Priority:
+     * 1) case.nextHearingDate
+     * 2) case.hearingDate
+     * 3) latest HEARING module form submission formData date fields
+     */
+    private HearingRef resolveLatestHearingRef(Case caseEntity) {
+        if (caseEntity == null) {
+            return new HearingRef(null, null);
+        }
+
+        Optional<CaseModuleFormSubmission> latestHearingSubmission = moduleFormSubmissionRepository
+                .findTopByCaseIdAndModuleTypeOrderBySubmittedAtDesc(caseEntity.getId(), ModuleType.HEARING);
+
+        Long submissionId = latestHearingSubmission.map(CaseModuleFormSubmission::getId).orElse(null);
+        LocalDate dateFromSubmission = null;
+        if (latestHearingSubmission.isPresent()) {
+            String formData = latestHearingSubmission.get().getFormData();
+            if (formData != null && !formData.isBlank()) {
+                try {
+                    Map<String, Object> data = objectMapper.readValue(formData, new TypeReference<Map<String, Object>>() {});
+                    String[] candidateKeys = {"nextHearingDate", "next_hearing_date", "hearingDate", "hearing_date", "date"};
+                    for (String key : candidateKeys) {
+                        Object value = data.get(key);
+                        if (value == null) continue;
+                        LocalDate parsed = parseFlexibleDate(value.toString());
+                        if (parsed != null) {
+                            dateFromSubmission = parsed;
+                            break;
+                        }
+                    }
+                } catch (Exception e) {
+                    log.debug("Could not parse HEARING formData for case {}: {}", caseEntity.getId(), e.getMessage());
+                }
+            }
+        }
+
+        if (caseEntity.getNextHearingDate() != null) {
+            return new HearingRef(submissionId, caseEntity.getNextHearingDate());
+        }
+        if (caseEntity.getHearingDate() != null) {
+            return new HearingRef(submissionId, caseEntity.getHearingDate());
+        }
+
+        return new HearingRef(submissionId, dateFromSubmission);
+    }
+
+    private LocalDate parseFlexibleDate(String raw) {
+        if (raw == null) return null;
+        String value = raw.trim();
+        if (value.isEmpty()) return null;
+
+        try {
+            return LocalDate.parse(value); // ISO yyyy-MM-dd
+        } catch (DateTimeParseException ignored) {
+        }
+        try {
+            return LocalDate.parse(value, DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+        } catch (DateTimeParseException ignored) {
+        }
+        try {
+            return LocalDate.parse(value, DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+        } catch (DateTimeParseException ignored) {
+        }
+        return null;
+    }
+
+    private record HearingRef(Long submissionId, LocalDate date) {
     }
 
     /**
