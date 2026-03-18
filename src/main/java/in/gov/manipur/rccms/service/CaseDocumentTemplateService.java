@@ -28,6 +28,12 @@ public class CaseDocumentTemplateService {
     private final CaseNatureRepository caseNatureRepository;
     private final CaseTypeRepository caseTypeRepository;
 
+    private static final List<ModuleType> DOCUMENT_MODULE_TYPES = List.of(
+            ModuleType.NOTICE,
+            ModuleType.ORDERSHEET,
+            ModuleType.JUDGEMENT
+    );
+
     @Transactional(readOnly = true)
     public List<DocumentTemplateDTO> getActiveTemplates(Long caseNatureId, Long caseTypeId, ModuleType moduleType) {
         if (caseNatureId == null) {
@@ -36,6 +42,7 @@ public class CaseDocumentTemplateService {
         if (moduleType == null) {
             throw new IllegalArgumentException("Module type cannot be null");
         }
+        validateDocumentModuleType(moduleType);
         List<CaseDocumentTemplate> templates = caseTypeId != null
                 ? templateRepository.findActiveTemplatesByCaseType(caseNatureId, caseTypeId, moduleType)
                 : templateRepository.findActiveTemplates(caseNatureId, moduleType);
@@ -53,6 +60,7 @@ public class CaseDocumentTemplateService {
         if (moduleType == null) {
             throw new IllegalArgumentException("Module type cannot be null");
         }
+        validateDocumentModuleType(moduleType);
         List<CaseDocumentTemplate> templates = caseTypeId != null
                 ? templateRepository.findByCaseNatureIdAndCaseTypeIdAndModuleTypeOrderByVersionDesc(
                         caseNatureId, caseTypeId, moduleType)
@@ -81,6 +89,7 @@ public class CaseDocumentTemplateService {
         Long caseTypeId = dto.getCaseTypeId();
         CaseNature caseNature = caseNatureRepository.findById(caseNatureId)
                 .orElseThrow(() -> new RuntimeException("Case nature not found: " + caseNatureId));
+        validateDocumentModuleType(dto.getModuleType());
         CaseType caseType = null;
         if (caseTypeId != null) {
             caseType = caseTypeRepository.findById(caseTypeId)
@@ -112,9 +121,7 @@ public class CaseDocumentTemplateService {
         }
         CaseDocumentTemplate template = templateRepository.findById(templateId)
                 .orElseThrow(() -> new RuntimeException("Template not found: " + templateId));
-        if (template == null) {
-            throw new RuntimeException("Template not found: " + templateId);
-        }
+        validateDocumentModuleType(template.getModuleType());
         Long caseTypeId = dto.getCaseTypeId();
         if (caseTypeId != null) {
             CaseType caseType = caseTypeRepository.findById(caseTypeId)
@@ -162,6 +169,7 @@ public class CaseDocumentTemplateService {
         if (moduleType == null) {
             throw new IllegalArgumentException("Module type cannot be null");
         }
+        validateDocumentModuleType(moduleType);
         if (caseTypeId != null) {
             DocumentTemplateDTO override = templateRepository
                     .findTopByCaseNatureIdAndCaseTypeIdAndModuleTypeAndIsActiveTrueOrderByVersionDesc(
@@ -201,6 +209,13 @@ public class CaseDocumentTemplateService {
             dto.setCaseTypeName(template.getCaseType().getTypeName());
         }
         return dto;
+    }
+
+    private void validateDocumentModuleType(ModuleType moduleType) {
+        if (moduleType == null || !DOCUMENT_MODULE_TYPES.contains(moduleType)) {
+            throw new IllegalArgumentException(
+                    "Invalid document module type: " + moduleType + ". Allowed: NOTICE, ORDERSHEET, JUDGEMENT");
+        }
     }
 }
 

@@ -26,7 +26,7 @@ public final class WorkflowDataKey {
             LABELS.put(mt.name() + "_SUBMITTED", mt.name().charAt(0) + mt.name().substring(1).toLowerCase() + " form submitted");
         }
         // Document flags: two stages only - DRAFT (save) and SIGNED (save and sign). No READY stage.
-        for (ModuleType mt : new ModuleType[]{ModuleType.NOTICE, ModuleType.NOTICE_DRAFT, ModuleType.ORDERSHEET, ModuleType.JUDGEMENT}) {
+        for (ModuleType mt : new ModuleType[]{ModuleType.NOTICE, ModuleType.ORDERSHEET, ModuleType.JUDGEMENT}) {
             String name = mt.name().charAt(0) + mt.name().substring(1).toLowerCase();
             LABELS.put(mt.name() + "_DRAFT_CREATED", "Draft " + name + " created");
             LABELS.put(mt.name() + "_SIGNED", name + " saved and signed");
@@ -95,7 +95,7 @@ public final class WorkflowDataKey {
                 list.add(entry);
             }
         }
-        for (ModuleType mt : new ModuleType[]{ModuleType.NOTICE, ModuleType.NOTICE_DRAFT, ModuleType.ORDERSHEET, ModuleType.JUDGEMENT}) {
+        for (ModuleType mt : new ModuleType[]{ModuleType.NOTICE, ModuleType.ORDERSHEET, ModuleType.JUDGEMENT}) {
             for (String suffix : new String[]{"_DRAFT_CREATED", "_SIGNED"}) {
                 String key = mt.name() + suffix;
                 if (LABELS.containsKey(key)) {

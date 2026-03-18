@@ -341,9 +341,9 @@ public class WorkflowEngineService {
     /**
      * Get available transitions for current user
      */
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, noRollbackFor = {RuntimeException.class, IllegalArgumentException.class})
     public List<WorkflowTransitionDTO> getAvailableTransitions(Long caseId, Long officerId, Long roleId, String roleCode, Long unitId) {
-        log.debug("Getting available transitions for caseId={}, officerId={}, roleId={}, roleCode={}, unitId={}",
+        log.info("[GET_AVAILABLE_TRANSITIONS] START: caseId={}, officerId={}, roleId={}, roleCode={}, unitId={}",
                 caseId, officerId, roleId, roleCode, unitId);
 
         // Get workflow instance
@@ -453,29 +453,39 @@ public class WorkflowEngineService {
                     ModuleFormSchemaDTO formSchema = null;
                     
                     try {
+                        log.info("[GET_AVAILABLE_TRANSITIONS] Getting checklist for transition: {} (caseId: {})", 
+                                transition.getTransitionCode(), caseId);
                         checklist = getTransitionChecklist(caseId, transition.getTransitionCode(),
                                 officerId, roleId, roleCode, unitId);
+                        log.info("[GET_AVAILABLE_TRANSITIONS] Successfully got checklist for transition: {} (caseId: {})", 
+                                transition.getTransitionCode(), caseId);
                         
                         // Extract module type from checklist conditions to determine if form is needed
                         String moduleTypeStr = extractModuleTypeFromChecklist(checklist);
                         if (moduleTypeStr != null) {
                             try {
                                 ModuleType moduleType = ModuleType.valueOf(moduleTypeStr);
+                                log.debug("[GET_AVAILABLE_TRANSITIONS] Fetching form schema for moduleType: {} (caseId: {})", 
+                                        moduleTypeStr, caseId);
                                 // Fetch form schema for this module type
                                 formSchema = caseModuleFormService.getFormSchema(
                                         caseEntity.getCaseNatureId(), 
                                         caseEntity.getCaseTypeId(), 
                                         moduleType);
+                                log.debug("[GET_AVAILABLE_TRANSITIONS] Successfully fetched form schema for moduleType: {} (caseId: {})", 
+                                        moduleTypeStr, caseId);
                             } catch (IllegalArgumentException e) {
-                                log.warn("Invalid module type extracted from checklist: {}", moduleTypeStr);
+                                log.warn("[GET_AVAILABLE_TRANSITIONS] Invalid module type extracted from checklist: {} (caseId: {})", 
+                                        moduleTypeStr, caseId);
                             } catch (Exception e) {
-                                log.warn("Failed to fetch form schema for module type {}: {}", 
-                                        moduleTypeStr, e.getMessage());
+                                log.warn("[GET_AVAILABLE_TRANSITIONS] Failed to fetch form schema for module type {} (caseId: {}): {}", 
+                                        moduleTypeStr, caseId, e.getMessage(), e);
                             }
                         }
                     } catch (Exception e) {
-                        log.warn("Failed to get checklist for transition {}: {}", 
-                                transition.getTransitionCode(), e.getMessage());
+                        log.error("[GET_AVAILABLE_TRANSITIONS] ERROR getting checklist for transition {} (caseId: {}): {}", 
+                                transition.getTransitionCode(), caseId, e.getMessage(), e);
+                        // Don't rethrow - continue with other transitions
                     }
                     
                     WorkflowTransitionDTO dto = WorkflowTransitionDTO.builder()
@@ -495,6 +505,8 @@ public class WorkflowEngineService {
             }
         }
 
+        log.info("[GET_AVAILABLE_TRANSITIONS] END: caseId={}, found {} available transition(s)", 
+                caseId, availableTransitions.size());
         return availableTransitions;
     }
 
@@ -886,7 +898,6 @@ public class WorkflowEngineService {
                         requiredStatuses.add(DocumentStatus.DRAFT);
                     }
                     if (Boolean.TRUE.equals(requireSigned)) {
-                        requiredStatuses.add(DocumentStatus.FINAL);
                         requiredStatuses.add(DocumentStatus.SIGNED);
                     }
 
@@ -1227,7 +1238,7 @@ public class WorkflowEngineService {
      */
     @Transactional(readOnly = true)
     public TransitionChecklistDTO getTransitionChecklist(Long caseId, String transitionCode, Long officerId, Long roleId, String roleCode, Long unitId) {
-        log.debug("Getting checklist for transition: caseId={}, transitionCode={}, officerId={}, roleId={}, roleCode={}, unitId={}",
+        log.info("[GET_CHECKLIST] START: caseId={}, transitionCode={}, officerId={}, roleId={}, roleCode={}, unitId={}",
                 caseId, transitionCode, officerId, roleId, roleCode, unitId);
 
         // Get workflow instance
@@ -1287,18 +1298,32 @@ public class WorkflowEngineService {
 
         for (WorkflowPermission permission : permissions) {
             if (!permission.getCanInitiate() || !permission.getIsActive()) {
+                log.debug("[GET_CHECKLIST] Skipping permission {} - canInitiate={}, isActive={}", 
+                        permission.getId(), permission.getCanInitiate(), permission.getIsActive());
                 continue;
             }
 
             // Check hierarchy rule
             boolean hierarchyPassed = checkHierarchyRule(permission, unitId, instance);
             if (!hierarchyPassed) {
+                log.debug("[GET_CHECKLIST] Permission {} failed hierarchy check", permission.getId());
                 continue;
             }
 
             // Parse and check conditions
-            List<ConditionStatusDTO> conditionStatuses = evaluateConditions(permission, instance, caseEntity);
-            allConditions.addAll(conditionStatuses);
+            log.info("[GET_CHECKLIST] Evaluating conditions for permission {} (caseId: {}, transitionCode: {})", 
+                    permission.getId(), caseId, transitionCode);
+            List<ConditionStatusDTO> conditionStatuses = new ArrayList<>();
+            try {
+                conditionStatuses = evaluateConditions(permission, instance, caseEntity);
+                log.info("[GET_CHECKLIST] Evaluated {} condition(s) for permission {} (caseId: {}, transitionCode: {})", 
+                        conditionStatuses.size(), permission.getId(), caseId, transitionCode);
+                allConditions.addAll(conditionStatuses);
+            } catch (Exception e) {
+                log.error("[GET_CHECKLIST] ERROR evaluating conditions for permission {} (caseId: {}, transitionCode: {}): {}", 
+                        permission.getId(), caseId, transitionCode, e.getMessage(), e);
+                // Continue with other permissions - conditionStatuses will be empty
+            }
 
             // If no conditions are defined, transition can be executed (no restrictions)
             // If conditions exist, all must pass
@@ -1355,7 +1380,7 @@ public class WorkflowEngineService {
             }
         }
 
-        return TransitionChecklistDTO.builder()
+        TransitionChecklistDTO result = TransitionChecklistDTO.builder()
                 .transitionCode(transition.getTransitionCode())
                 .transitionName(transition.getTransitionName())
                 .canExecute(canExecute)
@@ -1366,6 +1391,10 @@ public class WorkflowEngineService {
                 .allowDocumentDraft(allowDocumentDraft)
                 .allowDocumentSaveAndSign(allowDocumentSaveAndSign)
                 .build();
+        
+        log.info("[GET_CHECKLIST] END: caseId={}, transitionCode={}, canExecute={}, conditionsCount={}", 
+                caseId, transitionCode, canExecute, finalConditions.size());
+        return result;
     }
 
     /** Extract allowedFormIds, allowedDocumentIds, allowDocumentDraft, allowDocumentSaveAndSign from permission conditions JSON. */
@@ -1512,8 +1541,11 @@ public class WorkflowEngineService {
 
             // Document conditions based on allowedDocumentIds and stage flags (allowDocumentDraft / allowDocumentSaveAndSign)
             if (conditionsMap.containsKey("allowedDocumentIds")) {
+                log.info("[EVALUATE_CONDITIONS] Checking document conditions for caseId={}, permissionId={}", 
+                        caseEntity.getId(), permission.getId());
                 List<Long> templateIds = toLongList(conditionsMap.get("allowedDocumentIds"));
                 if (templateIds != null && !templateIds.isEmpty()) {
+                    log.info("[EVALUATE_CONDITIONS] Document templateIds: {} for caseId={}", templateIds, caseEntity.getId());
                     Boolean requireDraft = toBoolean(conditionsMap.get("allowDocumentDraft"));
                     Boolean requireSigned = toBoolean(conditionsMap.get("allowDocumentSaveAndSign"));
 
@@ -1522,47 +1554,58 @@ public class WorkflowEngineService {
                         requiredStatuses.add(DocumentStatus.DRAFT);
                     }
                     if (Boolean.TRUE.equals(requireSigned)) {
-                        // Save & Sign should treat FINAL or SIGNED as acceptable
-                        requiredStatuses.add(DocumentStatus.FINAL);
                         requiredStatuses.add(DocumentStatus.SIGNED);
                     }
 
                     if (!requiredStatuses.isEmpty()) {
-                        boolean passed = caseDocumentRepository.existsByCaseIdAndTemplateIdInAndStatusIn(
+                        log.info("[EVALUATE_CONDITIONS] Checking document existence: caseId={}, templateIds={}, requiredStatuses={}", 
                                 caseEntity.getId(), templateIds, requiredStatuses);
-
-                        String stageLabel;
-                        if (Boolean.TRUE.equals(requireDraft) && Boolean.TRUE.equals(requireSigned)) {
-                            stageLabel = "Draft or Signed";
-                        } else if (Boolean.TRUE.equals(requireDraft)) {
-                            stageLabel = "Draft";
-                        } else {
-                            stageLabel = "Signed";
-                        }
-
-                        String documentNamesLabel = getDocumentNamesLabel(templateIds);
-
-                        // Derive module type from first template (if all templates share same module type).
-                        String documentModuleType = null;
                         try {
-                            List<CaseDocumentTemplate> templates = caseDocumentTemplateRepository.findAllById(templateIds);
-                            if (!templates.isEmpty() && templates.get(0).getModuleType() != null) {
-                                documentModuleType = templates.get(0).getModuleType().name();
-                            }
-                        } catch (Exception e) {
-                            log.debug("Could not resolve document module type for templateIds {}: {}", templateIds, e.getMessage());
-                        }
+                            boolean passed = caseDocumentRepository.existsByCaseIdAndTemplateIdInAndStatusIn(
+                                    caseEntity.getId(), templateIds, requiredStatuses);
+                            log.info("[EVALUATE_CONDITIONS] Document check result: passed={} for caseId={}, templateIds={}", 
+                                    passed, caseEntity.getId(), templateIds);
 
-                        String label = "Document(s) [" + documentNamesLabel + "] " + stageLabel + " must exist";
-                        conditions.add(ConditionStatusDTO.builder()
-                                .label(label)
-                                .type("DOCUMENT_CONDITION")
-                                .moduleType(documentModuleType)
-                                .documentTemplateIds(templateIds)
-                                .required(true)
-                                .passed(passed)
-                                .message(passed ? label + " ✓" : label + " required")
-                                .build());
+                            String stageLabel;
+                            if (Boolean.TRUE.equals(requireDraft) && Boolean.TRUE.equals(requireSigned)) {
+                                stageLabel = "Draft or Signed";
+                            } else if (Boolean.TRUE.equals(requireDraft)) {
+                                stageLabel = "Draft";
+                            } else {
+                                stageLabel = "Signed";
+                            }
+
+                            String documentNamesLabel = getDocumentNamesLabel(templateIds);
+
+                            // Derive module type from first template (if all templates share same module type).
+                            String documentModuleType = null;
+                            try {
+                                List<CaseDocumentTemplate> templates = caseDocumentTemplateRepository.findAllById(templateIds);
+                                if (!templates.isEmpty() && templates.get(0).getModuleType() != null) {
+                                    documentModuleType = templates.get(0).getModuleType().name();
+                                    log.debug("[EVALUATE_CONDITIONS] Document module type: {} for templateIds: {}", 
+                                            documentModuleType, templateIds);
+                                }
+                            } catch (Exception e) {
+                                log.warn("[EVALUATE_CONDITIONS] Could not resolve document module type for templateIds {}: {}", 
+                                        templateIds, e.getMessage());
+                            }
+
+                            String label = "Document(s) [" + documentNamesLabel + "] " + stageLabel + " must exist";
+                            conditions.add(ConditionStatusDTO.builder()
+                                    .label(label)
+                                    .type("DOCUMENT_CONDITION")
+                                    .moduleType(documentModuleType)
+                                    .documentTemplateIds(templateIds)
+                                    .required(true)
+                                    .passed(passed)
+                                    .message(passed ? label + " ✓" : label + " required")
+                                    .build());
+                        } catch (Exception e) {
+                            log.error("[EVALUATE_CONDITIONS] ERROR checking document conditions for caseId={}, templateIds={}: {}", 
+                                    caseEntity.getId(), templateIds, e.getMessage(), e);
+                            // Don't add condition if check fails - continue with other conditions
+                        }
                     }
                 }
             }
@@ -1604,9 +1647,13 @@ public class WorkflowEngineService {
             }
 
         } catch (Exception e) {
-            log.error("Error evaluating conditions: {}", e.getMessage(), e);
+            log.error("[EVALUATE_CONDITIONS] ERROR evaluating conditions for permission {} (caseId: {}): {}", 
+                    permission.getId(), caseEntity.getId(), e.getMessage(), e);
+            // Return partial conditions - don't throw exception
         }
 
+        log.info("[EVALUATE_CONDITIONS] END: permissionId={}, caseId={}, conditionsCount={}", 
+                permission.getId(), caseEntity.getId(), conditions.size());
         return conditions;
     }
 
@@ -1675,7 +1722,7 @@ public class WorkflowEngineService {
         }
         
         // Check for known module types in flag names (NOTICE_DRAFT before NOTICE so NOTICE_DRAFT_* matches correctly)
-        String[] moduleTypes = {"HEARING", "NOTICE_DRAFT", "NOTICE", "ORDERSHEET", "JUDGEMENT", "ATTENDANCE", "FIELD_REPORT"};
+        String[] moduleTypes = {"HEARING", "NOTICE_DRAFT", "NOTICE", "ORDERSHEET", "JUDGEMENT", "ATTENDANCE", "FIELD_REPORT_REQUEST", "SUBMIT_FIELD_REPORT"};
         
         for (String moduleType : moduleTypes) {
             if (flagName.startsWith(moduleType + "_")) {

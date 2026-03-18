@@ -259,7 +259,7 @@ public class CitizenCaseController {
     public ResponseEntity<ApiResponse<CaseDocumentDTO>> getNoticeDraftDocument(
             @PathVariable Long caseId,
             HttpServletRequest request) {
-        return getDocumentForCitizen(caseId, ModuleType.NOTICE_DRAFT, request);
+        return getDocumentForCitizen(caseId, ModuleType.NOTICE, request);
     }
 
     /**
@@ -274,7 +274,7 @@ public class CitizenCaseController {
     public ResponseEntity<ApiResponse<List<CaseDocumentDTO>>> getAllNoticeDraftDocuments(
             @PathVariable Long caseId,
             HttpServletRequest request) {
-        return getAllDocumentsForCitizen(caseId, ModuleType.NOTICE_DRAFT, request);
+        return getAllDocumentsForCitizen(caseId, ModuleType.NOTICE, request);
     }
 
     /**
@@ -367,10 +367,9 @@ public class CitizenCaseController {
                     .body(ApiResponse.error(moduleType.name() + " document not found for this case"));
         }
 
-        // Only show FINAL or SIGNED documents
+        // Only show SIGNED documents
         if (document.getStatus() == null || 
-            (!document.getStatus().name().equals("FINAL") && 
-             !document.getStatus().name().equals("SIGNED"))) {
+            !document.getStatus().name().equals("SIGNED")) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body(ApiResponse.error(moduleType.name() + " is not yet finalized"));
         }
@@ -404,10 +403,10 @@ public class CitizenCaseController {
         // Get all documents
         List<CaseDocumentDTO> documents = documentService.getAllDocuments(caseId, moduleType);
         
-        // Filter to only show FINAL or SIGNED documents
+        // Filter to only show SIGNED documents
         List<CaseDocumentDTO> filteredDocuments = documents.stream()
                 .filter(doc -> doc.getStatus() != null && 
-                        (doc.getStatus().name().equals("FINAL") || doc.getStatus().name().equals("SIGNED")))
+                        doc.getStatus().name().equals("SIGNED"))
                 .collect(java.util.stream.Collectors.toList());
 
         if (filteredDocuments.isEmpty()) {

@@ -6,10 +6,10 @@ package in.gov.manipur.rccms.entity;
 public enum ModuleType {
     HEARING,
     NOTICE,
-    NOTICE_DRAFT,
     ORDERSHEET,
     JUDGEMENT,
     ATTENDANCE,
-    FIELD_REPORT
+    REQUEST_FIELD_REPORT,
+    SUBMIT_FIELD_REPORT
 }
 

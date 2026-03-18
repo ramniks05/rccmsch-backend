@@ -72,6 +72,9 @@ public class CaseModuleFormFieldDefinition {
     @Column(name = "field_options", columnDefinition = "TEXT")
     private String fieldOptions; // JSON string for SELECT/RADIO
 
+    @Column(name = "item_schema", columnDefinition = "TEXT")
+    private String itemSchema; // JSON string for REPEATABLE_SECTION item fields
+
     @Column(name = "placeholder", length = 200)
     private String placeholder;
 

@@ -24,6 +24,7 @@ public class ModuleFormFieldDTO {
     private Boolean isActive;
     private String defaultValue;
     private String fieldOptions;
+    private String itemSchema;
     private String placeholder;
     private String helpText;
     private String dataSource;

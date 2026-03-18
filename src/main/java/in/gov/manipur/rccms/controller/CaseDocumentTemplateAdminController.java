@@ -15,6 +15,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Admin APIs for document templates (notice, ordersheet, judgement)
@@ -27,6 +28,16 @@ import java.util.List;
 public class CaseDocumentTemplateAdminController {
 
     private final CaseDocumentTemplateService templateService;
+
+    @GetMapping("/module-types")
+    public ResponseEntity<ApiResponse<List<Map<String, String>>>> getDocumentModuleTypes() {
+        List<Map<String, String>> data = List.of(
+                Map.of("code", ModuleType.NOTICE.name(), "name", "NOTICE"),
+                Map.of("code", ModuleType.ORDERSHEET.name(), "name", "ORDERSHEET"),
+                Map.of("code", ModuleType.JUDGEMENT.name(), "name", "JUDGEMENT")
+        );
+        return ResponseEntity.ok(ApiResponse.success("Document module types retrieved", data));
+    }
 
     @GetMapping("/case-natures/{caseNatureId}/modules/{moduleType}")
     public ResponseEntity<ApiResponse<List<DocumentTemplateDTO>>> getTemplates(
