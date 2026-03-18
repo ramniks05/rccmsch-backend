@@ -886,7 +886,6 @@ public class WorkflowEngineService {
                         requiredStatuses.add(DocumentStatus.DRAFT);
                     }
                     if (Boolean.TRUE.equals(requireSigned)) {
-                        requiredStatuses.add(DocumentStatus.FINAL);
                         requiredStatuses.add(DocumentStatus.SIGNED);
                     }
 
@@ -1522,8 +1521,6 @@ public class WorkflowEngineService {
                         requiredStatuses.add(DocumentStatus.DRAFT);
                     }
                     if (Boolean.TRUE.equals(requireSigned)) {
-                        // Save & Sign should treat FINAL or SIGNED as acceptable
-                        requiredStatuses.add(DocumentStatus.FINAL);
                         requiredStatuses.add(DocumentStatus.SIGNED);
                     }
 
@@ -1675,7 +1672,7 @@ public class WorkflowEngineService {
         }
         
         // Check for known module types in flag names (NOTICE_DRAFT before NOTICE so NOTICE_DRAFT_* matches correctly)
-        String[] moduleTypes = {"HEARING", "NOTICE_DRAFT", "NOTICE", "ORDERSHEET", "JUDGEMENT", "ATTENDANCE", "FIELD_REPORT"};
+        String[] moduleTypes = {"HEARING", "NOTICE_DRAFT", "NOTICE", "ORDERSHEET", "JUDGEMENT", "ATTENDANCE", "FIELD_REPORT", "FIELD_REPORT_REQUEST", "SUBMIT_FIELD_REPORT"};
         
         for (String moduleType : moduleTypes) {
             if (flagName.startsWith(moduleType + "_")) {

@@ -162,7 +162,7 @@ public class CaseModuleFormController {
         
         // Handle multipart/form-data (for FIELD_REPORT with files)
         if (contentType != null && contentType.contains("multipart/form-data")) {
-            if (moduleType == ModuleType.FIELD_REPORT) {
+            if (moduleType == ModuleType.SUBMIT_FIELD_REPORT) {
                 return handleMultipartSubmission(caseId, moduleType, officerId, request);
             } else {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -326,7 +326,7 @@ public class CaseModuleFormController {
         try {
             // Process multipart form data and save files
             ModuleFormSubmissionDTO saved = moduleFormService.submitFormWithFiles(
-                    caseId, ModuleType.FIELD_REPORT, officerId, allParams, 
+                    caseId, ModuleType.SUBMIT_FIELD_REPORT, officerId, allParams, 
                     fileMetadataJson, files, remarks);
             
             log.info("Field report with files submitted successfully: caseId={}, submissionId={}", 

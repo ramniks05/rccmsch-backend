@@ -32,6 +32,12 @@ public class CaseDocumentService {
     private final CaseWorkflowInstanceRepository workflowInstanceRepository;
     private final ObjectMapper objectMapper;
 
+    private static final List<ModuleType> DOCUMENT_MODULE_TYPES = List.of(
+            ModuleType.NOTICE,
+            ModuleType.ORDERSHEET,
+            ModuleType.JUDGEMENT
+    );
+
     public CaseDocumentDTO createOrUpdateDocument(Long caseId, ModuleType moduleType, Long officerId, CreateCaseDocumentDTO dto, String roleCode) {
         if (caseId == null) {
             throw new IllegalArgumentException("Case ID cannot be null");
@@ -39,6 +45,7 @@ public class CaseDocumentService {
         if (moduleType == null) {
             throw new IllegalArgumentException("Module type cannot be null");
         }
+        validateDocumentModuleType(moduleType);
         if (officerId == null) {
             throw new IllegalArgumentException("Officer ID cannot be null");
         }
@@ -56,6 +63,7 @@ public class CaseDocumentService {
             }
             template = templateRepository.findById(templateId)
                     .orElseThrow(() -> new RuntimeException("Template not found: " + templateId));
+            validateDocumentModuleType(template.getModuleType());
         }
 
         Optional<CaseDocument> existing = documentRepository.findTopByCaseIdAndModuleTypeOrderByUpdatedAtDesc(caseId, moduleType);
@@ -125,6 +133,7 @@ public class CaseDocumentService {
     public CaseDocumentDTO createOrUpdateDocumentByTemplateId(Long caseId, Long templateId, Long officerId, CreateCaseDocumentDTO dto, String roleCode) {
         CaseDocumentTemplate template = templateRepository.findById(templateId)
                 .orElseThrow(() -> new RuntimeException("Template not found: " + templateId));
+        validateDocumentModuleType(template.getModuleType());
         if (dto == null) {
             dto = new CreateCaseDocumentDTO();
         }
@@ -181,6 +190,7 @@ public class CaseDocumentService {
         if (moduleType == null) {
             throw new IllegalArgumentException("Module type cannot be null");
         }
+        validateDocumentModuleType(moduleType);
         if (documentId == null) {
             throw new IllegalArgumentException("Document ID cannot be null");
         }
@@ -220,6 +230,7 @@ public class CaseDocumentService {
         if (dto.getTemplateId() != null) {
             CaseDocumentTemplate template = templateRepository.findById(dto.getTemplateId())
                     .orElseThrow(() -> new RuntimeException("Template not found: " + dto.getTemplateId()));
+            validateDocumentModuleType(template.getModuleType());
             doc.setTemplate(template);
             doc.setTemplateId(template.getId());
         }
@@ -290,6 +301,7 @@ public class CaseDocumentService {
         if (moduleType == null) {
             throw new IllegalArgumentException("Module type cannot be null");
         }
+        validateDocumentModuleType(moduleType);
         return documentRepository.findTopByCaseIdAndModuleTypeOrderByUpdatedAtDesc(caseId, moduleType)
                 .map(this::toDto)
                 .orElse(null);
@@ -319,6 +331,7 @@ public class CaseDocumentService {
         if (moduleType == null) {
             throw new IllegalArgumentException("Module type cannot be null");
         }
+        validateDocumentModuleType(moduleType);
         List<CaseDocument> documents = documentRepository.findByCaseIdAndModuleTypeOrderByUpdatedAtDesc(caseId, moduleType);
         return documents.stream()
                 .map(this::toDto)
@@ -368,6 +381,13 @@ public class CaseDocumentService {
         dto.setCreatedAt(doc.getCreatedAt());
         dto.setUpdatedAt(doc.getUpdatedAt());
         return dto;
+    }
+
+    private void validateDocumentModuleType(ModuleType moduleType) {
+        if (moduleType == null || !DOCUMENT_MODULE_TYPES.contains(moduleType)) {
+            throw new IllegalArgumentException(
+                    "Invalid document module type: " + moduleType + ". Allowed: NOTICE, ORDERSHEET, JUDGEMENT");
+        }
     }
 }
 

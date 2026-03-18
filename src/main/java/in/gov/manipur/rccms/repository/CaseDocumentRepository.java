@@ -22,7 +22,7 @@ public interface CaseDocumentRepository extends JpaRepository<CaseDocument, Long
 
     /**
      * Check if at least one document exists for this case with any of the given templateIds
-     * and any of the given statuses (e.g. DRAFT, FINAL, SIGNED).
+     * and any of the given statuses (e.g. DRAFT, SIGNED).
      */
     boolean existsByCaseIdAndTemplateIdInAndStatusIn(Long caseId,
                                                      List<Long> templateIds,

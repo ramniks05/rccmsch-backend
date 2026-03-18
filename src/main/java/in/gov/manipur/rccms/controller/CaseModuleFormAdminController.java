@@ -12,6 +12,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Admin APIs for module form configuration (hearing, notice, ordersheet, judgement)
@@ -24,6 +26,16 @@ import java.util.List;
 public class CaseModuleFormAdminController {
 
     private final CaseModuleFormService moduleFormService;
+
+    @GetMapping("/module-types")
+    public ResponseEntity<ApiResponse<List<Map<String, String>>>> getModuleTypes() {
+        List<Map<String, String>> moduleTypes = java.util.Arrays.stream(ModuleType.values())
+                .map(mt -> Map.of(
+                        "code", mt.name(),
+                        "name", mt.name().replace('_', ' ')))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.success("Module types retrieved", moduleTypes));
+    }
 
     @GetMapping("/case-natures/{caseNatureId}/modules/{moduleType}/fields")
     public ResponseEntity<ApiResponse<List<ModuleFormFieldDTO>>> getAllFields(

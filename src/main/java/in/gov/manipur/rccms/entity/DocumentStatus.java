@@ -5,7 +5,6 @@ package in.gov.manipur.rccms.entity;
  */
 public enum DocumentStatus {
     DRAFT,
-    FINAL,
     SIGNED
 }
 
