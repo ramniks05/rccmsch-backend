@@ -66,7 +66,8 @@ public class CaseDocumentService {
         if (doc.getId() != null && doc.getStatus() == DocumentStatus.SIGNED) {
             boolean allowEdit = template != null && Boolean.TRUE.equals(template.getAllowEditAfterSign());
             if (!allowEdit) {
-                throw new RuntimeException("Signed document cannot be edited");
+                // For new hearing cycle, keep signed history immutable and create a fresh document row.
+                doc = new CaseDocument();
             }
         }
 
@@ -138,7 +139,8 @@ public class CaseDocumentService {
         CaseDocument doc = existing.orElseGet(CaseDocument::new);
         if (doc.getId() != null && doc.getStatus() == DocumentStatus.SIGNED) {
             if (!Boolean.TRUE.equals(template.getAllowEditAfterSign())) {
-                throw new RuntimeException("Signed document cannot be edited");
+                // For new hearing cycle, keep signed history immutable and create a fresh document row.
+                doc = new CaseDocument();
             }
         }
         doc.setCaseEntity(caseEntity);
@@ -309,9 +311,16 @@ public class CaseDocumentService {
         if (templateId == null) {
             throw new IllegalArgumentException("Template ID cannot be null");
         }
-        return documentRepository.findTopByCaseIdAndTemplateIdOrderByUpdatedAtDesc(caseId, templateId)
-                .map(this::toDto)
-                .orElse(null);
+        CaseDocumentTemplate template = templateRepository.findById(templateId)
+                .orElseThrow(() -> new RuntimeException("Template not found: " + templateId));
+
+        Optional<CaseDocument> latestByTemplate = documentRepository
+                .findTopByCaseIdAndTemplateIdOrderByUpdatedAtDesc(caseId, templateId);
+        Optional<CaseDocument> latestByModule = documentRepository
+                .findTopByCaseIdAndModuleTypeOrderByUpdatedAtDesc(caseId, template.getModuleType());
+
+        CaseDocument picked = pickLatest(latestByTemplate.orElse(null), latestByModule.orElse(null));
+        return picked != null ? toDto(picked) : null;
     }
 
     /**
@@ -379,6 +388,26 @@ public class CaseDocumentService {
 
     private String validateDocumentModuleType(String moduleType) {
         return moduleMasterService.requireDocumentModuleCode(moduleType);
+    }
+
+    private CaseDocument pickLatest(CaseDocument a, CaseDocument b) {
+        if (a == null) return b;
+        if (b == null) return a;
+        LocalDateTime ta = a.getUpdatedAt() != null ? a.getUpdatedAt() : a.getCreatedAt();
+        LocalDateTime tb = b.getUpdatedAt() != null ? b.getUpdatedAt() : b.getCreatedAt();
+        if (ta == null && tb == null) {
+            Long ida = a.getId() != null ? a.getId() : 0L;
+            Long idb = b.getId() != null ? b.getId() : 0L;
+            return ida >= idb ? a : b;
+        }
+        if (ta == null) return b;
+        if (tb == null) return a;
+        int cmp = ta.compareTo(tb);
+        if (cmp > 0) return a;
+        if (cmp < 0) return b;
+        Long ida = a.getId() != null ? a.getId() : 0L;
+        Long idb = b.getId() != null ? b.getId() : 0L;
+        return ida >= idb ? a : b;
     }
 }
 
