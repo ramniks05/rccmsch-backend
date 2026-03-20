@@ -249,6 +249,9 @@ public class CaseModuleFormController {
                 Iterator<String> fileNames = multipartRequest.getFileNames();
                 while (fileNames.hasNext()) {
                     String fileName = fileNames.next();
+                    if (fileName == null) {
+                        continue;
+                    }
                     List<MultipartFile> fileParts = multipartRequest.getFiles(fileName);
                     fileList.addAll(fileParts);
                 }
@@ -366,6 +369,32 @@ public class CaseModuleFormController {
         }
         CasePartiesDTO parties = caseService.getCaseParties(caseId);
         return ResponseEntity.ok(ApiResponse.success("Case parties retrieved successfully", parties));
+    }
+
+    @GetMapping("/{caseId}/hearing-history")
+    public ResponseEntity<ApiResponse<List<HearingEventDTO>>> getHearingHistory(@PathVariable Long caseId) {
+        if (caseId == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("Case ID cannot be null"));
+        }
+        return ResponseEntity.ok(ApiResponse.success("Hearing history retrieved successfully",
+                moduleFormService.getHearingHistory(caseId)));
+    }
+
+    @GetMapping("/{caseId}/hearings/{hearingSubmissionId}/activity")
+    public ResponseEntity<ApiResponse<HearingActivityDTO>> getHearingActivity(
+            @PathVariable Long caseId,
+            @PathVariable Long hearingSubmissionId) {
+        if (caseId == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("Case ID cannot be null"));
+        }
+        if (hearingSubmissionId == null) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error("hearingSubmissionId cannot be null"));
+        }
+        return ResponseEntity.ok(ApiResponse.success("Hearing activity retrieved successfully",
+                moduleFormService.getHearingActivity(caseId, hearingSubmissionId)));
     }
 }
 

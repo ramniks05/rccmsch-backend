@@ -13,6 +13,7 @@ import in.gov.manipur.rccms.exception.InvalidCredentialsException;
 import in.gov.manipur.rccms.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +39,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional
 public class WorkflowEngineService {
+    @Value("${app.workflow.hearing-cycle-reset-transition-codes:HEARING_RESCHEDULE}")
+    private String hearingCycleResetTransitionCodesConfig;
+
+    @Value("${app.workflow.hearing-cycle-reset-flags:NOTICE_DRAFT_CREATED,NOTICE_SIGNED,ATTENDANCE_SUBMITTED,ORDERSHEET_DRAFT_CREATED,ORDERSHEET_SIGNED}")
+    private String hearingCycleResetFlagsConfig;
 
     private final CaseWorkflowInstanceRepository instanceRepository;
     private final WorkflowTransitionRepository transitionRepository;
@@ -247,6 +253,9 @@ public class WorkflowEngineService {
             // Normal auto-assignment based on workflow state and permissions
             assignCaseBasedOnWorkflowState(instance, toState, caseEntity);
         }
+
+        // Start a fresh hearing cycle when configured cycle-reset transition is executed.
+        maybeResetHearingCycleFlags(instance, transitionCode);
         
         // Save instance with assignment
         instanceRepository.save(instance);
@@ -1761,6 +1770,43 @@ public class WorkflowEngineService {
                     .collect(Collectors.toList());
         }
         return List.of();
+    }
+
+    private void maybeResetHearingCycleFlags(CaseWorkflowInstance instance, String transitionCode) {
+        if (instance == null || transitionCode == null || transitionCode.isBlank()) {
+            return;
+        }
+        List<String> resetTransitionCodes = parseCsvConfig(hearingCycleResetTransitionCodesConfig);
+        if (!resetTransitionCodes.contains(transitionCode.trim().toUpperCase())) {
+            return;
+        }
+        List<String> resetFlags = parseCsvConfig(hearingCycleResetFlagsConfig);
+        if (resetFlags.isEmpty()) {
+            return;
+        }
+
+        Map<String, Object> workflowData = new HashMap<>(parseJsonToMap(instance.getWorkflowData()));
+        for (String flag : resetFlags) {
+            workflowData.put(flag, false);
+        }
+        try {
+            instance.setWorkflowData(objectMapper.writeValueAsString(workflowData));
+            log.info("Reset {} hearing-cycle flag(s) for case {} on transition {}",
+                    resetFlags.size(), instance.getCaseId(), transitionCode);
+        } catch (Exception e) {
+            log.error("Failed to reset hearing-cycle flags for case {} on transition {}: {}",
+                    instance.getCaseId(), transitionCode, e.getMessage());
+            throw new RuntimeException("Failed to reset hearing-cycle flags");
+        }
+    }
+
+    private List<String> parseCsvConfig(String config) {
+        if (config == null || config.isBlank()) return List.of();
+        return Arrays.stream(config.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(String::toUpperCase)
+                .toList();
     }
 }
 

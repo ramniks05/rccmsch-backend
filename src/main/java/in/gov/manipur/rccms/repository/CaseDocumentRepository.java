@@ -3,6 +3,8 @@ package in.gov.manipur.rccms.repository;
 import in.gov.manipur.rccms.entity.CaseDocument;
 import in.gov.manipur.rccms.entity.DocumentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -11,13 +13,37 @@ import java.util.Optional;
 @Repository
 public interface CaseDocumentRepository extends JpaRepository<CaseDocument, Long> {
 
-    List<CaseDocument> findByCaseIdAndModuleTypeOrderByUpdatedAtDesc(Long caseId, String moduleType);
+    @Query("""
+            SELECT d FROM CaseDocument d
+            WHERE d.caseId = :caseId AND d.moduleType = :moduleType
+            ORDER BY d.updatedAt DESC, d.id DESC
+            """)
+    List<CaseDocument> findByCaseIdAndModuleTypeOrderByUpdatedAtDesc(@Param("caseId") Long caseId,
+                                                                      @Param("moduleType") String moduleType);
 
-    Optional<CaseDocument> findTopByCaseIdAndModuleTypeOrderByUpdatedAtDesc(Long caseId, String moduleType);
+    @Query("""
+            SELECT d FROM CaseDocument d
+            WHERE d.caseId = :caseId AND d.moduleType = :moduleType
+            ORDER BY d.updatedAt DESC, d.id DESC
+            """)
+    Optional<CaseDocument> findTopByCaseIdAndModuleTypeOrderByUpdatedAtDesc(@Param("caseId") Long caseId,
+                                                                             @Param("moduleType") String moduleType);
 
-    Optional<CaseDocument> findTopByCaseIdAndTemplateIdOrderByUpdatedAtDesc(Long caseId, Long templateId);
+    @Query("""
+            SELECT d FROM CaseDocument d
+            WHERE d.caseId = :caseId AND d.templateId = :templateId
+            ORDER BY d.updatedAt DESC, d.id DESC
+            """)
+    Optional<CaseDocument> findTopByCaseIdAndTemplateIdOrderByUpdatedAtDesc(@Param("caseId") Long caseId,
+                                                                             @Param("templateId") Long templateId);
 
-    List<CaseDocument> findByCaseIdAndTemplateIdOrderByUpdatedAtDesc(Long caseId, Long templateId);
+    @Query("""
+            SELECT d FROM CaseDocument d
+            WHERE d.caseId = :caseId AND d.templateId = :templateId
+            ORDER BY d.updatedAt DESC, d.id DESC
+            """)
+    List<CaseDocument> findByCaseIdAndTemplateIdOrderByUpdatedAtDesc(@Param("caseId") Long caseId,
+                                                                      @Param("templateId") Long templateId);
 
     /**
      * Check if at least one document exists for this case with any of the given templateIds

@@ -5,6 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -14,7 +15,8 @@ import java.time.LocalDateTime;
 @Table(name = "case_module_form_submissions", indexes = {
         @Index(name = "idx_module_form_case", columnList = "case_id"),
         @Index(name = "idx_module_form_case_nature", columnList = "case_nature_id"),
-        @Index(name = "idx_module_form_module_type", columnList = "module_type")
+        @Index(name = "idx_module_form_module_type", columnList = "module_type"),
+        @Index(name = "idx_module_form_hearing_submission", columnList = "hearing_submission_id")
 })
 @Data
 @NoArgsConstructor
@@ -44,6 +46,12 @@ public class CaseModuleFormSubmission {
 
     @Column(name = "form_data", columnDefinition = "TEXT")
     private String formData; // JSON string
+
+    @Column(name = "hearing_submission_id")
+    private Long hearingSubmissionId;
+
+    @Column(name = "hearing_date_snapshot")
+    private LocalDate hearingDateSnapshot;
 
     @Column(name = "submitted_by_officer_id")
     private Long submittedByOfficerId;

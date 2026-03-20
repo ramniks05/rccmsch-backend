@@ -15,6 +15,9 @@ import org.springframework.web.multipart.MultipartFile;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.Base64;
 import java.util.UUID;
@@ -28,6 +31,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional
 public class CaseModuleFormService {
+    private static final Set<String> HEARING_DEPENDENT_MODULES = Set.of(
+            "ORDERSHEET",
+            "JUDGEMENT",
+            "SUBMIT_FIELD_REPORT",
+            "FIELD_REPORT"
+    );
 
     private final CaseModuleFormFieldRepository fieldRepository;
     private final CaseModuleFormSubmissionRepository submissionRepository;
@@ -35,6 +44,7 @@ public class CaseModuleFormService {
     private final CaseNatureRepository caseNatureRepository;
     private final CaseTypeRepository caseTypeRepository;
     private final CaseWorkflowInstanceRepository workflowInstanceRepository;
+    private final CaseHearingEventRepository caseHearingEventRepository;
     private final ModuleMasterService moduleMasterService;
     private final ObjectMapper objectMapper;
 
@@ -261,6 +271,8 @@ public class CaseModuleFormService {
 
         // Process formData to save any files and update file paths
         String processedFormData = processFormDataFiles(dto.getFormData(), caseId, moduleCode);
+        Long hearingSubmissionId = validateAndResolveHearingContext(caseEntity, moduleCode, dto.getHearingSubmissionId());
+        LocalDate hearingDateSnapshot = resolveHearingDateSnapshot(caseEntity, moduleCode, hearingSubmissionId, processedFormData);
 
         CaseModuleFormSubmission submission = new CaseModuleFormSubmission();
         submission.setCaseEntity(caseEntity);
@@ -269,10 +281,16 @@ public class CaseModuleFormService {
         submission.setCaseNatureId(caseEntity.getCaseNatureId());
         submission.setModuleType(moduleCode);
         submission.setFormData(processedFormData);
+        submission.setHearingSubmissionId(hearingSubmissionId);
+        submission.setHearingDateSnapshot(hearingDateSnapshot);
         submission.setRemarks(dto.getRemarks());
         submission.setSubmittedByOfficerId(officerId);
 
         CaseModuleFormSubmission saved = submissionRepository.save(submission);
+
+        if ("HEARING".equalsIgnoreCase(moduleCode)) {
+            syncCaseHearingFromSubmission(caseEntity, saved, officerId);
+        }
 
         // Update workflow data flag for checklist
         updateWorkflowFlag(caseId, moduleCode + "_SUBMITTED", true);
@@ -462,6 +480,7 @@ public class CaseModuleFormService {
         CreateModuleFormSubmissionDTO submissionDto = new CreateModuleFormSubmissionDTO();
         submissionDto.setFormData(formDataJson);
         submissionDto.setRemarks(remarks);
+        submissionDto.setHearingSubmissionId(parseLongOrNull(allParams.get("hearingSubmissionId")));
         
         return submitForm(caseId, moduleCode, officerId, submissionDto);
     }
@@ -696,6 +715,179 @@ public class CaseModuleFormService {
                 .map(this::toSubmissionDto);
     }
 
+    @Transactional(readOnly = true)
+    public List<HearingEventDTO> getHearingHistory(Long caseId) {
+        if (caseId == null) {
+            throw new IllegalArgumentException("Case ID cannot be null");
+        }
+        return caseHearingEventRepository.findByCaseIdOrderByHearingNoDesc(caseId)
+                .stream()
+                .map(this::toHearingEventDto)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public HearingActivityDTO getHearingActivity(Long caseId, Long hearingSubmissionId) {
+        if (caseId == null) {
+            throw new IllegalArgumentException("Case ID cannot be null");
+        }
+        if (hearingSubmissionId == null) {
+            throw new IllegalArgumentException("hearingSubmissionId cannot be null");
+        }
+
+        CaseModuleFormSubmission hearingSubmission = submissionRepository.findById(hearingSubmissionId)
+                .orElseThrow(() -> new RuntimeException("Hearing submission not found: " + hearingSubmissionId));
+        if (!caseId.equals(hearingSubmission.getCaseId())) {
+            throw new IllegalArgumentException("Hearing submission does not belong to case: " + caseId);
+        }
+        if (!"HEARING".equalsIgnoreCase(hearingSubmission.getModuleType())) {
+            throw new IllegalArgumentException("Provided submission is not a HEARING submission");
+        }
+
+        List<ModuleFormSubmissionDTO> linked = submissionRepository
+                .findByCaseIdAndHearingSubmissionIdOrderBySubmittedAtDesc(caseId, hearingSubmissionId)
+                .stream()
+                .map(this::toSubmissionDto)
+                .toList();
+
+        return HearingActivityDTO.builder()
+                .caseId(caseId)
+                .hearingSubmissionId(hearingSubmissionId)
+                .hearingDate(extractHearingDate(hearingSubmission.getFormData()))
+                .hearingSubmission(toSubmissionDto(hearingSubmission))
+                .linkedModuleSubmissions(linked)
+                .build();
+    }
+
+    private Long validateAndResolveHearingContext(Case caseEntity, String moduleCode, Long requestedHearingSubmissionId) {
+        if (!HEARING_DEPENDENT_MODULES.contains(moduleCode)) {
+            return requestedHearingSubmissionId;
+        }
+        Long hearingSubmissionId = requestedHearingSubmissionId;
+        if (hearingSubmissionId == null) {
+            throw new IllegalArgumentException("hearingSubmissionId is required for module type: " + moduleCode);
+        }
+        CaseModuleFormSubmission hearingSubmission = submissionRepository.findById(hearingSubmissionId)
+                .orElseThrow(() -> new RuntimeException("Hearing submission not found: " + hearingSubmissionId));
+        if (!caseEntity.getId().equals(hearingSubmission.getCaseId())) {
+            throw new IllegalArgumentException("Hearing submission does not belong to case: " + caseEntity.getId());
+        }
+        if (!"HEARING".equalsIgnoreCase(hearingSubmission.getModuleType())) {
+            throw new IllegalArgumentException("hearingSubmissionId must point to HEARING module submission");
+        }
+        return hearingSubmissionId;
+    }
+
+    private LocalDate resolveHearingDateSnapshot(Case caseEntity, String moduleCode, Long hearingSubmissionId, String processedFormData) {
+        if ("HEARING".equalsIgnoreCase(moduleCode)) {
+            return extractHearingDate(processedFormData);
+        }
+        if (hearingSubmissionId != null) {
+            CaseModuleFormSubmission hearingSubmission = submissionRepository.findById(hearingSubmissionId)
+                    .orElseThrow(() -> new RuntimeException("Hearing submission not found: " + hearingSubmissionId));
+            LocalDate extracted = extractHearingDate(hearingSubmission.getFormData());
+            if (extracted != null) {
+                return extracted;
+            }
+        }
+        return caseEntity.getHearingDate();
+    }
+
+    private void syncCaseHearingFromSubmission(Case caseEntity, CaseModuleFormSubmission hearingSubmission, Long officerId) {
+        LocalDate hearingDate = extractHearingDate(hearingSubmission.getFormData());
+        if (hearingDate == null) {
+            log.debug("No hearing date found in HEARING form submission {} for case {}", hearingSubmission.getId(), caseEntity.getId());
+            return;
+        }
+
+        Optional<CaseHearingEvent> currentOpt = caseHearingEventRepository.findByCaseIdAndIsCurrentTrue(caseEntity.getId());
+        Integer nextHearingNo = 1;
+        Long previousHearingEventId = null;
+        if (currentOpt.isPresent()) {
+            CaseHearingEvent current = currentOpt.get();
+            current.setIsCurrent(false);
+            // Flush deactivation first so partial unique index (case_id where is_current=true) is not violated on insert.
+            caseHearingEventRepository.saveAndFlush(current);
+            nextHearingNo = (current.getHearingNo() != null ? current.getHearingNo() : 0) + 1;
+            previousHearingEventId = current.getId();
+        } else {
+            Optional<CaseHearingEvent> latest = caseHearingEventRepository.findTopByCaseIdOrderByHearingNoDesc(caseEntity.getId());
+            if (latest.isPresent()) {
+                nextHearingNo = (latest.get().getHearingNo() != null ? latest.get().getHearingNo() : 0) + 1;
+                previousHearingEventId = latest.get().getId();
+            }
+        }
+
+        CaseHearingEvent event = new CaseHearingEvent();
+        event.setCaseEntity(caseEntity);
+        event.setCaseId(caseEntity.getId());
+        event.setHearingSubmissionId(hearingSubmission.getId());
+        event.setHearingNo(nextHearingNo);
+        event.setHearingDate(hearingDate);
+        event.setStatus("SCHEDULED");
+        event.setIsCurrent(true);
+        event.setPreviousHearingEventId(previousHearingEventId);
+        event.setSource("HEARING_FORM");
+        event.setRemarks(hearingSubmission.getRemarks());
+        event.setActionByOfficerId(officerId);
+        caseHearingEventRepository.save(event);
+
+        caseEntity.setHearingDate(hearingDate);
+        caseEntity.setNextHearingDate(hearingDate);
+        caseRepository.save(caseEntity);
+    }
+
+    private LocalDate extractHearingDate(String formDataJson) {
+        if (formDataJson == null || formDataJson.isBlank()) {
+            return null;
+        }
+        try {
+            Map<String, Object> data = objectMapper.readValue(formDataJson, new TypeReference<Map<String, Object>>() {});
+            String[] candidateKeys = {"nextHearingDate", "next_hearing_date", "hearingDate", "hearing_date", "date"};
+            for (String key : candidateKeys) {
+                Object value = data.get(key);
+                if (value == null) continue;
+                LocalDate parsed = parseFlexibleDate(value.toString());
+                if (parsed != null) {
+                    return parsed;
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Could not parse hearing date from formData: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    private LocalDate parseFlexibleDate(String raw) {
+        if (raw == null) return null;
+        String value = raw.trim();
+        if (value.isEmpty()) return null;
+        try {
+            return LocalDate.parse(value);
+        } catch (DateTimeParseException ignored) {
+        }
+        try {
+            return LocalDate.parse(value, DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+        } catch (DateTimeParseException ignored) {
+        }
+        try {
+            return LocalDate.parse(value, DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+        } catch (DateTimeParseException ignored) {
+        }
+        return null;
+    }
+
+    private Long parseLongOrNull(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.parseLong(raw.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid hearingSubmissionId: " + raw);
+        }
+    }
+
     private void updateWorkflowFlag(Long caseId, String key, boolean value) {
         workflowInstanceRepository.findByCaseId(caseId).ifPresent(instance -> {
             Map<String, Object> data = parseJsonMap(instance.getWorkflowData());
@@ -763,9 +955,30 @@ public class CaseModuleFormService {
         dto.setCaseNatureId(submission.getCaseNatureId());
         dto.setModuleType(submission.getModuleType());
         dto.setFormData(submission.getFormData());
+        dto.setHearingSubmissionId(submission.getHearingSubmissionId());
+        dto.setHearingDateSnapshot(submission.getHearingDateSnapshot());
         dto.setSubmittedByOfficerId(submission.getSubmittedByOfficerId());
         dto.setSubmittedAt(submission.getSubmittedAt());
         dto.setRemarks(submission.getRemarks());
+        return dto;
+    }
+
+    private HearingEventDTO toHearingEventDto(CaseHearingEvent event) {
+        HearingEventDTO dto = new HearingEventDTO();
+        dto.setId(event.getId());
+        dto.setCaseId(event.getCaseId());
+        dto.setHearingSubmissionId(event.getHearingSubmissionId());
+        dto.setHearingNo(event.getHearingNo());
+        dto.setHearingDate(event.getHearingDate());
+        dto.setStatus(event.getStatus());
+        dto.setIsCurrent(event.getIsCurrent());
+        dto.setPreviousHearingEventId(event.getPreviousHearingEventId());
+        dto.setSource(event.getSource());
+        dto.setBatchId(event.getBatchId());
+        dto.setReason(event.getReason());
+        dto.setRemarks(event.getRemarks());
+        dto.setActionByOfficerId(event.getActionByOfficerId());
+        dto.setActionAt(event.getActionAt());
         return dto;
     }
 }

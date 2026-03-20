@@ -10,5 +10,6 @@ public class CreateModuleFormSubmissionDTO {
     @JsonDeserialize(using = JsonStringOrObjectDeserializer.class)
     private String formData; // JSON string (accepts string or object from client)
     private String remarks;
+    private Long hearingSubmissionId;
 }
 

@@ -39,6 +39,15 @@ public interface CaseRepository extends JpaRepository<Case, Long> {
     @Query("SELECT c FROM Case c WHERE c.hearingDate = :date AND c.isActive = true ORDER BY c.courtId, c.caseNumber")
     List<Case> findByHearingDateAndIsActiveTrue(@Param("date") LocalDate date);
 
+    @Query("""
+            SELECT c FROM Case c
+            WHERE c.hearingDate = :date
+              AND c.isActive = true
+              AND (:courtId IS NULL OR c.courtId = :courtId)
+            ORDER BY c.caseNumber
+            """)
+    List<Case> findActiveCasesByHearingDateAndOptionalCourt(@Param("date") LocalDate date, @Param("courtId") Long courtId);
+
     @Query("SELECT c FROM Case c WHERE c.courtId = :courtId AND c.hearingDate BETWEEN :startDate AND :endDate AND c.isActive = true ORDER BY c.hearingDate, c.caseNumber")
     List<Case> findByCourtIdAndHearingDateBetweenAndIsActiveTrue(
             @Param("courtId") Long courtId,

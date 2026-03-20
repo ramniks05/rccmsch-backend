@@ -2,6 +2,7 @@ package in.gov.manipur.rccms.dto;
 
 import lombok.Data;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Data
@@ -11,6 +12,8 @@ public class ModuleFormSubmissionDTO {
     private Long caseNatureId;
     private String moduleType;
     private String formData;
+    private Long hearingSubmissionId;
+    private LocalDate hearingDateSnapshot;
     private Long submittedByOfficerId;
     private LocalDateTime submittedAt;
     private String remarks;
