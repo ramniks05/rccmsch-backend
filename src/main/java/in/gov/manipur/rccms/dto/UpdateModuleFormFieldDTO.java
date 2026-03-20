@@ -1,6 +1,5 @@
 package in.gov.manipur.rccms.dto;
 
-import in.gov.manipur.rccms.entity.ModuleType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -12,8 +11,8 @@ public class UpdateModuleFormFieldDTO {
 
     private Long caseTypeId; // optional override per case type
 
-    @NotNull
-    private ModuleType moduleType;
+    @NotBlank
+    private String moduleType;
 
     @NotBlank
     private String fieldName;

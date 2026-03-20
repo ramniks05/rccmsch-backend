@@ -1,7 +1,6 @@
 package in.gov.manipur.rccms.dto;
 
 import in.gov.manipur.rccms.entity.DocumentStatus;
-import in.gov.manipur.rccms.entity.ModuleType;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -11,7 +10,7 @@ public class CaseDocumentDTO {
     private Long id;
     private Long caseId;
     private Long caseNatureId;
-    private ModuleType moduleType;
+    private String moduleType;
     private Long templateId;
     private String templateName;
     private String contentHtml;

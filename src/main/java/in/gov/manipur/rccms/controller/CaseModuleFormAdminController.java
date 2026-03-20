@@ -1,8 +1,8 @@
 package in.gov.manipur.rccms.controller;
 
 import in.gov.manipur.rccms.dto.*;
-import in.gov.manipur.rccms.entity.ModuleType;
 import in.gov.manipur.rccms.service.CaseModuleFormService;
+import in.gov.manipur.rccms.service.ModuleMasterService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +13,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Admin APIs for module form configuration (hearing, notice, ordersheet, judgement)
@@ -26,21 +25,20 @@ import java.util.stream.Collectors;
 public class CaseModuleFormAdminController {
 
     private final CaseModuleFormService moduleFormService;
+    private final ModuleMasterService moduleMasterService;
 
     @GetMapping("/module-types")
     public ResponseEntity<ApiResponse<List<Map<String, String>>>> getModuleTypes() {
-        List<Map<String, String>> moduleTypes = java.util.Arrays.stream(ModuleType.values())
-                .map(mt -> Map.of(
-                        "code", mt.name(),
-                        "name", mt.name().replace('_', ' ')))
-                .collect(Collectors.toList());
+        List<Map<String, String>> moduleTypes = moduleMasterService.getActiveModules().stream()
+                .map(m -> Map.of("code", m.getCode(), "name", m.getName()))
+                .toList();
         return ResponseEntity.ok(ApiResponse.success("Module types retrieved", moduleTypes));
     }
 
     @GetMapping("/case-natures/{caseNatureId}/modules/{moduleType}/fields")
     public ResponseEntity<ApiResponse<List<ModuleFormFieldDTO>>> getAllFields(
             @PathVariable Long caseNatureId,
-            @PathVariable ModuleType moduleType,
+            @PathVariable String moduleType,
             @RequestParam(value = "caseTypeId", required = false) Long caseTypeId) {
         List<ModuleFormFieldDTO> fields = moduleFormService.getAllFields(caseNatureId, caseTypeId, moduleType);
         return ResponseEntity.ok(ApiResponse.success("Module form fields retrieved", fields));

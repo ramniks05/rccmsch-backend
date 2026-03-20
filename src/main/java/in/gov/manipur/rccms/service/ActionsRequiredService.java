@@ -3,7 +3,6 @@ package in.gov.manipur.rccms.service;
 import in.gov.manipur.rccms.dto.*;
 import in.gov.manipur.rccms.entity.Case;
 import in.gov.manipur.rccms.entity.CaseWorkflowInstance;
-import in.gov.manipur.rccms.entity.ModuleType;
 import in.gov.manipur.rccms.entity.WorkflowState;
 import in.gov.manipur.rccms.repository.CaseRepository;
 import in.gov.manipur.rccms.repository.CaseWorkflowInstanceRepository;
@@ -194,20 +193,16 @@ public class ActionsRequiredService {
         List<CaseDocumentSummaryDTO> documents = new ArrayList<>();
 
         // Only query modules that support documents, to avoid invalid module type errors.
-        List<ModuleType> documentModules = List.of(
-                ModuleType.NOTICE,
-                ModuleType.ORDERSHEET,
-                ModuleType.JUDGEMENT
-        );
+        List<String> documentModules = List.of("NOTICE", "ORDERSHEET", "JUDGEMENT");
 
-        for (ModuleType mt : documentModules) {
+        for (String mt : documentModules) {
             try {
                 var doc = documentService.getLatestDocument(caseId, mt);
                 if (doc != null) {
                     documents.add(CaseDocumentSummaryDTO.builder()
                             .documentId(doc.getId())
                             .moduleType(mt)
-                            .moduleTypeLabel(mt.name().replace("_", " "))
+                            .moduleTypeLabel(mt.replace("_", " "))
                             .status(doc.getStatus())
                             .createdAt(doc.getCreatedAt())
                             .signedAt(doc.getSignedAt())

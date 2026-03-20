@@ -1011,7 +1011,7 @@ public class CaseService {
         }
 
         Optional<CaseModuleFormSubmission> latestHearingSubmission = moduleFormSubmissionRepository
-                .findTopByCaseIdAndModuleTypeOrderBySubmittedAtDesc(caseEntity.getId(), ModuleType.HEARING);
+                .findTopByCaseIdAndModuleTypeOrderBySubmittedAtDesc(caseEntity.getId(), "HEARING");
 
         Long submissionId = latestHearingSubmission.map(CaseModuleFormSubmission::getId).orElse(null);
         LocalDate dateFromSubmission = null;

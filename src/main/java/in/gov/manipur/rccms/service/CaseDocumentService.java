@@ -16,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -31,21 +30,16 @@ public class CaseDocumentService {
     private final CaseRepository caseRepository;
     private final CaseWorkflowInstanceRepository workflowInstanceRepository;
     private final ObjectMapper objectMapper;
+    private final ModuleMasterService moduleMasterService;
 
-    private static final List<ModuleType> DOCUMENT_MODULE_TYPES = List.of(
-            ModuleType.NOTICE,
-            ModuleType.ORDERSHEET,
-            ModuleType.JUDGEMENT
-    );
-
-    public CaseDocumentDTO createOrUpdateDocument(Long caseId, ModuleType moduleType, Long officerId, CreateCaseDocumentDTO dto, String roleCode) {
+    public CaseDocumentDTO createOrUpdateDocument(Long caseId, String moduleType, Long officerId, CreateCaseDocumentDTO dto, String roleCode) {
         if (caseId == null) {
             throw new IllegalArgumentException("Case ID cannot be null");
         }
         if (moduleType == null) {
             throw new IllegalArgumentException("Module type cannot be null");
         }
-        validateDocumentModuleType(moduleType);
+        String moduleCode = validateDocumentModuleType(moduleType);
         if (officerId == null) {
             throw new IllegalArgumentException("Officer ID cannot be null");
         }
@@ -66,7 +60,7 @@ public class CaseDocumentService {
             validateDocumentModuleType(template.getModuleType());
         }
 
-        Optional<CaseDocument> existing = documentRepository.findTopByCaseIdAndModuleTypeOrderByUpdatedAtDesc(caseId, moduleType);
+        Optional<CaseDocument> existing = documentRepository.findTopByCaseIdAndModuleTypeOrderByUpdatedAtDesc(caseId, moduleCode);
         CaseDocument doc = existing.orElseGet(CaseDocument::new);
 
         if (doc.getId() != null && doc.getStatus() == DocumentStatus.SIGNED) {
@@ -80,7 +74,7 @@ public class CaseDocumentService {
         doc.setCaseId(caseEntity.getId());
         doc.setCaseNature(caseEntity.getCaseNature());
         doc.setCaseNatureId(caseEntity.getCaseNatureId());
-        doc.setModuleType(moduleType);
+        doc.setModuleType(moduleCode);
         if (template != null) {
             doc.setTemplate(template);
             doc.setTemplateId(template.getId());
@@ -116,7 +110,7 @@ public class CaseDocumentService {
 
         // Update workflow data flags: two stages - DRAFT (save as draft) and SIGNED (save and sign).
         // When signed, keep _DRAFT_CREATED true (draft was submitted) and set _SIGNED true (now signed).
-        String moduleName = moduleType.name();
+        String moduleName = moduleCode;
         if (saved.getStatus() == DocumentStatus.DRAFT) {
             updateWorkflowFlag(caseId, moduleName + "_DRAFT_CREATED", true);
             updateWorkflowFlag(caseId, moduleName + "_SIGNED", false);
@@ -172,7 +166,7 @@ public class CaseDocumentService {
             doc.setStatus(DocumentStatus.SIGNED);
         }
         CaseDocument saved = documentRepository.save(doc);
-        String moduleName = template.getModuleType().name();
+        String moduleName = template.getModuleType();
         if (saved.getStatus() == DocumentStatus.DRAFT) {
             updateWorkflowFlag(caseId, moduleName + "_DRAFT_CREATED", true);
             updateWorkflowFlag(caseId, moduleName + "_SIGNED", false);
@@ -183,14 +177,14 @@ public class CaseDocumentService {
         return toDto(saved);
     }
 
-    public CaseDocumentDTO updateDocument(Long caseId, ModuleType moduleType, Long documentId, Long officerId, CreateCaseDocumentDTO dto, String roleCode) {
+    public CaseDocumentDTO updateDocument(Long caseId, String moduleType, Long documentId, Long officerId, CreateCaseDocumentDTO dto, String roleCode) {
         if (caseId == null) {
             throw new IllegalArgumentException("Case ID cannot be null");
         }
         if (moduleType == null) {
             throw new IllegalArgumentException("Module type cannot be null");
         }
-        validateDocumentModuleType(moduleType);
+        String moduleCode = validateDocumentModuleType(moduleType);
         if (documentId == null) {
             throw new IllegalArgumentException("Document ID cannot be null");
         }
@@ -212,7 +206,7 @@ public class CaseDocumentService {
         if (!doc.getCaseId().equals(caseId)) {
             throw new RuntimeException("Document does not belong to case: " + caseId);
         }
-        if (doc.getModuleType() != moduleType) {
+        if (!doc.getModuleType().equals(moduleCode)) {
             throw new RuntimeException("Document module type mismatch. Expected: " + moduleType + ", Found: " + doc.getModuleType());
         }
         
@@ -267,7 +261,7 @@ public class CaseDocumentService {
         
         // Update workflow data flags: two stages - DRAFT (save as draft) and SIGNED (save and sign).
         // When signed, keep _DRAFT_CREATED true (draft was submitted) and set _SIGNED true (now signed).
-        String moduleName = moduleType.name();
+        String moduleName = moduleCode;
         if (saved.getStatus() == DocumentStatus.DRAFT) {
             updateWorkflowFlag(caseId, moduleName + "_DRAFT_CREATED", true);
             updateWorkflowFlag(caseId, moduleName + "_SIGNED", false);
@@ -294,15 +288,15 @@ public class CaseDocumentService {
     }
 
     @Transactional(readOnly = true)
-    public CaseDocumentDTO getLatestDocument(Long caseId, ModuleType moduleType) {
+    public CaseDocumentDTO getLatestDocument(Long caseId, String moduleType) {
         if (caseId == null) {
             throw new IllegalArgumentException("Case ID cannot be null");
         }
         if (moduleType == null) {
             throw new IllegalArgumentException("Module type cannot be null");
         }
-        validateDocumentModuleType(moduleType);
-        return documentRepository.findTopByCaseIdAndModuleTypeOrderByUpdatedAtDesc(caseId, moduleType)
+        String moduleCode = validateDocumentModuleType(moduleType);
+        return documentRepository.findTopByCaseIdAndModuleTypeOrderByUpdatedAtDesc(caseId, moduleCode)
                 .map(this::toDto)
                 .orElse(null);
     }
@@ -324,15 +318,15 @@ public class CaseDocumentService {
      * Get all documents of a specific type for a case
      */
     @Transactional(readOnly = true)
-    public List<CaseDocumentDTO> getAllDocuments(Long caseId, ModuleType moduleType) {
+    public java.util.List<CaseDocumentDTO> getAllDocuments(Long caseId, String moduleType) {
         if (caseId == null) {
             throw new IllegalArgumentException("Case ID cannot be null");
         }
         if (moduleType == null) {
             throw new IllegalArgumentException("Module type cannot be null");
         }
-        validateDocumentModuleType(moduleType);
-        List<CaseDocument> documents = documentRepository.findByCaseIdAndModuleTypeOrderByUpdatedAtDesc(caseId, moduleType);
+        String moduleCode = validateDocumentModuleType(moduleType);
+        java.util.List<CaseDocument> documents = documentRepository.findByCaseIdAndModuleTypeOrderByUpdatedAtDesc(caseId, moduleCode);
         return documents.stream()
                 .map(this::toDto)
                 .collect(java.util.stream.Collectors.toList());
@@ -383,11 +377,8 @@ public class CaseDocumentService {
         return dto;
     }
 
-    private void validateDocumentModuleType(ModuleType moduleType) {
-        if (moduleType == null || !DOCUMENT_MODULE_TYPES.contains(moduleType)) {
-            throw new IllegalArgumentException(
-                    "Invalid document module type: " + moduleType + ". Allowed: NOTICE, ORDERSHEET, JUDGEMENT");
-        }
+    private String validateDocumentModuleType(String moduleType) {
+        return moduleMasterService.requireDocumentModuleCode(moduleType);
     }
 }
 

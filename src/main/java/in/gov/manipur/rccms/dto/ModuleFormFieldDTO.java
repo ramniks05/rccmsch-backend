@@ -1,6 +1,5 @@
 package in.gov.manipur.rccms.dto;
 
-import in.gov.manipur.rccms.entity.ModuleType;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -14,7 +13,7 @@ public class ModuleFormFieldDTO {
     private Long caseTypeId;
     private String caseTypeCode;
     private String caseTypeName;
-    private ModuleType moduleType;
+    private String moduleType;
     private String fieldName;
     private String fieldLabel;
     private String fieldType;

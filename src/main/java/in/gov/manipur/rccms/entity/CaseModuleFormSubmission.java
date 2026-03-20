@@ -39,9 +39,8 @@ public class CaseModuleFormSubmission {
     @Column(name = "case_nature_id", insertable = false, updatable = false)
     private Long caseNatureId;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "module_type", nullable = false, length = 30)
-    private ModuleType moduleType;
+    private String moduleType;
 
     @Column(name = "form_data", columnDefinition = "TEXT")
     private String formData; // JSON string

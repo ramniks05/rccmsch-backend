@@ -1,7 +1,5 @@
 package in.gov.manipur.rccms.constant;
 
-import in.gov.manipur.rccms.entity.ModuleType;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -19,17 +17,21 @@ import java.util.Set;
 public final class WorkflowDataKey {
 
     private static final Map<String, String> LABELS = new LinkedHashMap<>();
+    private static final List<String> FORM_MODULES = List.of(
+            "HEARING", "NOTICE", "ORDERSHEET", "JUDGEMENT", "ATTENDANCE", "REQUEST_FIELD_REPORT", "SUBMIT_FIELD_REPORT"
+    );
+    private static final List<String> DOCUMENT_MODULES = List.of("NOTICE", "ORDERSHEET", "JUDGEMENT");
 
     static {
         // Form submission flags: MODULE_SUBMITTED (from CaseModuleFormService)
-        for (ModuleType mt : ModuleType.values()) {
-            LABELS.put(mt.name() + "_SUBMITTED", mt.name().charAt(0) + mt.name().substring(1).toLowerCase() + " form submitted");
+        for (String mt : FORM_MODULES) {
+            LABELS.put(mt + "_SUBMITTED", mt.charAt(0) + mt.substring(1).toLowerCase() + " form submitted");
         }
         // Document flags: two stages only - DRAFT (save) and SIGNED (save and sign). No READY stage.
-        for (ModuleType mt : new ModuleType[]{ModuleType.NOTICE, ModuleType.ORDERSHEET, ModuleType.JUDGEMENT}) {
-            String name = mt.name().charAt(0) + mt.name().substring(1).toLowerCase();
-            LABELS.put(mt.name() + "_DRAFT_CREATED", "Draft " + name + " created");
-            LABELS.put(mt.name() + "_SIGNED", name + " saved and signed");
+        for (String mt : DOCUMENT_MODULES) {
+            String name = mt.charAt(0) + mt.substring(1).toLowerCase();
+            LABELS.put(mt + "_DRAFT_CREATED", "Draft " + name + " created");
+            LABELS.put(mt + "_SIGNED", name + " saved and signed");
         }
         // Special
         LABELS.put("NOTICE_ACCEPTED_BY_APPLICANT", "Notice accepted by applicant");
@@ -84,25 +86,25 @@ public final class WorkflowDataKey {
      */
     public static List<Map<String, String>> keysWithBinding() {
         List<Map<String, String>> list = new ArrayList<>();
-        for (ModuleType mt : ModuleType.values()) {
-            String key = mt.name() + "_SUBMITTED";
+        for (String mt : FORM_MODULES) {
+            String key = mt + "_SUBMITTED";
             if (LABELS.containsKey(key)) {
                 Map<String, String> entry = new LinkedHashMap<>();
                 entry.put("key", key);
                 entry.put("label", LABELS.get(key));
-                entry.put("moduleType", mt.name());
+                entry.put("moduleType", mt);
                 entry.put("kind", KIND_FORM);
                 list.add(entry);
             }
         }
-        for (ModuleType mt : new ModuleType[]{ModuleType.NOTICE, ModuleType.ORDERSHEET, ModuleType.JUDGEMENT}) {
+        for (String mt : DOCUMENT_MODULES) {
             for (String suffix : new String[]{"_DRAFT_CREATED", "_SIGNED"}) {
-                String key = mt.name() + suffix;
+                String key = mt + suffix;
                 if (LABELS.containsKey(key)) {
                     Map<String, String> entry = new LinkedHashMap<>();
                     entry.put("key", key);
                     entry.put("label", LABELS.get(key));
-                    entry.put("moduleType", mt.name());
+                    entry.put("moduleType", mt);
                     entry.put("kind", KIND_DOCUMENT);
                     list.add(entry);
                 }

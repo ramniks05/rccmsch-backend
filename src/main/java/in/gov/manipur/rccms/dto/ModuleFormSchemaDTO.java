@@ -1,6 +1,5 @@
 package in.gov.manipur.rccms.dto;
 
-import in.gov.manipur.rccms.entity.ModuleType;
 import lombok.Builder;
 import lombok.Data;
 
@@ -15,7 +14,7 @@ public class ModuleFormSchemaDTO {
     private Long caseTypeId;
     private String caseTypeCode;
     private String caseTypeName;
-    private ModuleType moduleType;
+    private String moduleType;
     private List<ModuleFormFieldDTO> fields;
     private Integer totalFields;
 }
