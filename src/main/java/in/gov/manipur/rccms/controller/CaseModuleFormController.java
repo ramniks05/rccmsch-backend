@@ -4,11 +4,11 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import in.gov.manipur.rccms.dto.*;
 import in.gov.manipur.rccms.entity.Case;
-import in.gov.manipur.rccms.entity.ModuleType;
 import in.gov.manipur.rccms.repository.CaseRepository;
 import in.gov.manipur.rccms.service.CaseModuleFormService;
 import in.gov.manipur.rccms.service.CaseService;
 import in.gov.manipur.rccms.service.CurrentUserService;
+import in.gov.manipur.rccms.service.ModuleMasterService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,12 +33,13 @@ public class CaseModuleFormController {
     private final CaseService caseService;
     private final CaseRepository caseRepository;
     private final CurrentUserService currentUserService;
+    private final ModuleMasterService moduleMasterService;
     private final ObjectMapper objectMapper;
 
     @GetMapping("/{caseId}/module-forms/{moduleType}")
     public ResponseEntity<ApiResponse<ModuleFormSchemaDTO>> getModuleFormSchema(
             @PathVariable Long caseId,
-            @PathVariable ModuleType moduleType) {
+            @PathVariable String moduleType) {
         if (caseId == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ApiResponse.error("Case ID cannot be null"));
@@ -53,7 +54,7 @@ public class CaseModuleFormController {
     @GetMapping("/{caseId}/module-forms/{moduleType}/latest")
     public ResponseEntity<ApiResponse<ModuleFormSubmissionDTO>> getLatestSubmission(
             @PathVariable Long caseId,
-            @PathVariable ModuleType moduleType) {
+            @PathVariable String moduleType) {
         if (caseId == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ApiResponse.error("Case ID cannot be null"));
@@ -65,7 +66,7 @@ public class CaseModuleFormController {
     @GetMapping("/{caseId}/module-forms/{moduleType}/data")
     public ResponseEntity<ApiResponse<ModuleFormWithDataDTO>> getModuleFormData(
             @PathVariable Long caseId,
-            @PathVariable ModuleType moduleType) {
+            @PathVariable String moduleType) {
         if (caseId == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(ApiResponse.error("Case ID cannot be null"));
@@ -135,7 +136,7 @@ public class CaseModuleFormController {
                  consumes = {MediaType.APPLICATION_JSON_VALUE, MediaType.MULTIPART_FORM_DATA_VALUE})
     public ResponseEntity<ApiResponse<ModuleFormSubmissionDTO>> submitModuleForm(
             @PathVariable Long caseId,
-            @PathVariable ModuleType moduleType,
+            @PathVariable String moduleType,
             HttpServletRequest request) {
         log.info("Submit module form request: caseId={}, moduleType={}, contentType={}", 
                 caseId, moduleType, request.getContentType());
@@ -146,9 +147,9 @@ public class CaseModuleFormController {
         }
         
         if (moduleType == null) {
-            log.error("ModuleType is null in path variable");
+            log.error("Module type is null in path variable");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponse.error("Module type cannot be null. Valid values: HEARING, NOTICE, ORDERSHEET, JUDGEMENT, ATTENDANCE, FIELD_REPORT"));
+                    .body(ApiResponse.error("Module type cannot be null"));
         }
         
         Long officerId = currentUserService.getCurrentOfficerId(request);
@@ -162,7 +163,8 @@ public class CaseModuleFormController {
         
         // Handle multipart/form-data (for FIELD_REPORT with files)
         if (contentType != null && contentType.contains("multipart/form-data")) {
-            if (moduleType == ModuleType.SUBMIT_FIELD_REPORT) {
+            String moduleCode = moduleMasterService.normalizeModuleCode(moduleType);
+            if ("SUBMIT_FIELD_REPORT".equals(moduleCode)) {
                 return handleMultipartSubmission(caseId, moduleType, officerId, request);
             } else {
                 return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -178,7 +180,7 @@ public class CaseModuleFormController {
      * Handle JSON form submission
      */
     private ResponseEntity<ApiResponse<ModuleFormSubmissionDTO>> handleJsonSubmission(
-            Long caseId, ModuleType moduleType, Long officerId, HttpServletRequest request) {
+            Long caseId, String moduleType, Long officerId, HttpServletRequest request) {
         try {
             CreateModuleFormSubmissionDTO dto = objectMapper.readValue(
                     request.getInputStream(), CreateModuleFormSubmissionDTO.class);
@@ -212,7 +214,7 @@ public class CaseModuleFormController {
      * Handle multipart/form-data submission (for FIELD_REPORT with files)
      */
     private ResponseEntity<ApiResponse<ModuleFormSubmissionDTO>> handleMultipartSubmission(
-            Long caseId, ModuleType moduleType, Long officerId, HttpServletRequest request) {
+            Long caseId, String moduleType, Long officerId, HttpServletRequest request) {
         try {
             // Extract all parameters from multipart request
             Map<String, String> allParams = new HashMap<>();
@@ -326,7 +328,7 @@ public class CaseModuleFormController {
         try {
             // Process multipart form data and save files
             ModuleFormSubmissionDTO saved = moduleFormService.submitFormWithFiles(
-                    caseId, ModuleType.SUBMIT_FIELD_REPORT, officerId, allParams, 
+                    caseId, "SUBMIT_FIELD_REPORT", officerId, allParams,
                     fileMetadataJson, files, remarks);
             
             log.info("Field report with files submitted successfully: caseId={}, submissionId={}", 

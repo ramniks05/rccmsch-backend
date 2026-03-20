@@ -35,16 +35,15 @@ public class CaseModuleFormService {
     private final CaseNatureRepository caseNatureRepository;
     private final CaseTypeRepository caseTypeRepository;
     private final CaseWorkflowInstanceRepository workflowInstanceRepository;
+    private final ModuleMasterService moduleMasterService;
     private final ObjectMapper objectMapper;
 
     @Transactional(readOnly = true)
-    public ModuleFormSchemaDTO getFormSchema(Long caseNatureId, Long caseTypeId, ModuleType moduleType) {
+    public ModuleFormSchemaDTO getFormSchema(Long caseNatureId, Long caseTypeId, String moduleType) {
         if (caseNatureId == null) {
             throw new IllegalArgumentException("Case nature ID cannot be null");
         }
-        if (moduleType == null) {
-            throw new IllegalArgumentException("Module type cannot be null");
-        }
+        String moduleCode = moduleMasterService.requireActiveModuleCode(moduleType);
         CaseNature caseNature = caseNatureRepository.findById(caseNatureId)
                 .orElseThrow(() -> new RuntimeException("Case nature not found: " + caseNatureId));
 
@@ -55,10 +54,10 @@ public class CaseModuleFormService {
 
         List<CaseModuleFormFieldDefinition> fields = new ArrayList<>();
         if (caseTypeId != null) {
-            fields = fieldRepository.findActiveFieldsByCaseType(caseNatureId, caseTypeId, moduleType);
+            fields = fieldRepository.findActiveFieldsByCaseType(caseNatureId, caseTypeId, moduleCode);
         }
         if (fields.isEmpty()) {
-            fields = fieldRepository.findActiveFields(caseNatureId, moduleType);
+            fields = fieldRepository.findActiveFields(caseNatureId, moduleCode);
         }
         List<ModuleFormFieldDTO> fieldDTOs = fields.stream()
                 .map(this::toDto)
@@ -71,7 +70,7 @@ public class CaseModuleFormService {
                 .caseTypeId(caseTypeId)
                 .caseTypeCode(caseType != null ? caseType.getTypeCode() : null)
                 .caseTypeName(caseType != null ? caseType.getTypeName() : null)
-                .moduleType(moduleType)
+                .moduleType(moduleCode)
                 .fields(fieldDTOs)
                 .totalFields(fieldDTOs.size())
                 .build();
@@ -93,7 +92,7 @@ public class CaseModuleFormService {
         CaseModuleFormFieldDefinition fieldDef = fieldRepository.findById(formId)
                 .orElseThrow(() -> new RuntimeException("Module form definition not found: " + formId));
 
-        ModuleType moduleType = fieldDef.getModuleType();
+        String moduleType = fieldDef.getModuleType();
 
         Case caseEntity = caseRepository.findById(caseId)
                 .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
@@ -125,18 +124,16 @@ public class CaseModuleFormService {
     }
 
     @Transactional(readOnly = true)
-    public List<ModuleFormFieldDTO> getAllFields(Long caseNatureId, Long caseTypeId, ModuleType moduleType) {
+    public List<ModuleFormFieldDTO> getAllFields(Long caseNatureId, Long caseTypeId, String moduleType) {
         if (caseNatureId == null) {
             throw new IllegalArgumentException("Case nature ID cannot be null");
         }
-        if (moduleType == null) {
-            throw new IllegalArgumentException("Module type cannot be null");
-        }
+        String moduleCode = moduleMasterService.requireActiveModuleCode(moduleType);
         List<CaseModuleFormFieldDefinition> fields;
         if (caseTypeId != null) {
-            fields = fieldRepository.findAllFieldsByCaseType(caseNatureId, caseTypeId, moduleType);
+            fields = fieldRepository.findAllFieldsByCaseType(caseNatureId, caseTypeId, moduleCode);
         } else {
-            fields = fieldRepository.findAllFields(caseNatureId, moduleType);
+            fields = fieldRepository.findAllFields(caseNatureId, moduleCode);
         }
         return fields.stream().map(this::toDto).collect(Collectors.toList());
     }
@@ -158,17 +155,7 @@ public class CaseModuleFormService {
                     .orElseThrow(() -> new RuntimeException("Case type not found: " + caseTypeId));
         }
 
-        // Validate and normalize module type - FIELD_REPORT is deprecated, use SUBMIT_FIELD_REPORT
-        ModuleType moduleType = dto.getModuleType();
-        if (moduleType == null) {
-            throw new IllegalArgumentException("Module type cannot be null");
-        }
-        
-        // Log warning if somehow FIELD_REPORT is being used (shouldn't happen with enum, but just in case)
-        if (moduleType.name().equals("FIELD_REPORT")) {
-            log.warn("FIELD_REPORT module type detected in createField - this is deprecated. Mapping to SUBMIT_FIELD_REPORT. DTO: {}", dto);
-            moduleType = ModuleType.SUBMIT_FIELD_REPORT;
-        }
+        String moduleType = moduleMasterService.requireActiveModuleCode(dto.getModuleType());
 
         if (fieldRepository.existsByCaseNatureIdAndCaseTypeIdAndModuleTypeAndFieldName(
                 caseNatureId, caseTypeId, moduleType, dto.getFieldName())) {
@@ -211,21 +198,9 @@ public class CaseModuleFormService {
         CaseModuleFormFieldDefinition field = fieldRepository.findById(fieldId)
                 .orElseThrow(() -> new RuntimeException("Module form field not found: " + fieldId));
 
-        // Validate and normalize module type - FIELD_REPORT is deprecated, use SUBMIT_FIELD_REPORT
-        ModuleType moduleType = dto.getModuleType();
+        String moduleType = dto.getModuleType();
         if (moduleType != null) {
-            // Log warning if somehow FIELD_REPORT is being used (shouldn't happen with enum, but just in case)
-            if (moduleType.name().equals("FIELD_REPORT")) {
-                log.warn("FIELD_REPORT module type detected in updateField for fieldId {} - this is deprecated. Mapping to SUBMIT_FIELD_REPORT. DTO: {}", fieldId, dto);
-                moduleType = ModuleType.SUBMIT_FIELD_REPORT;
-            }
-            field.setModuleType(moduleType);
-        } else {
-            // If moduleType is not provided in update, check if existing value is FIELD_REPORT and normalize it
-            if (field.getModuleType() != null && field.getModuleType().name().equals("FIELD_REPORT")) {
-                log.warn("Existing field {} has deprecated FIELD_REPORT module type. Auto-updating to SUBMIT_FIELD_REPORT.", fieldId);
-                field.setModuleType(ModuleType.SUBMIT_FIELD_REPORT);
-            }
+            field.setModuleType(moduleMasterService.requireActiveModuleCode(moduleType));
         }
 
         Long caseTypeId = dto.getCaseTypeId();
@@ -270,13 +245,11 @@ public class CaseModuleFormService {
         fieldRepository.delete(field);
     }
 
-    public ModuleFormSubmissionDTO submitForm(Long caseId, ModuleType moduleType, Long officerId, CreateModuleFormSubmissionDTO dto) {
+    public ModuleFormSubmissionDTO submitForm(Long caseId, String moduleType, Long officerId, CreateModuleFormSubmissionDTO dto) {
         if (caseId == null) {
             throw new IllegalArgumentException("Case ID cannot be null");
         }
-        if (moduleType == null) {
-            throw new IllegalArgumentException("Module type cannot be null");
-        }
+        String moduleCode = moduleMasterService.requireActiveModuleCode(moduleType);
         if (officerId == null) {
             throw new IllegalArgumentException("Officer ID cannot be null");
         }
@@ -287,14 +260,14 @@ public class CaseModuleFormService {
                 .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
 
         // Process formData to save any files and update file paths
-        String processedFormData = processFormDataFiles(dto.getFormData(), caseId, moduleType);
+        String processedFormData = processFormDataFiles(dto.getFormData(), caseId, moduleCode);
 
         CaseModuleFormSubmission submission = new CaseModuleFormSubmission();
         submission.setCaseEntity(caseEntity);
         submission.setCaseId(caseEntity.getId());
         submission.setCaseNature(caseEntity.getCaseNature());
         submission.setCaseNatureId(caseEntity.getCaseNatureId());
-        submission.setModuleType(moduleType);
+        submission.setModuleType(moduleCode);
         submission.setFormData(processedFormData);
         submission.setRemarks(dto.getRemarks());
         submission.setSubmittedByOfficerId(officerId);
@@ -302,7 +275,7 @@ public class CaseModuleFormService {
         CaseModuleFormSubmission saved = submissionRepository.save(submission);
 
         // Update workflow data flag for checklist
-        updateWorkflowFlag(caseId, moduleType.name() + "_SUBMITTED", true);
+        updateWorkflowFlag(caseId, moduleCode + "_SUBMITTED", true);
 
         return toSubmissionDto(saved);
     }
@@ -313,7 +286,7 @@ public class CaseModuleFormService {
      */
     public ModuleFormSubmissionDTO submitFormWithFiles(
             Long caseId, 
-            ModuleType moduleType, 
+            String moduleType, 
             Long officerId,
             Map<String, String> allParams,
             String fileMetadataJson,
@@ -323,9 +296,7 @@ public class CaseModuleFormService {
         if (caseId == null) {
             throw new IllegalArgumentException("Case ID cannot be null");
         }
-        if (moduleType == null) {
-            throw new IllegalArgumentException("Module type cannot be null");
-        }
+        String moduleCode = moduleMasterService.requireActiveModuleCode(moduleType);
         if (officerId == null) {
             throw new IllegalArgumentException("Officer ID cannot be null");
         }
@@ -492,7 +463,7 @@ public class CaseModuleFormService {
         submissionDto.setFormData(formDataJson);
         submissionDto.setRemarks(remarks);
         
-        return submitForm(caseId, moduleType, officerId, submissionDto);
+        return submitForm(caseId, moduleCode, officerId, submissionDto);
     }
     
     /**
@@ -539,7 +510,7 @@ public class CaseModuleFormService {
      * Process formData JSON to save files and update file paths
      * Handles file objects in formData (base64 encoded or file references)
      */
-    private String processFormDataFiles(String formDataJson, Long caseId, ModuleType moduleType) {
+    private String processFormDataFiles(String formDataJson, Long caseId, String moduleType) {
         if (formDataJson == null || formDataJson.trim().isEmpty()) {
             return formDataJson;
         }
@@ -565,7 +536,7 @@ public class CaseModuleFormService {
      * Recursively process formData to find and save files
      */
     @SuppressWarnings("unchecked")
-    private void processFormDataRecursive(Object value, Long caseId, ModuleType moduleType) {
+    private void processFormDataRecursive(Object value, Long caseId, String moduleType) {
         if (value == null) {
             return;
         }
@@ -600,7 +571,7 @@ public class CaseModuleFormService {
      * - {file: {fileName: "...", fileData: "data:..."}}
      */
     @SuppressWarnings("unchecked")
-    private void processFileObject(Map<String, Object> fileObj, Long caseId, ModuleType moduleType) {
+    private void processFileObject(Map<String, Object> fileObj, Long caseId, String moduleType) {
         try {
             String fileUrl = getStringValue(fileObj, "fileUrl");
             String fileName = getStringValue(fileObj, "fileName");
@@ -672,7 +643,7 @@ public class CaseModuleFormService {
     /**
      * Save a base64 encoded file to disk
      */
-    private String saveBase64File(String base64Data, String originalFileName, Long caseId, ModuleType moduleType) {
+    private String saveBase64File(String base64Data, String originalFileName, Long caseId, String moduleType) {
         try {
             // Parse base64 data URL (format: data:image/png;base64,...)
             String[] parts = base64Data.split(",");
@@ -716,14 +687,12 @@ public class CaseModuleFormService {
     }
 
     @Transactional(readOnly = true)
-    public Optional<ModuleFormSubmissionDTO> getLatestSubmission(Long caseId, ModuleType moduleType) {
+    public Optional<ModuleFormSubmissionDTO> getLatestSubmission(Long caseId, String moduleType) {
         if (caseId == null) {
             throw new IllegalArgumentException("Case ID cannot be null");
         }
-        if (moduleType == null) {
-            throw new IllegalArgumentException("Module type cannot be null");
-        }
-        return submissionRepository.findTopByCaseIdAndModuleTypeOrderBySubmittedAtDesc(caseId, moduleType)
+        String moduleCode = moduleMasterService.requireActiveModuleCode(moduleType);
+        return submissionRepository.findTopByCaseIdAndModuleTypeOrderBySubmittedAtDesc(caseId, moduleCode)
                 .map(this::toSubmissionDto);
     }
 

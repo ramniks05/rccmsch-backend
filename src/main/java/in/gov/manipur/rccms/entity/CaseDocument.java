@@ -39,9 +39,8 @@ public class CaseDocument {
     @Column(name = "case_nature_id", insertable = false, updatable = false)
     private Long caseNatureId;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "module_type", nullable = false, length = 30)
-    private ModuleType moduleType;
+    private String moduleType;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "template_id", foreignKey = @ForeignKey(name = "fk_doc_template"))

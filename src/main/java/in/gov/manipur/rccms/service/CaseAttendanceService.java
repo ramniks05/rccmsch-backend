@@ -7,7 +7,6 @@ import in.gov.manipur.rccms.dto.SubmitCaseAttendanceDTO;
 import in.gov.manipur.rccms.entity.Case;
 import in.gov.manipur.rccms.entity.CaseAttendanceSubmission;
 import in.gov.manipur.rccms.entity.CaseModuleFormSubmission;
-import in.gov.manipur.rccms.entity.ModuleType;
 import in.gov.manipur.rccms.repository.CaseAttendanceSubmissionRepository;
 import in.gov.manipur.rccms.repository.CaseModuleFormSubmissionRepository;
 import in.gov.manipur.rccms.repository.CaseRepository;
@@ -62,7 +61,7 @@ public class CaseAttendanceService {
         if (!caseId.equals(hearingSubmission.getCaseId())) {
             throw new IllegalArgumentException("Hearing submission does not belong to case: " + caseId);
         }
-        if (hearingSubmission.getModuleType() != ModuleType.HEARING) {
+        if (!"HEARING".equalsIgnoreCase(hearingSubmission.getModuleType())) {
             throw new IllegalArgumentException("Provided hearing submission id is not a HEARING module submission");
         }
         // Idempotent behavior: if attendance for same hearing already exists, update it.

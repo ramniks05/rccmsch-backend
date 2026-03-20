@@ -384,7 +384,7 @@ public class WorkflowConfigController {
                     Map<String, Object> item = new LinkedHashMap<>();
                     item.put("id", t.getId());
                     item.put("name", t.getTemplateName());
-                    item.put("moduleType", t.getModuleType() != null ? t.getModuleType().name() : null);
+                    item.put("moduleType", t.getModuleType());
                     item.put("stages", stages);
                     item.put("stageLabels", stageLabels);
                     return item;

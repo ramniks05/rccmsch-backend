@@ -41,9 +41,8 @@ public class CaseDocumentTemplate {
     @Column(name = "case_type_id", insertable = false, updatable = false)
     private Long caseTypeId; // optional override per case type
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "module_type", nullable = false, length = 30)
-    private ModuleType moduleType;
+    private String moduleType;
 
     @Column(name = "template_name", nullable = false, length = 200)
     private String templateName;

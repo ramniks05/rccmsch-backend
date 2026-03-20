@@ -1,7 +1,6 @@
 package in.gov.manipur.rccms.dto;
 
 import in.gov.manipur.rccms.entity.DocumentStatus;
-import in.gov.manipur.rccms.entity.ModuleType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,7 +17,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class CaseDocumentSummaryDTO {
     private Long documentId;
-    private ModuleType moduleType;
+    private String moduleType;
     private String moduleTypeLabel;
     private DocumentStatus status;
     private LocalDateTime createdAt;

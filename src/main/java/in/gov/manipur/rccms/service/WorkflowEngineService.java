@@ -464,14 +464,13 @@ public class WorkflowEngineService {
                         String moduleTypeStr = extractModuleTypeFromChecklist(checklist);
                         if (moduleTypeStr != null) {
                             try {
-                                ModuleType moduleType = ModuleType.valueOf(moduleTypeStr);
-                                log.debug("[GET_AVAILABLE_TRANSITIONS] Fetching form schema for moduleType: {} (caseId: {})", 
+                                log.debug("[GET_AVAILABLE_TRANSITIONS] Fetching form schema for moduleType: {} (caseId: {})",
                                         moduleTypeStr, caseId);
                                 // Fetch form schema for this module type
                                 formSchema = caseModuleFormService.getFormSchema(
-                                        caseEntity.getCaseNatureId(), 
-                                        caseEntity.getCaseTypeId(), 
-                                        moduleType);
+                                        caseEntity.getCaseNatureId(),
+                                        caseEntity.getCaseTypeId(),
+                                        moduleTypeStr);
                                 log.debug("[GET_AVAILABLE_TRANSITIONS] Successfully fetched form schema for moduleType: {} (caseId: {})", 
                                         moduleTypeStr, caseId);
                             } catch (IllegalArgumentException e) {
@@ -1483,22 +1482,17 @@ public class WorkflowEngineService {
                     String moduleTypeStr = String.valueOf(fieldReq.get("moduleType"));
                     String fieldName = String.valueOf(fieldReq.get("fieldName"));
                     
-                    try {
-                        ModuleType moduleType = ModuleType.valueOf(moduleTypeStr);
-                        boolean passed = checkModuleFormField(instance.getCaseId(), moduleType, fieldName);
-                        String label = getModuleFieldDisplayLabel(moduleType, fieldName);
-                        conditions.add(ConditionStatusDTO.builder()
-                                .label(label)
-                                .type("FORM_FIELD")
-                                .moduleType(moduleTypeStr)
-                                .fieldName(fieldName)
-                                .required(true)
-                                .passed(passed)
-                                .message(passed ? label + " ✓" : label + " must be filled")
-                                .build());
-                    } catch (IllegalArgumentException e) {
-                        log.warn("Invalid module type: {}", moduleTypeStr);
-                    }
+                    boolean passed = checkModuleFormField(instance.getCaseId(), moduleTypeStr, fieldName);
+                    String label = getModuleFieldDisplayLabel(moduleTypeStr, fieldName);
+                    conditions.add(ConditionStatusDTO.builder()
+                            .label(label)
+                            .type("FORM_FIELD")
+                            .moduleType(moduleTypeStr)
+                            .fieldName(fieldName)
+                            .required(true)
+                            .passed(passed)
+                            .message(passed ? label + " ✓" : label + " must be filled")
+                            .build());
                 }
             }
 
@@ -1582,7 +1576,7 @@ public class WorkflowEngineService {
                             try {
                                 List<CaseDocumentTemplate> templates = caseDocumentTemplateRepository.findAllById(templateIds);
                                 if (!templates.isEmpty() && templates.get(0).getModuleType() != null) {
-                                    documentModuleType = templates.get(0).getModuleType().name();
+                                    documentModuleType = templates.get(0).getModuleType();
                                     log.debug("[EVALUATE_CONDITIONS] Document module type: {} for templateIds: {}", 
                                             documentModuleType, templateIds);
                                 }
@@ -1629,14 +1623,14 @@ public class WorkflowEngineService {
                         if (field.getCaseTypeId() != null && !field.getCaseTypeId().equals(caseTypeId)) {
                             continue;
                         }
-                        ModuleType moduleType = field.getModuleType();
-                        String flag = moduleType.name() + "_SUBMITTED";
+                        String moduleType = field.getModuleType();
+                        String flag = moduleType + "_SUBMITTED";
                         boolean passed = workflowData.containsKey(flag) && Boolean.TRUE.equals(workflowData.get(flag));
-                        String label = "Form [" + moduleType.name() + "] must be submitted";
+                        String label = "Form [" + moduleType + "] must be submitted";
                         conditions.add(ConditionStatusDTO.builder()
                                 .label(label)
                                 .type("FORM_CONDITION")
-                                .moduleType(moduleType.name())
+                                .moduleType(moduleType)
                                 .formId(formId)
                                 .required(true)
                                 .passed(passed)
@@ -1660,7 +1654,7 @@ public class WorkflowEngineService {
     /**
      * Check if a module form field has a value
      */
-    private boolean checkModuleFormField(Long caseId, ModuleType moduleType, String fieldName) {
+    private boolean checkModuleFormField(Long caseId, String moduleType, String fieldName) {
         Optional<CaseModuleFormSubmission> submission = moduleFormSubmissionRepository
                 .findTopByCaseIdAndModuleTypeOrderBySubmittedAtDesc(caseId, moduleType);
         
@@ -1683,8 +1677,8 @@ public class WorkflowEngineService {
     /**
      * Get display label for module field
      */
-    private String getModuleFieldDisplayLabel(ModuleType moduleType, String fieldName) {
-        String moduleName = moduleType.name().toLowerCase();
+    private String getModuleFieldDisplayLabel(String moduleType, String fieldName) {
+        String moduleName = moduleType.toLowerCase();
         moduleName = moduleName.substring(0, 1).toUpperCase() + moduleName.substring(1);
         return moduleName + " - " + fieldName.replaceAll("([A-Z])", " $1").trim();
     }

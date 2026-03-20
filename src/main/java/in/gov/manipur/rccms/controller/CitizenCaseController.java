@@ -8,7 +8,6 @@ import in.gov.manipur.rccms.dto.CitizenActionsRequiredDTO;
 import in.gov.manipur.rccms.dto.CreateCaseDTO;
 import in.gov.manipur.rccms.dto.ResubmitCaseDTO;
 import in.gov.manipur.rccms.entity.Case;
-import in.gov.manipur.rccms.entity.ModuleType;
 import in.gov.manipur.rccms.repository.CaseRepository;
 import in.gov.manipur.rccms.repository.CaseWorkflowInstanceRepository;
 import in.gov.manipur.rccms.service.ActionsRequiredService;
@@ -229,7 +228,7 @@ public class CitizenCaseController {
     public ResponseEntity<ApiResponse<CaseDocumentDTO>> getNoticeDocument(
             @PathVariable Long caseId,
             HttpServletRequest request) {
-        return getDocumentForCitizen(caseId, ModuleType.NOTICE, request);
+        return getDocumentForCitizen(caseId, "NOTICE", request);
     }
 
     /**
@@ -244,7 +243,7 @@ public class CitizenCaseController {
     public ResponseEntity<ApiResponse<List<CaseDocumentDTO>>> getAllNoticeDocuments(
             @PathVariable Long caseId,
             HttpServletRequest request) {
-        return getAllDocumentsForCitizen(caseId, ModuleType.NOTICE, request);
+        return getAllDocumentsForCitizen(caseId, "NOTICE", request);
     }
 
     /**
@@ -259,7 +258,7 @@ public class CitizenCaseController {
     public ResponseEntity<ApiResponse<CaseDocumentDTO>> getNoticeDraftDocument(
             @PathVariable Long caseId,
             HttpServletRequest request) {
-        return getDocumentForCitizen(caseId, ModuleType.NOTICE, request);
+        return getDocumentForCitizen(caseId, "NOTICE", request);
     }
 
     /**
@@ -274,7 +273,7 @@ public class CitizenCaseController {
     public ResponseEntity<ApiResponse<List<CaseDocumentDTO>>> getAllNoticeDraftDocuments(
             @PathVariable Long caseId,
             HttpServletRequest request) {
-        return getAllDocumentsForCitizen(caseId, ModuleType.NOTICE, request);
+        return getAllDocumentsForCitizen(caseId, "NOTICE", request);
     }
 
     /**
@@ -289,7 +288,7 @@ public class CitizenCaseController {
     public ResponseEntity<ApiResponse<CaseDocumentDTO>> getOrdersheetDocument(
             @PathVariable Long caseId,
             HttpServletRequest request) {
-        return getDocumentForCitizen(caseId, ModuleType.ORDERSHEET, request);
+        return getDocumentForCitizen(caseId, "ORDERSHEET", request);
     }
 
     /**
@@ -304,7 +303,7 @@ public class CitizenCaseController {
     public ResponseEntity<ApiResponse<List<CaseDocumentDTO>>> getAllOrdersheetDocuments(
             @PathVariable Long caseId,
             HttpServletRequest request) {
-        return getAllDocumentsForCitizen(caseId, ModuleType.ORDERSHEET, request);
+        return getAllDocumentsForCitizen(caseId, "ORDERSHEET", request);
     }
 
     /**
@@ -319,7 +318,7 @@ public class CitizenCaseController {
     public ResponseEntity<ApiResponse<CaseDocumentDTO>> getJudgementDocument(
             @PathVariable Long caseId,
             HttpServletRequest request) {
-        return getDocumentForCitizen(caseId, ModuleType.JUDGEMENT, request);
+        return getDocumentForCitizen(caseId, "JUDGEMENT", request);
     }
 
     /**
@@ -334,14 +333,14 @@ public class CitizenCaseController {
     public ResponseEntity<ApiResponse<List<CaseDocumentDTO>>> getAllJudgementDocuments(
             @PathVariable Long caseId,
             HttpServletRequest request) {
-        return getAllDocumentsForCitizen(caseId, ModuleType.JUDGEMENT, request);
+        return getAllDocumentsForCitizen(caseId, "JUDGEMENT", request);
     }
 
     /**
      * Helper method to get document for citizen with access control
      */
     private ResponseEntity<ApiResponse<CaseDocumentDTO>> getDocumentForCitizen(
-            Long caseId, ModuleType moduleType, HttpServletRequest request) {
+            Long caseId, String moduleType, HttpServletRequest request) {
         log.info("Citizen get {} document request: caseId={}", moduleType, caseId);
 
         // Get applicant ID
@@ -364,24 +363,24 @@ public class CitizenCaseController {
         CaseDocumentDTO document = documentService.getLatestDocument(caseId, moduleType);
         if (document == null) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error(moduleType.name() + " document not found for this case"));
+                    .body(ApiResponse.error(moduleType + " document not found for this case"));
         }
 
         // Only show SIGNED documents
         if (document.getStatus() == null || 
             !document.getStatus().name().equals("SIGNED")) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error(moduleType.name() + " is not yet finalized"));
+                    .body(ApiResponse.error(moduleType + " is not yet finalized"));
         }
 
-        return ResponseEntity.ok(ApiResponse.success(moduleType.name() + " retrieved", document));
+        return ResponseEntity.ok(ApiResponse.success(moduleType + " retrieved", document));
     }
 
     /**
      * Helper method to get all documents for citizen with access control
      */
     private ResponseEntity<ApiResponse<List<CaseDocumentDTO>>> getAllDocumentsForCitizen(
-            Long caseId, ModuleType moduleType, HttpServletRequest request) {
+            Long caseId, String moduleType, HttpServletRequest request) {
         log.info("Citizen get all {} documents request: caseId={}", moduleType, caseId);
 
         // Get applicant ID
@@ -411,10 +410,10 @@ public class CitizenCaseController {
 
         if (filteredDocuments.isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error("No finalized " + moduleType.name() + " documents found for this case"));
+                    .body(ApiResponse.error("No finalized " + moduleType + " documents found for this case"));
         }
 
-        return ResponseEntity.ok(ApiResponse.success("All " + moduleType.name() + " documents retrieved", filteredDocuments));
+        return ResponseEntity.ok(ApiResponse.success("All " + moduleType + " documents retrieved", filteredDocuments));
     }
 
     /**

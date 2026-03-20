@@ -4,8 +4,8 @@ import in.gov.manipur.rccms.dto.ApiResponse;
 import in.gov.manipur.rccms.dto.CreateDocumentTemplateDTO;
 import in.gov.manipur.rccms.dto.DocumentTemplateDTO;
 import in.gov.manipur.rccms.dto.UpdateDocumentTemplateDTO;
-import in.gov.manipur.rccms.entity.ModuleType;
 import in.gov.manipur.rccms.service.CaseDocumentTemplateService;
+import in.gov.manipur.rccms.service.ModuleMasterService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,21 +28,24 @@ import java.util.Map;
 public class CaseDocumentTemplateAdminController {
 
     private final CaseDocumentTemplateService templateService;
+    private final ModuleMasterService moduleMasterService;
 
     @GetMapping("/module-types")
     public ResponseEntity<ApiResponse<List<Map<String, String>>>> getDocumentModuleTypes() {
-        List<Map<String, String>> data = List.of(
-                Map.of("code", ModuleType.NOTICE.name(), "name", "NOTICE"),
-                Map.of("code", ModuleType.ORDERSHEET.name(), "name", "ORDERSHEET"),
-                Map.of("code", ModuleType.JUDGEMENT.name(), "name", "JUDGEMENT")
-        );
+        List<Map<String, String>> data = moduleMasterService.getActiveModules().stream()
+                .filter(m -> {
+                    String kind = m.getKind() == null ? "" : m.getKind().trim().toUpperCase();
+                    return "DOCUMENT".equals(kind) || "BOTH".equals(kind);
+                })
+                .map(m -> Map.of("code", m.getCode(), "name", m.getName()))
+                .toList();
         return ResponseEntity.ok(ApiResponse.success("Document module types retrieved", data));
     }
 
     @GetMapping("/case-natures/{caseNatureId}/modules/{moduleType}")
     public ResponseEntity<ApiResponse<List<DocumentTemplateDTO>>> getTemplates(
             @PathVariable Long caseNatureId,
-            @PathVariable ModuleType moduleType,
+            @PathVariable String moduleType,
             @RequestParam(value = "caseTypeId", required = false) Long caseTypeId,
             @RequestParam(value = "activeOnly", defaultValue = "true") boolean activeOnly) {
         List<DocumentTemplateDTO> templates = activeOnly
